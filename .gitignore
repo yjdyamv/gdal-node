@@ -1,5 +1,12 @@
 .lock-wscript
 build/
+build-ninja*/
+build-conan/
+CMakeUserPresets.json
+# Conan's generated environment scripts
+conanbuild*.sh
+conanrun*.sh
+deactivate_conan*.sh
 find.exe
 node.exe
 msys-1.0.dll
