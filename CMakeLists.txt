@@ -1,12 +1,28 @@
-# CMake.js build for the gdal-async native addon.
+# CMake build for the gdal-async native addon.
 #
-# This coexists with binding.gyp (node-gyp) while the migration is in progress:
-# both produce lib/binding/<node_abi>-<platform>-<arch>/gdal.node, so nothing in
-# lib/gdal.js has to change - it locates the binding through node-pre-gyp's
-# binary.find().
+# Generator: Ninja (see CMakePresets.json, or -G Ninja). cmake-js also prefers
+# Ninja automatically as soon as it is on PATH.
 #
-# Only the system-GDAL configuration is ported so far. The vendored sources
-# under deps/ (binding.gyp's SHARED_GDAL=OFF path) still need node-gyp.
+# GDAL comes from Conan:
+#
+#   conan install . -of build-conan -s build_type=Release
+#   cmake --preset conan-release          # or -DCMAKE_TOOLCHAIN_FILE=... below
+#   cmake --build --preset conan-release
+#
+# Plain CMake, equivalent:
+#
+#   cmake -G Ninja -S . -B build -DCMAKE_TOOLCHAIN_FILE=build-conan/conan_toolchain.cmake
+#   cmake --build build
+#
+# Without Conan it falls back to a GDAL pointed at with -DGDAL_INCLUDE_DIR=<dir
+# with gdal.h> and -DGDAL_LIBRARY=<libgdal>.
+#
+# The binding still lands in lib/binding/<node_abi>-<platform>-<arch>/gdal.node,
+# so nothing in lib/gdal.js has to change - it locates the binding through
+# node-pre-gyp's binary.find().
+#
+# The vendored sources under deps/ (binding.gyp's SHARED_GDAL=OFF path) are not
+# ported to CMake and remain node-gyp-only.
 
 cmake_minimum_required(VERSION 3.15)
 
@@ -19,17 +35,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type")
-endif()
-
-option(SHARED_GDAL "Link against a system GDAL instead of the vendored one under deps/" ON)
-option(BUNDLED_GDAL "Define BUNDLED_GDAL: the module reports itself as shipping its own GDAL/PROJ data" ON)
-option(ENABLE_LOGGING "Compile the logging API (gdal.startLogging and friends)" OFF)
-
-if(NOT SHARED_GDAL)
-  message(FATAL_ERROR
-    "Building the vendored GDAL under deps/ is not ported to CMake yet.\n"
-    "Configure with -DSHARED_GDAL=ON plus -DGDAL_INCLUDE_DIR=... -DGDAL_LIBRARY=..., "
-    "or keep using binding.gyp/node-gyp for that configuration.")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -56,18 +61,65 @@ execute_process(
 
 # ---------------------------------------------------------------------------
 # GDAL
+#
+# GDAL_INCLUDE_DIR/GDAL_LIBRARY win when given; otherwise the package from
+# Conan's CMakeDeps generator (which conan_toolchain.cmake puts on
+# CMAKE_PREFIX_PATH) or a distro GDAL CMake package is used.
 # ---------------------------------------------------------------------------
-find_path(GDAL_INCLUDE_DIR NAMES gdal.h PATH_SUFFIXES gdal)
-find_library(GDAL_LIBRARY NAMES gdal)
+# An explicit GDAL_INCLUDE_DIR/GDAL_LIBRARY wins, so a caller pointing at a
+# specific GDAL (a toolchain, a sysroot) always gets exactly that one.
+if(GDAL_INCLUDE_DIR AND GDAL_LIBRARY)
+  message(STATUS "GDAL: using GDAL_INCLUDE_DIR/GDAL_LIBRARY")
+  set(GDAL_TARGET ${GDAL_LIBRARY})
+  set(GDAL_FROM_PACKAGE FALSE)
+else()
+  # Conan's CMakeDeps generates gdal-config.cmake with a gdal::gdal target; a
+  # distro GDAL ships a gdal-config.cmake with GDAL::GDAL. The two files have the
+  # same name, so accept whichever target actually turns up.
+  find_package(gdal CONFIG QUIET)
 
-if(NOT GDAL_INCLUDE_DIR OR NOT GDAL_LIBRARY)
-  message(FATAL_ERROR
-    "GDAL not found. Point CMake at it with -DGDAL_INCLUDE_DIR=<dir containing gdal.h> "
-    "and -DGDAL_LIBRARY=<path to libgdal>.")
+  if(TARGET gdal::gdal)
+    message(STATUS "GDAL: using the Conan package (gdal::gdal)")
+    set(GDAL_TARGET gdal::gdal)
+    set(GDAL_FROM_PACKAGE TRUE)
+  elseif(TARGET GDAL::GDAL)
+    message(STATUS "GDAL: using the GDAL CMake package (GDAL::GDAL)")
+    set(GDAL_TARGET GDAL::GDAL)
+    set(GDAL_FROM_PACKAGE TRUE)
+  else()
+    message(STATUS "GDAL: no CMake package, searching for gdal.h and libgdal")
+    find_path(GDAL_INCLUDE_DIR NAMES gdal.h PATH_SUFFIXES gdal)
+    find_library(GDAL_LIBRARY NAMES gdal)
+
+    if(NOT GDAL_INCLUDE_DIR OR NOT GDAL_LIBRARY)
+      message(FATAL_ERROR
+        "GDAL not found. Run 'conan install .' to provide it, or point CMake at it "
+        "with -DGDAL_INCLUDE_DIR=<dir containing gdal.h> and -DGDAL_LIBRARY=<path to libgdal>.")
+    endif()
+
+    set(GDAL_TARGET ${GDAL_LIBRARY})
+    set(GDAL_FROM_PACKAGE FALSE)
+  endif()
 endif()
 
-if(BUNDLED_GDAL)
-  # gdal_coordinate_transformation.cpp includes <proj.h> in this configuration
+# A GDAL coming from a package carries its own data files, so the module must not
+# claim to be self-contained: lib/gdal.js would point GDAL_DATA/PROJ_LIB at deps/.
+if(DEFINED BUNDLED_GDAL)
+  set(BUNDLED_GDAL_DEFAULT ${BUNDLED_GDAL})
+elseif(GDAL_FROM_PACKAGE)
+  set(BUNDLED_GDAL_DEFAULT OFF)
+else()
+  set(BUNDLED_GDAL_DEFAULT ON)
+endif()
+
+option(BUNDLED_GDAL
+  "Define BUNDLED_GDAL: the module reports itself as shipping its own GDAL/PROJ data"
+  ${BUNDLED_GDAL_DEFAULT})
+option(ENABLE_LOGGING "Compile the logging API (gdal.startLogging and friends)" OFF)
+
+if(BUNDLED_GDAL AND NOT GDAL_FROM_PACKAGE)
+  # gdal_coordinate_transformation.cpp includes <proj.h> in this configuration.
+  # With a GDAL package the PROJ include directories come with its target.
   find_path(PROJ_INCLUDE_DIR NAMES proj.h)
   if(NOT PROJ_INCLUDE_DIR)
     # a system GDAL usually sits next to PROJ, e.g. .../include/gdal and .../include
@@ -131,7 +183,7 @@ else()
   target_link_options(gdal PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
 
-target_link_libraries(gdal PRIVATE ${GDAL_LIBRARY})
+target_link_libraries(gdal PRIVATE ${GDAL_TARGET})
 
 # cmake-js passes the Node.js import library (node.lib on Windows) in
 # CMAKE_JS_LIB; without it the napi_* and uv_* symbols stay unresolved.

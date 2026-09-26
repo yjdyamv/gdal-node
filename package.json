@@ -56,8 +56,9 @@
   "scripts": {
     "test": "npm run lint:js && tsc --noEmit && mocha && npm run test:stress 20",
     "bench": "node bench/streams.js",
-    "build:cmake": "cmake-js build",
+    "build:cmake": "cmake-js build -G Ninja",
     "clean:cmake": "cmake-js clean",
+    "conan:install": "conan install . -of build-conan -s build_type=Release",
     "lint:cpp": "clang-format -i src/*.cpp src/*.hpp && clang-format -i src/*/*.cpp src/*/*.hpp",
     "lint:js": "eslint lib test examples",
     "lint:fix": "eslint lib test examples --fix",
