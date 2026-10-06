@@ -17,7 +17,7 @@
 # Without Conan it falls back to a GDAL pointed at with -DGDAL_INCLUDE_DIR=<dir
 # with gdal.h> and -DGDAL_LIBRARY=<libgdal>.
 #
-# The binding still lands in lib/binding/<node_abi>-<platform>-<arch>/gdal.node,
+# The binding still lands in lib/binding/napi-v8-<platform>-<arch>/gdal.node,
 # so nothing in lib/gdal.js has to change - it locates the binding through
 # node-pre-gyp's binary.find().
 #
@@ -52,12 +52,15 @@ if(NOT NODE_ADDON_API_INCLUDE_DIR)
   message(FATAL_ERROR "node-addon-api is not installed (run npm install first)")
 endif()
 
-# node-pre-gyp's directory name for the running runtime, e.g. node-v137-linux-x64
+# node-pre-gyp's directory name for the N-API build, e.g. napi-v8-linux-x64.
+# Keep NAPI_BUILD_VERSION in sync with the napi-v8 in binary.module_path in
+# package.json and with NAPI_VERSION in binding.gyp.
+set(NAPI_BUILD_VERSION 8)
 execute_process(
-  COMMAND ${NODE_EXECUTABLE} -p
-          "process.release.name + '-v' + process.versions.modules + '-' + process.platform + '-' + process.arch"
-  OUTPUT_VARIABLE NODE_PRE_GYP_DIR
+  COMMAND ${NODE_EXECUTABLE} -p "process.platform + '-' + process.arch"
+  OUTPUT_VARIABLE NODE_PLATFORM_ARCH
   OUTPUT_STRIP_TRAILING_WHITESPACE)
+set(NODE_PRE_GYP_DIR "napi-v${NAPI_BUILD_VERSION}-${NODE_PLATFORM_ARCH}")
 
 # ---------------------------------------------------------------------------
 # GDAL
@@ -152,7 +155,8 @@ target_compile_definitions(gdal PRIVATE
   _LARGEFILE_SOURCE
   _FILE_OFFSET_BITS=64
   NOGDI=1
-  HAVE_LIBZ=1)
+  HAVE_LIBZ=1
+  NAPI_VERSION=${NAPI_BUILD_VERSION})
 
 if(BUNDLED_GDAL)
   target_compile_definitions(gdal PRIVATE BUNDLED_GDAL=1)
@@ -193,7 +197,7 @@ endif()
 
 # ---------------------------------------------------------------------------
 # node-pre-gyp layout: lib/gdal.js -> binary.find() ->
-# lib/binding/<node_abi>-<platform>-<arch>/gdal.node
+# lib/binding/napi-v8-<platform>-<arch>/gdal.node
 # ---------------------------------------------------------------------------
 set(BINDING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/binding/${NODE_PRE_GYP_DIR})
 

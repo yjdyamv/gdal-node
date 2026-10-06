@@ -4,13 +4,9 @@ on: workflow_dispatch
 
 jobs:
 
-  publish-linux-old:
+  publish-linux:
 
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [ 20, 22, 24 ]
 
     steps:
     - uses: actions/checkout@v7
@@ -18,26 +14,7 @@ jobs:
       uses: actions/setup-node@v7
       with:
         node-version: 20.x
-    - run: npm run container publish debian-archive:bullseye ${{ matrix.node-version }}
-      env:
-        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
-
-
-  publish-linux-new:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [ 26 ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 26.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 26.x
-    - run: npm run container publish debian:trixie ${{ matrix.node-version }}
+    - run: npm run container publish debian-archive:bullseye 20
       env:
         NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
 
@@ -48,15 +25,15 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [ 20.x, 22.x, 24.x, 26.x ]
+        # N-API builds one binary per platform, valid for every supported Node.js
         platforms: [ windows-2022, macos-15-intel, macos-15 ]
 
     steps:
     - uses: actions/checkout@v7
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use Node.js 20.x
       uses: actions/setup-node@v7
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 20.x
     - uses: actions/setup-python@v7
       with:
         python-version: "3.11"
