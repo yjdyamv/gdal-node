@@ -1,0 +1,31 @@
+# The profile the CI uses on Linux arm64 (glibc, ubuntu-24.04-arm).
+#
+# It is not detected, but pinned to the compiler of the runner image, so that a
+# local build and a build of the CI agree on the settings of the packages.
+# conan-center publishes no binaries for Linux arm64 - its Linux builds are
+# x86_64 only - so there is nothing to reuse here and the whole dependency tree
+# is built from source: the cache of ~/.conan2/p is what makes that affordable.
+# Keep the compiler in sync with the runner image of the workflow.
+[settings]
+os=Linux
+arch=armv8
+compiler=gcc
+compiler.version=13
+compiler.libcxx=libstdc++11
+compiler.cppstd=20
+build_type=Release
+
+[conf]
+# Without this Conan keeps the platform default generator of CMake
+# (Unix Makefiles, or Xcode on macOS), which is slower on a build as large as
+# the ~1300 translation units of GDAL.  GDAL is always built from source here:
+# the recipe of conan/recipes/gdal carries the ExprTk and muparser options of
+# the addon, so no binary of it exists on conan-center.  Ninja is part of the
+# runner image; when using this profile by hand, install it first.
+tools.cmake.cmaketoolchain:generator=Ninja
+
+[buildenv]
+# Several dependencies still declare compatibility with CMake < 3.5, which
+# CMake 4 rejects outright when it has to build them from source.  Only the
+# environment variable is honored by those projects.
+CMAKE_POLICY_VERSION_MINIMUM=3.5

@@ -6,9 +6,19 @@ import { promisify } from 'node:util'
 import { Octokit } from '@octokit/core'
 const exec = promisify(child_process.exec)
 const octokit = new Octokit({ auth: process.env.NODE_PRE_GYP_GITHUB_TOKEN })
-const pkg = { repo: 'node-gdal-async', owner: 'mmomtchev' }
-const version = JSON.parse(await fs.readFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'))).version
-const workflowPublishId = 7048427
+const pkgJSON = JSON.parse(await fs.readFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json')))
+const version = pkgJSON.version
+// The releases are hosted by the repository the binaries are downloaded from,
+// the `host` of scripts/install.mjs, which is not necessarily the upstream one
+const [, owner, repo] = pkgJSON.binary.host.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\//) || []
+if (!owner || !repo) throw new Error(`cannot tell the repository of ${pkgJSON.binary.host}`)
+const pkg = { repo, owner }
+// The numeric id of a workflow is local to the repository it was created in, so
+// it cannot be hardcoded: look the workflow up by the file name instead
+const workflows = (await octokit.request('GET /repos/{owner}/{repo}/actions/workflows', { ...pkg })).data.workflows
+const workflow = workflows.find((w) => w.path === '.github/workflows/publish.yml')
+if (!workflow) throw new Error(`${owner}/${repo} has no .github/workflows/publish.yml`)
+const workflowPublishId = workflow.id
 const workflowPublish = { ...pkg, workflow_id: workflowPublishId, ref: `v${version}` }
 
 try {

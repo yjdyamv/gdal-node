@@ -73,7 +73,7 @@ case ${1} in
     node scripts/build.mjs
     npm test
     npm run package
-    npx node-pre-gyp-github publish
+    npx @mmomtchev/node-pre-gyp-github publish
     R=0
     ;;
 

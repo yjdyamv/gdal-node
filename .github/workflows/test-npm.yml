@@ -8,22 +8,33 @@ on:
         required: true
 
 jobs:
-  test_npm_binaries:
+  test_npm:
 
-    name: Published binaries
+    name: ${{ matrix.platform }}, ${{ matrix.mode }}
 
     runs-on: ${{ matrix.platform }}
+
+    permissions:
+      contents: read
+
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
       matrix:
         platform:
           - ubuntu-24.04
+          - ubuntu-24.04-arm
           - ubuntu-26.04
           - windows-2022
+          - windows-11-arm
           - macos-14
           - macos-15-intel
           - macos-15
+        # The very same tests, once on the binary and once on a rebuild of it:
+        # the assets are published per platform and per architecture, and a
+        # platform that has no asset falls back to the build from the sources
+        mode: [ binaries, rebuild ]
         node-version: [ 24 ]
 
     steps:
@@ -34,6 +45,34 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.11"
+    - name: Install the build dependencies
+      if: matrix.mode == 'rebuild'
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS}" == "Linux" ]; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build ccache
+        elif [ "${RUNNER_OS}" == "macOS" ]; then
+          brew install ninja ccache
+        elif [ "${RUNNER_OS}" == "Windows" ]; then
+          command -v ninja >/dev/null || choco install ninja --no-progress -y
+        fi
+    - name: Install Conan
+      if: matrix.mode == 'rebuild'
+      run: pip3 install --break-system-packages conan || pip3 install conan
+    - name: Detect the Conan profile
+      if: matrix.mode == 'rebuild'
+      run: |
+        conan profile detect --force
+        conan profile show
+    - name: Cache the Conan packages
+      if: matrix.mode == 'rebuild'
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package.json') }}
+        restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-
     - name: Set up the unit tests
       run: |
         curl https://codeload.github.com/mmomtchev/node-gdal-async/zip/refs/tags/v${{ github.event.inputs.version }} --output repo.zip
@@ -43,49 +82,10 @@ jobs:
         mv node-gdal-async-${{ github.event.inputs.version }}/scripts .
         npm install
     - name: Install from npm
-      run:  npm install --force gdal-async@${{ github.event.inputs.version }}
-    - name: Run the unit tests
-      run: |
-        cd test
-        npx tsc -p tsconfig.test.json --noEmit
-        npx mocha --v8-expose-gc --reporter=tap -r tsx -r _common.ts -r _hooks.ts --timeout 20000 *.test.ts
-
-
-  test_npm_rebuild:
-
-    name: Rebuild from source
-
-    runs-on: ${{ matrix.platform }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - ubuntu-24.04
-          - ubuntu-26.04
-          - windows-2022
-          - macos-14
-          - macos-15-intel
-          - macos-15
-        node-version: [ 24 ]
-
-    steps:
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v7
-      with:
-        node-version: ${{ matrix.node-version }}
-    - uses: actions/setup-python@v7
-      with:
-        python-version: "3.11"
-    - name: Set up the unit tests
-      run: |
-        curl https://codeload.github.com/mmomtchev/node-gdal-async/zip/refs/tags/v${{ github.event.inputs.version }} --output repo.zip
-        unzip repo.zip
-        mv node-gdal-async-${{ github.event.inputs.version }}/package.json .
-        mv node-gdal-async-${{ github.event.inputs.version }}/test .
-        mv node-gdal-async-${{ github.event.inputs.version }}/scripts .
-        npm install
+      if: matrix.mode == 'binaries'
+      run: npm install --force gdal-async@${{ github.event.inputs.version }}
     - name: Rebuild with npm
+      if: matrix.mode == 'rebuild'
       run: npm install --verbose --force gdal-async@${{ github.event.inputs.version }} --build-from-source
     - name: Run the unit tests
       run: |

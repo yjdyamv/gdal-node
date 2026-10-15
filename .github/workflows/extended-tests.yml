@@ -70,13 +70,13 @@ jobs:
       with:
         max-size: 1000M
         key: asan
-    - run: npm run container asan ubuntu:22.04 24 bundled
+    - run: npm run container asan ubuntu:22.04 24
       env:
         MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
 
   distros:
 
-    name: ${{ matrix.linux-version }}, bundled GDAL
+    name: ${{ matrix.linux-version }}
 
     runs-on: ubuntu-latest
 
@@ -95,7 +95,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@v1.2
       with:
         max-size: 1000M
-        key: distros-bundled-${{ matrix.linux-version }}
-    - run: npm run container dev ${{ matrix.linux-version }} 24 bundled
+        key: distros-${{ matrix.linux-version }}
+    - run: npm run container dev ${{ matrix.linux-version }} 24
       env:
         MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}

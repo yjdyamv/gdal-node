@@ -21,6 +21,26 @@ jobs:
         NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
 
 
+  publish-linux-arm64:
+
+    name: Linux arm64
+
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24.x
+    # The binary is built in the very same ubuntu 22.04 container as the x86_64
+    # one, so it needs no newer glibc than that one, even though the arm64
+    # runners are 24.04
+    - run: npm run container publish ubuntu:22.04 24
+      env:
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
+
+
   publish-winmac:
 
     name: Windows and macOS
@@ -30,7 +50,7 @@ jobs:
     strategy:
       matrix:
         # N-API builds one binary per platform, valid for every supported Node.js
-        platforms: [ windows-2022, macos-15-intel, macos-15 ]
+        platforms: [ windows-2022, windows-11-arm, macos-15-intel, macos-15 ]
 
     steps:
     - uses: actions/checkout@v7
@@ -41,6 +61,16 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.11"
+    - name: Install the build dependencies
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS}" == "macOS" ]; then
+          brew install ninja ccache
+        elif [ "${RUNNER_OS}" == "Windows" ]; then
+          # The pinned Windows profile builds with Ninja instead of MSBuild.
+          # The image ships it, but it is not part of the tools it guarantees
+          command -v ninja >/dev/null || choco install ninja --no-progress -y
+        fi
     - name: Install Conan
       run: |
         pip install conan

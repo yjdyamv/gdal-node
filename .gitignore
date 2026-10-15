@@ -5,8 +5,14 @@ build-conan/
 CMakeUserPresets.json
 # Conan's generated environment scripts
 conanbuild*.sh
+conanbuild*.bat
+conanbuild*.ps1
 conanrun*.sh
+conanrun*.bat
+conanrun*.ps1
 deactivate_conan*.sh
+deactivate_conan*.bat
+deactivate_conan*.ps1
 find.exe
 node.exe
 msys-1.0.dll
