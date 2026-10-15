@@ -26,12 +26,8 @@
     "module_name": "gdal",
     "module_path": "./lib/binding/napi-v8-{platform}-{arch}",
     "remote_path": "v{version}",
-    "host": "https://github.com/mmomtchev/node-gdal-async/releases/download/",
-    "package_name": "napi-v8-{platform}-{arch}.tar.gz",
-    "hosting": {
-      "provider": "github",
-      "repo": "mmomtchev/node-gdal-async"
-    }
+    "host": "https://github.com/yjdyamv/node-gdal-async/releases/download/",
+    "package_name": "napi-v8-{platform}-{arch}.tar.gz"
   },
   "repository": {
     "type": "git",
@@ -56,21 +52,21 @@
   "scripts": {
     "test": "npm run lint:js && tsc --noEmit && mocha && npm run test:stress 20",
     "bench": "node bench/streams.js",
-    "build:cmake": "cmake-js build -G Ninja",
+    "build:cmake": "node scripts/build.mjs",
     "clean:cmake": "cmake-js clean",
     "conan:install": "conan install . -of build-conan -s build_type=Release",
     "lint:cpp": "clang-format -i src/*.cpp src/*.hpp && clang-format -i src/*/*.cpp src/*/*.hpp",
     "lint:js": "eslint lib test examples",
     "lint:fix": "eslint lib test examples --fix",
     "lint": "npm run lint:js && npm run lint:cpp",
-    "install": "node-pre-gyp install --fallback-to-build -j max",
+    "install": "node scripts/install.mjs",
     "postinstall": "node scripts/motd",
     "yatag": "npx yatag",
     "gpp": "gpp -H lib/default_iterators.gpp -o lib/default_iterators.js && eslint --fix lib/default_iterators.js",
     "doc:build": "npx documentation build --config=documentation.yml src/*.cpp src/collections/*.cpp src/geometry/*.cpp lib/*.js -f=html -o=doc --theme=node_modules/documentation-hipster/index.js",
     "doc:publish": "npm run doc:build && node ./scripts/publish-docs.js",
     "preversion": "npm run lint && npx yatag && npm run test",
-    "gcov": "mkdir -p coverage && cd coverage && gcov -o ../build/Debug/obj.target/gdal/src ../src/*",
+    "gcov": "mkdir -p coverage && cd coverage && gcov -o ../build/CMakeFiles/gdal.dir/src ../src/*",
     "lcov": "npx c8 report --reporter=text-lcov > coverage/tests.lcov",
     "codecov": "cd coverage && curl -s https://codecov.io/bash | bash",
     "version": "git add package.json",
@@ -90,16 +86,12 @@
     "postpublish": "gh workflow run test-npm.yml -F version=$npm_package_version"
   },
   "dependencies": {
-    "@mapbox/node-pre-gyp": "^2.0.0",
     "@petamoriken/float16": "^3.9.2",
+    "cmake-js": "^8.0.0",
     "node-addon-api": "^8.5.0",
-    "node-gyp": "^12.4.0",
     "xmlbuilder2": "^4.0.0",
     "yatag": "^1.2.0"
   },
-  "bundleDependencies": [
-    "@mapbox/node-pre-gyp"
-  ],
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^10.0.1",
@@ -120,7 +112,6 @@
     "c8": "^11.0.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "cmake-js": "^8.0.0",
     "documentation-hipster": "^1.0.0",
     "documentation-polyglot": "^1.0.1",
     "eslint": "^10.0.0",

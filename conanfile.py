@@ -22,7 +22,7 @@ class GdalAsyncDependencies(ConanFile):
     see conan/recipes/gdal-prebuilt for the latter:
 
         GDAL_LOCAL_ROOT=/path/to/gdal-prefix \\
-            conan export-pkg conan/recipes/gdal-prebuilt --version=3.12.2
+            conan export-pkg conan/recipes/gdal-prebuilt --version=3.13.0
     """
 
     settings = "os", "arch", "compiler", "build_type"
@@ -30,10 +30,10 @@ class GdalAsyncDependencies(ConanFile):
     generators = "CMakeToolchain", "CMakeDeps"
 
     def requirements(self):
-        # 3.12.2 is the GDAL the WSL regression harness runs against and what
-        # conan/recipes/gdal-prebuilt was verified with. The vendored bundled
-        # build stays on 3.13.0 - bump this when you package (or fetch) that one
-        # instead. Note that a version range would not help here: Conan resolves
-        # it to the newest recipe it knows, which is the remote 3.13.0 with no
-        # binary for this toolchain.
-        self.requires("gdal/3.12.2")
+        # The version the addon is developed and tested against - it is also the
+        # version of the vendored sources that used to live under deps/libgdal.
+        # A version range is not an option: Conan resolves it to the newest
+        # recipe it knows, which may not have a binary for the current
+        # toolchain. Edit this line (or package your own GDAL with
+        # conan/recipes/gdal-prebuilt) when the toolchain cannot consume it.
+        self.requires("gdal/3.13.0")

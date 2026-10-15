@@ -21,26 +21,17 @@ clean-test:
 	@rm -rf ./test/**/*.tmp*
 	@rm -rf ./test/data/**/*.tmp*
 
-./node_modules/.bin/node-pre-gyp:
-	npm install @mapbox/node-pre-gyp
+build:
+	node ./scripts/build.mjs
 
-build: ./node_modules/.bin/node-pre-gyp
-	./node_modules/.bin/node-pre-gyp configure --silent
-	./node_modules/.bin/node-pre-gyp build -j max
-
-build-shared: ./node_modules/.bin/node-pre-gyp
-	./node_modules/.bin/node-pre-gyp configure --shared_gdal=true --silent
-	./node_modules/.bin/node-pre-gyp build -j max
+build-debug:
+	node ./scripts/build.mjs --debug
 
 rebuild:
 	@make clean
 	@make
 
 test: clean-test build
-	./node_modules/.bin/mocha $(MOCHA_ARGS)
-	@make clean-test
-
-test-shared: clean-test build-shared
 	./node_modules/.bin/mocha $(MOCHA_ARGS)
 	@make clean-test
 

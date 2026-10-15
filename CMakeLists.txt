@@ -120,18 +120,29 @@ option(BUNDLED_GDAL
   ${BUNDLED_GDAL_DEFAULT})
 option(ENABLE_LOGGING "Compile the logging API (gdal.startLogging and friends)" OFF)
 
-if(BUNDLED_GDAL AND NOT GDAL_FROM_PACKAGE)
-  # gdal_coordinate_transformation.cpp includes <proj.h> in this configuration.
-  # With a GDAL package the PROJ include directories come with its target.
-  find_path(PROJ_INCLUDE_DIR NAMES proj.h)
-  if(NOT PROJ_INCLUDE_DIR)
-    # a system GDAL usually sits next to PROJ, e.g. .../include/gdal and .../include
-    get_filename_component(GDAL_INCLUDE_ROOT ${GDAL_INCLUDE_DIR} DIRECTORY)
-    find_path(PROJ_INCLUDE_DIR NAMES proj.h HINTS ${GDAL_INCLUDE_ROOT})
+# gdal_coordinate_transformation.cpp includes <proj.h> in every configuration, but
+# PROJ is a private dependency of GDAL: Conan links it as $<LINK_ONLY:PROJ::proj>,
+# so the library ends up on the link line while its include directories do not.
+# Conan's PROJ package also declares no include directories of its own (its
+# locations only end up in CMAKE_INCLUDE_PATH), so look for the header first,
+# then for a PROJ CMake package that does carry them, then next to GDAL.
+find_package(proj CONFIG QUIET)
+find_path(PROJ_INCLUDE_DIR NAMES proj.h)
+if(NOT PROJ_INCLUDE_DIR AND GDAL_INCLUDE_DIR)
+  # a system GDAL usually sits next to PROJ, e.g. .../include/gdal and .../include
+  get_filename_component(GDAL_INCLUDE_ROOT ${GDAL_INCLUDE_DIR} DIRECTORY)
+  find_path(PROJ_INCLUDE_DIR NAMES proj.h HINTS ${GDAL_INCLUDE_ROOT})
+endif()
+if(NOT PROJ_INCLUDE_DIR)
+  # a PROJ whose CMake package carries the include directories itself
+  if(TARGET proj::proj)
+    set(PROJ_TARGET proj::proj)
+  elseif(TARGET PROJ::proj)
+    set(PROJ_TARGET PROJ::proj)
   endif()
-  if(NOT PROJ_INCLUDE_DIR)
-    message(FATAL_ERROR "proj.h not found, set -DPROJ_INCLUDE_DIR=<dir containing proj.h>")
-  endif()
+endif()
+if(NOT PROJ_INCLUDE_DIR AND NOT PROJ_TARGET)
+  message(FATAL_ERROR "proj.h not found, set -DPROJ_INCLUDE_DIR=<dir containing proj.h>")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -183,6 +194,11 @@ if(WIN32)
     # differs between the two MSVC configurations - see common.gypi
     _HAS_EXCEPTIONS=1)
   target_compile_options(gdal PRIVATE /MP /GR /EHsc /permissive-)
+  # node.lib - the import library of node.exe - and the static zlib coming from
+  # Conan both define the zlib symbols that node.exe exports, which MSVC reports
+  # as LNK2005.  The definitions of the library that comes first on the command
+  # line win, which is the zlib the addon should be using.
+  target_link_options(gdal PRIVATE /FORCE:MULTIPLE)
   target_link_libraries(gdal PRIVATE
     secur32 odbccp32 odbc32 crypt32 ws2_32 advapi32 wbemuuid Shlwapi)
 elseif(APPLE)
@@ -195,6 +211,12 @@ endif()
 
 target_link_libraries(gdal PRIVATE ${GDAL_TARGET})
 
+# PROJ has to be linked directly for its include directories to be expanded
+# (see the PROJ detection above).
+if(PROJ_TARGET)
+  target_link_libraries(gdal PRIVATE ${PROJ_TARGET})
+endif()
+
 # cmake-js passes the Node.js import library (node.lib on Windows) in
 # CMAKE_JS_LIB; without it the napi_* and uv_* symbols stay unresolved.
 if(CMAKE_JS_LIB)
@@ -202,8 +224,8 @@ if(CMAKE_JS_LIB)
 endif()
 
 # ---------------------------------------------------------------------------
-# node-pre-gyp layout: lib/gdal.js -> binary.find() ->
-# lib/binding/napi-v8-<platform>-<arch>/gdal.node
+# The addon is loaded from lib/binding/<binary.module_path>/gdal.node, the
+# layout that lib/gdal.js and scripts/install.mjs both compute from package.json
 # ---------------------------------------------------------------------------
 set(BINDING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/binding/${NODE_PRE_GYP_DIR})
 
