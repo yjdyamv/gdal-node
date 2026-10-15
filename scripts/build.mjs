@@ -9,8 +9,8 @@
  *
  * Usage: node scripts/build.mjs [--debug] [--shared-gdal]
  *
- * --shared-gdal builds against the GDAL already installed on the system (or one
- * pointed at with -DGDAL_INCLUDE_DIR/-DGDAL_LIBRARY) and skips Conan entirely.
+ * --shared-gdal builds against the GDAL already installed on the system and
+ * skips Conan entirely; the build then defaults to GDAL's own data files.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -79,9 +79,6 @@ export const buildFromSource = (debug = false, sharedGdal = false) => {
   const args = [ cmakejs, 'build' ]
   if (debug) {
     args.push('--debug')
-  }
-  if (sharedGdal) {
-    args.push('--cmake-options=-DBUNDLED_GDAL=OFF')
   }
   return run(process.execPath, args, env)
 }

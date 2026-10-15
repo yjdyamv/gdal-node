@@ -102,16 +102,17 @@ else()
   endif()
 endif()
 
-# The npm package ships the GDAL and PROJ data files from deps/ no matter where
-# the GDAL library itself comes from: lib/gdal.js points GDAL_DATA/PROJ_LIB at
-# deps/ whenever the module reports itself as bundled.  Pass -DBUNDLED_GDAL=OFF
-# to build against a GDAL that provides its own data.
+# BUNDLED_GDAL makes the module report itself as shipping its own GDAL and PROJ
+# data: lib/gdal.js then points GDAL_DATA, PROJ_LIB and CURL_CA_BUNDLE at the
+# data files in deps/.  That is what the released binaries do - the GDAL from
+# Conan has its data files in the Conan cache, which is not shipped.  A GDAL of
+# the system brings its own data, so it is only used with -DBUNDLED_GDAL=ON.
 if(DEFINED BUNDLED_GDAL)
   set(BUNDLED_GDAL_DEFAULT ${BUNDLED_GDAL})
 elseif(GDAL_FROM_PACKAGE)
-  set(BUNDLED_GDAL_DEFAULT OFF)
-else()
   set(BUNDLED_GDAL_DEFAULT ON)
+else()
+  set(BUNDLED_GDAL_DEFAULT OFF)
 endif()
 
 option(BUNDLED_GDAL
