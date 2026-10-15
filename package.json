@@ -54,6 +54,7 @@
     "bench": "node bench/streams.js",
     "build:cmake": "node scripts/build.mjs",
     "clean:cmake": "cmake-js clean",
+    "package": "node scripts/package.mjs",
     "conan:install": "conan install . -of build-conan -s build_type=Release",
     "lint:cpp": "clang-format -i src/*.cpp src/*.hpp && clang-format -i src/*/*.cpp src/*/*.hpp",
     "lint:js": "eslint lib test examples",

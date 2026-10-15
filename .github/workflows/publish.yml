@@ -37,12 +37,16 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.11"
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npm install node-gyp
-    - run: npx @mapbox/node-pre-gyp configure
-    - run: npx @mapbox/node-pre-gyp build -j max
+    - name: Build the addon
+      run: npm run build:cmake
     - run: npm test
-    - run: npx @mapbox/node-pre-gyp package
+    - name: Pack the prebuilt binary
+      run: npm run package
     - run: npx @mmomtchev/node-pre-gyp-github publish
       env:
         NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
