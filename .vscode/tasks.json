@@ -6,7 +6,7 @@
     {
       "label": "Build",
       "type": "shell",
-      "command": "npx node-pre-gyp build -j max",
+      "command": "node scripts/build.mjs",
       "problemMatcher": {
         "base": "$gcc",
         "fileLocation": [
@@ -20,37 +20,35 @@
       }
     },
     {
-      "label": "Configure Release",
+      "label": "Build debug",
       "type": "shell",
-      "command": "npx node-pre-gyp configure",
-      "problemMatcher": [],
+      "command": "node scripts/build.mjs --debug",
+      "problemMatcher": {
+        "base": "$gcc",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}/build"
+        ]
+      },
       "group": "build"
     },
     {
-      "label": "Configure Debug",
+      "label": "Build against the GDAL of the system",
       "type": "shell",
-      "command": "npx node-pre-gyp configure --debug",
-      "problemMatcher": [],
+      "command": "node scripts/build.mjs --shared-gdal",
+      "problemMatcher": {
+        "base": "$gcc",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}/build"
+        ]
+      },
       "group": "build"
     },
     {
-      "label": "Configure Logging",
+      "label": "Clean",
       "type": "shell",
-      "command": "npx node-pre-gyp configure --debug --enable_logging",
-      "problemMatcher": [],
-      "group": "build"
-    },
-    {
-      "label": "Configure ASAN",
-      "type": "shell",
-      "command": "npx node-pre-gyp configure --debug --enable_asan",
-      "problemMatcher": [],
-      "group": "build"
-    },
-    {
-      "label": "Configure coverage",
-      "type": "shell",
-      "command": "npx node-pre-gyp configure --debug --enable_coverage",
+      "command": "npx cmake-js clean",
       "problemMatcher": [],
       "group": "build"
     },

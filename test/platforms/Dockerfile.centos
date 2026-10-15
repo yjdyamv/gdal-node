@@ -18,6 +18,7 @@ RUN \
   mkdir -p /target && chmod 777 /target
 
 RUN if [ "${GDAL}" = "shared" ]; then dnf install -y gdal-devel; fi
+RUN if [ "${GDAL}" != "shared" ]; then dnf install -y python3-pip && (pip3 install --break-system-packages conan || pip3 install conan); fi
 
 COPY entrypoint.sh /
 

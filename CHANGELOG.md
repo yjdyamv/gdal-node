@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [Unreleased]
+
+### Changed
+ - The build system is now CMake.js with Conan: `binding.gyp`, node-gyp and `@mapbox/node-pre-gyp` have been removed, the native addon is built from `CMakeLists.txt` with `npm run build:cmake` and the prebuilt binaries are packed and installed by the new `scripts/package.mjs` and `scripts/install.mjs`
+ - The build dependencies (GDAL, PROJ, GEOS, curl, HDF5, netCDF, ...) are no longer vendored under `deps/`; they are resolved with `conan install` and the only files still shipped in `deps/` are the GDAL and PROJ data files and the curl root certificates. `npm install --build-from-source` builds with Conan, so a compiler and Conan are required to build from source
+
 # [3.13.0]
 
 ### Added

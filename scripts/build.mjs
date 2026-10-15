@@ -7,7 +7,10 @@
  * which cmake-js passes to CMake. CMakeLists.txt copies the resulting addon
  * to lib/binding/<platform>-<arch>.
  *
- * Usage: node scripts/build.mjs [--debug]
+ * Usage: node scripts/build.mjs [--debug] [--shared-gdal]
+ *
+ * --shared-gdal builds against the GDAL already installed on the system (or one
+ * pointed at with -DGDAL_INCLUDE_DIR/-DGDAL_LIBRARY) and skips Conan entirely.
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -44,18 +47,28 @@ const run = (command, args, env) => {
  * Builds the addon, reporting whether it was built
  *
  * @param {boolean} [debug] build a debug addon
+ * @param {boolean} [sharedGdal] use the GDAL of the system, without Conan
  * @returns {boolean}
  */
-export const buildFromSource = (debug = false) => {
+export const buildFromSource = (debug = false, sharedGdal = false) => {
   const toolchain = path.join(root, 'build-conan', 'conan_toolchain.cmake')
-  log('resolving the dependencies with Conan')
-  if (!run('conan', [ 'install', '.', '-of', 'build-conan', '-s', `build_type=${debug ? 'Debug' : 'Release'}` ])) {
-    log('install Conan from https://conan.io/downloads and try again')
-    return false
-  }
-  if (!existsSync(toolchain)) {
-    log(`Conan did not generate ${path.relative(root, toolchain)}`)
-    return false
+  const env = { ...process.env }
+  if (!sharedGdal) {
+    log('resolving the dependencies with Conan')
+    // --build=missing so that a toolchain without prebuilt dependencies
+    // (a distribution that Conan has no binaries for) still works
+    if (!run('conan', [ 'install', '.', '-of', 'build-conan', '--build=missing',
+      '-s', `build_type=${debug ? 'Debug' : 'Release'}` ])) {
+      log('install Conan from https://conan.io/downloads and try again')
+      return false
+    }
+    if (!existsSync(toolchain)) {
+      log(`Conan did not generate ${path.relative(root, toolchain)}`)
+      return false
+    }
+    env.CMAKE_TOOLCHAIN_FILE = toolchain
+  } else {
+    log('using the GDAL installed on this system')
   }
   const cmakejs = path.join(root, 'node_modules', 'cmake-js', 'bin', 'cmake-js')
   if (!existsSync(cmakejs)) {
@@ -67,9 +80,12 @@ export const buildFromSource = (debug = false) => {
   if (debug) {
     args.push('--debug')
   }
-  return run(process.execPath, args, { ...process.env, CMAKE_TOOLCHAIN_FILE: toolchain })
+  if (sharedGdal) {
+    args.push('--cmake-options=-DBUNDLED_GDAL=OFF')
+  }
+  return run(process.execPath, args, env)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(buildFromSource(process.argv.includes('--debug')) ? 0 : 1)
+  process.exit(buildFromSource(process.argv.includes('--debug'), process.argv.includes('--shared-gdal')) ? 0 : 1)
 }

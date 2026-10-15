@@ -33,16 +33,18 @@ jobs:
       with:
         max-size: 1000M
         key: coverage
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npx @mapbox/node-pre-gyp configure --debug --enable_coverage
-      env:
-        CXX: ccache g++
-        CC: ccache gcc
     - name: Build from sources
-      run: npx @mapbox/node-pre-gyp build -j max --debug --enable_coverage
+      run: node scripts/build.mjs --debug
       env:
         CXX: ccache g++
         CC: ccache gcc
+        CXXFLAGS: --coverage
+        LDFLAGS: --coverage
     - name: Run unit tests
       run: npx c8 npm test
       env:
@@ -210,13 +212,13 @@ jobs:
       with:
         max-size: 1000M
         key: mac-${{ matrix.node-version }}
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npx @mapbox/node-pre-gyp configure
-      env:
-        CXX: ccache g++
-        CC: ccache gcc
     - name: Build from sources
-      run: npx @mapbox/node-pre-gyp build -j max
+      run: node scripts/build.mjs
       env:
         CXX: ccache g++
         CC: ccache gcc
@@ -243,13 +245,13 @@ jobs:
       with:
         max-size: 1000M
         key: mac-debug
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npx @mapbox/node-pre-gyp configure --debug
-      env:
-        CXX: ccache g++
-        CC: ccache gcc
     - name: Build from sources
-      run: npx @mapbox/node-pre-gyp build -j max
+      run: node scripts/build.mjs --debug
       env:
         CXX: ccache g++
         CC: ccache gcc
@@ -273,11 +275,16 @@ jobs:
       uses: actions/setup-node@v7
       with:
         node-version: ${{ matrix.node-version }}
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npm install node-gyp
-    - run: npx @mapbox/node-pre-gyp configure
     - name: Build from sources
-      run: npx @mapbox/node-pre-gyp build -j max
+      run: node scripts/build.mjs
     - name: Run unit tests
       run: npm test
       env:
@@ -293,10 +300,16 @@ jobs:
       uses: actions/setup-node@v7
       with:
         node-version: 24.x
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+    - name: Install Conan
+      run: |
+        pip install conan
+        conan profile detect --force
     - run: npm install --ignore-scripts
-    - run: npx @mapbox/node-pre-gyp configure --debug
     - name: Build from sources
-      run: npx @mapbox/node-pre-gyp build -j max
+      run: node scripts/build.mjs --debug
     - name: Run unit tests
       run: npm test
       env:

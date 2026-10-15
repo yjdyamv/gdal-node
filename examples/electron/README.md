@@ -15,6 +15,8 @@ npm install --save gdal-async
 
 :warning: This is still highly experimental. The binary distribution of Electron, unlike Node.js, is built using `clang`/`libc++` and is not fully binary compatible with `MSVC` built projects.
 
+:information_source: The steps below were written for the node-gyp build. With the CMake build the addon is built with `node scripts/build.mjs`, which accepts `--cmake-options` for the compiler and standard library settings, and the resulting addon is written to `lib/binding/napi-v8-win32-x64/gdal.node`.
+
 First of all, install `clang` >= 14.0.0 for Windows from [https://releases.llvm.org/download.html](https://releases.llvm.org/download.html).
 
 Checkout and build `libc++` according to their instructions. This is a very important step since it is using `libc++` which renders the module compatible with Electron.
