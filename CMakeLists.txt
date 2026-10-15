@@ -1,7 +1,7 @@
 # CMake build for the gdal-async native addon.
 #
-# Generator: Ninja (see CMakePresets.json, or -G Ninja). cmake-js also prefers
-# Ninja automatically as soon as it is on PATH.
+# Generator: CMake's default for the platform (Visual Studio on Windows).
+# CMakePresets.json contains Ninja presets for a manual command-line build.
 #
 # GDAL comes from Conan:
 #
@@ -17,18 +17,15 @@
 # Without Conan it falls back to a GDAL pointed at with -DGDAL_INCLUDE_DIR=<dir
 # with gdal.h> and -DGDAL_LIBRARY=<libgdal>.
 #
-# The binding still lands in lib/binding/napi-v8-<platform>-<arch>/gdal.node,
-# so nothing in lib/gdal.js has to change - it locates the binding through
-# node-pre-gyp's binary.find().
-#
-# The vendored sources under deps/ (binding.gyp's SHARED_GDAL=OFF path) are not
-# ported to CMake and remain node-gyp-only.
+# The binding lands in lib/binding/napi-v8-<platform>-<arch>/gdal.node, the
+# directory that lib/gdal.js and scripts/install.mjs look in.  The dependencies
+# are not vendored anymore, they come from Conan.
 
 cmake_minimum_required(VERSION 3.15)
 
 project(gdal-async LANGUAGES CXX)
 
-# Node 24's V8 headers require C++20 (cpp_17.gypi's C++17 is a NAN-era leftover)
+# Node 24's V8 headers require C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -38,7 +35,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # ---------------------------------------------------------------------------
-# Node.js headers and node-addon-api, resolved the same way binding.gyp does
+# Node.js headers and node-addon-api, resolved through node-addon-api itself
 # ---------------------------------------------------------------------------
 find_program(NODE_EXECUTABLE NAMES node REQUIRED)
 
@@ -54,7 +51,7 @@ endif()
 
 # node-pre-gyp's directory name for the N-API build, e.g. napi-v8-linux-x64.
 # Keep NAPI_BUILD_VERSION in sync with the napi-v8 in binary.module_path in
-# package.json and with NAPI_VERSION in binding.gyp.
+# package.json.
 set(NAPI_BUILD_VERSION 8)
 execute_process(
   COMMAND ${NODE_EXECUTABLE} -p "process.platform + '-' + process.arch"
@@ -105,8 +102,10 @@ else()
   endif()
 endif()
 
-# A GDAL coming from a package carries its own data files, so the module must not
-# claim to be self-contained: lib/gdal.js would point GDAL_DATA/PROJ_LIB at deps/.
+# The npm package ships the GDAL and PROJ data files from deps/ no matter where
+# the GDAL library itself comes from: lib/gdal.js points GDAL_DATA/PROJ_LIB at
+# deps/ whenever the module reports itself as bundled.  Pass -DBUNDLED_GDAL=OFF
+# to build against a GDAL that provides its own data.
 if(DEFINED BUNDLED_GDAL)
   set(BUNDLED_GDAL_DEFAULT ${BUNDLED_GDAL})
 elseif(GDAL_FROM_PACKAGE)
@@ -191,7 +190,7 @@ if(WIN32)
     PROJ_DLL=
     OPJ_EXPORTS
     # exceptions must be on for all translation units, sizeof(std::exception)
-    # differs between the two MSVC configurations - see common.gypi
+    # differs between the two MSVC configurations
     _HAS_EXCEPTIONS=1)
   target_compile_options(gdal PRIVATE /MP /GR /EHsc /permissive-)
   # node.lib - the import library of node.exe - and the static zlib coming from

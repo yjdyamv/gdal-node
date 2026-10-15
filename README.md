@@ -242,13 +242,13 @@ A separate plugin [ndarray-gdal](https://github.com/mmomtchev/ndarray-gdal) allo
 
 A separate plugin [gdal-exprtk](https://github.com/mmomtchev/gdal-exprtk) adds seamless integration with [ExprTk.js](https://github.com/mmomtchev/ExprTk.js) allowing for truly multi-threaded and asynchronous computing with raster datasets. The plugin requires at least `gdal-async@3.5`.
 
-### Pruning the source tree
+### The size of the module
 
-A special NPM script target, `npm run prune` allows to delete most of the bundled source packages - these are not needed unless rebuilding from source. It significantly reduces the overall size of this module.
+The sources of the dependencies are not bundled anymore - they are resolved by Conan when the addon is built. The npm package ships the prebuilt binary, the native sources (so that it can be rebuilt from source) and the GDAL and PROJ data files.
 
 ### Using in Amazon Linux Lambdas
 
-Amazon Linux was supported starting from `gdal-async@3.3.4`. There is no shared GDAL support, only the bundled GDAL version is supported. It is highly recommended that you prune the module before deploying to an Amazon Lambda - when pruned the module is only 16MB zipped. Starting from `gdal-async@3.6.0` only Amazon 2022 will be supported.
+Amazon Linux was supported starting from `gdal-async@3.3.4`. There is no shared GDAL support, only the bundled GDAL version is supported. When deploying to an Amazon Linux Lambda only the GDAL and PROJ data files and the prebuilt binary are required. Starting from `gdal-async@3.6.0` only Amazon 2022 will be supported.
 
 ### Using with Electron
 
