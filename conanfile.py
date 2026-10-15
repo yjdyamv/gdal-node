@@ -18,11 +18,11 @@ class GdalAsyncDependencies(ConanFile):
     The CMake side picks the package up through find_package(gdal CONFIG), which
     is what the CMakeDeps generator provides.
 
-    GDAL itself can come from conan-center or from a tree you built yourself -
-    see conan/recipes/gdal-prebuilt for the latter:
+    GDAL comes from conan/recipes/gdal, the fork of the recipe of conan-center
+    that carries the ExprTk and muparser options of the addon.  To build
+    against the GDAL that the system already has, skip Conan altogether with
 
-        GDAL_LOCAL_ROOT=/path/to/gdal-prefix \\
-            conan export-pkg conan/recipes/gdal-prebuilt --version=3.13.0
+        node scripts/build.mjs --shared-gdal
     """
 
     settings = "os", "arch", "compiler", "build_type"
@@ -34,8 +34,7 @@ class GdalAsyncDependencies(ConanFile):
         # version of the vendored sources that used to live under deps/libgdal.
         # A version range is not an option: Conan resolves it to the newest
         # recipe it knows, which may not have a binary for the current
-        # toolchain. Edit this line (or package your own GDAL with
-        # conan/recipes/gdal-prebuilt) when the toolchain cannot consume it.
+        # toolchain. Edit this line when the toolchain cannot consume it.
         # The set of drivers the addon ships is defined by conan/recipes/gdal,
         # a fork of the recipe of conan-center: it adds the ExprTk and muparser
         # options (VRT pixel functions, gdal.calcAsync/gdal.wrapVRT) and aligns
