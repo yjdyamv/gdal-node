@@ -1,4 +1,4 @@
-ARG VERSION=latest
+ARG VERSION=2023
 FROM amazonlinux:${VERSION}
 
 ARG NODEJS=20
@@ -12,7 +12,7 @@ RUN \
   alternatives --install /usr/bin/python python /usr/bin/python3 60 && \
   mkdir -p /target && chmod 777 /target
 
-RUN if [ "${GDAL}" = "shared" ]; then error; fi
+RUN if [ "${GDAL}" = "shared" ]; then echo "Amazon Linux does not ship a GDAL development package, use GDAL=bundled" >&2; exit 1; fi
 RUN if [ "${GDAL}" != "shared" ]; then yum install -y python3-pip && (pip3 install --break-system-packages conan || pip3 install conan); fi
 
 COPY entrypoint.sh /

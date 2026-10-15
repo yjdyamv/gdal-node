@@ -1,7 +1,4 @@
-# This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
-
-name: Node.js CI
+name: Tests
 
 on:
   push:
@@ -13,304 +10,112 @@ on:
   workflow_dispatch:
     inputs:
       testNetwork:
-        description: 'Run tests that require network connectivity'
+        description: 'Run the tests that require network connectivity'
         required: false
         default: '0'
 
+# A push supersedes the run it interrupts: without this, every push leaves the
+# jobs of the previous runs running, and this workflow takes half an hour
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  bundled_gdal_coverage:
+  build-and-test:
 
-    runs-on: ubuntu-22.04
+    name: ${{ matrix.name }}
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: Linux, x64
+          - os: windows-2022
+            name: Windows, x64
+          - os: macos-15
+            name: macOS, arm64
 
     steps:
     - uses: actions/checkout@v7
+    - name: Select the Xcode
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        # conan-center publishes the macOS binaries built with apple-clang 17,
+        # which is the Xcode 26 of the macos-15 image, and Conan reuses them
+        # only for that exact version of the compiler.  Without it, the whole
+        # dependency tree is built from source on every run.
+        XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+        if [ -n "${XCODE}" ]; then sudo xcode-select -s "${XCODE}"; fi
+        xcode-select -p
+        clang --version
     - name: Use Node.js 24.x
       uses: actions/setup-node@v7
       with:
         node-version: 24.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: coverage
+    - name: Install the build dependencies
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS}" == "Linux" ]; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build ccache
+        elif [ "${RUNNER_OS}" == "macOS" ]; then
+          brew install ninja ccache
+        elif [ "${RUNNER_OS}" == "Windows" ]; then
+          # The pinned Windows profile builds with Ninja instead of MSBuild.
+          # The image ships it, but it is not part of the tools it guarantees
+          # (it was removed from windows-2022 for a while in 2023)
+          command -v ninja >/dev/null || choco install ninja --no-progress -y
+        fi
     - name: Install Conan
+      run: pip3 install --break-system-packages conan || pip3 install conan
+    - name: Detect the Conan profile
       run: |
-        pip install conan
         conan profile detect --force
+        conan profile show
+    - name: Cache the Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conan/profiles/**') }}
+        restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-
+    - name: Cache the compiler output
+      if: runner.os != 'Windows'
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-${{ matrix.os }}
+        max-size: 500M
     - run: npm install --ignore-scripts
-    - name: Build from sources
-      run: node scripts/build.mjs --debug
+    - name: Build the addon
+      id: build
+      continue-on-error: true
+      shell: bash
+      run: node scripts/build.mjs 2>&1 | tee build.log
+    - name: Run the tests
+      id: test
+      if: steps.build.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      run: npm test 2>&1 | tee test.log
       env:
-        CXX: ccache g++
-        CC: ccache gcc
-        CXXFLAGS: --coverage
-        LDFLAGS: --coverage
-    - name: Run unit tests
-      run: npx c8 npm test
-      env:
-        MOCHA_TEST_NETWORK: 1
-    - name: Collect code coverage
+        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+    - name: Report the failure
+      # The log of a job is only visible to the owner of the repository, but
+      # the annotations of a check run are public: send the tail of the log
+      # there so that a failure can be diagnosed without that access.  GitHub
+      # keeps only the first 4096 characters of an annotation, so the tail has
+      # to stay well below that after the escaping of the newlines
+      if: steps.build.outcome == 'failure' || steps.test.outcome == 'failure'
+      shell: bash
       run: |
-        npm run gcov
-        npm run lcov
-    - run: npm run codecov
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-
-  test_distros_shared:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        linux-version:
-          - ubuntu:22.04
-          - ubuntu:24.04
-          - ubuntu:26.04
-          - debian:bookworm
-          - fedora:42
-          # CentOS is disabled because of
-          # https://bugzilla.redhat.com/show_bug.cgi?id=2376350
-          # - centos:stream10
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: distros-shared-${{ matrix.linux-version }}
-    - run: npm run container dev ${{ matrix.linux-version }} 24 shared
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-
-  test_distros_bundled:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        linux-version: [ 'amazonlinux:2023', 'ubuntu:24.04' ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 20.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: distros-bundled-${{ matrix.linux-version }}
-    - run: npm run container dev ${{ matrix.linux-version }} 22 bundled
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-
-  test_node_old:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [ 20, 22, 24 ]
-        gdal-version: [ 'shared', 'bundled' ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: node-${{ matrix.node-version }}
-    - run: npm run container dev debian-archive:bullseye ${{ matrix.node-version }} ${{ matrix.gdal-version }}
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-
-  test_node_new:
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [ 26 ]
-        gdal-version: [ 'shared', 'bundled' ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: node-${{ matrix.node-version }}
-    - run: npm run container dev debian:trixie ${{ matrix.node-version }} ${{ matrix.gdal-version }}
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-
-  test_asan:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: asan
-    - run: npm run container asan ubuntu:22.04 24 bundled
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-
-  test_mac:
-
-    runs-on: ${{ matrix.mac-version }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        mac-version: [ macos-15-intel, macos-15 ]
-        node-version: [ 20.x, 22.x, 24.x, 26.x ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v7
-      with:
-        node-version: ${{ matrix.node-version }}
-    - uses: actions/setup-python@v7
-      with:
-        python-version: "3.11"
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: mac-${{ matrix.node-version }}
-    - name: Install Conan
-      run: |
-        pip install conan
-        conan profile detect --force
-    - run: npm install --ignore-scripts
-    - name: Build from sources
-      run: node scripts/build.mjs
-      env:
-        CXX: ccache g++
-        CC: ccache gcc
-    - name: Run unit tests
-      run: npm test
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-  test_mac_debug:
-
-    runs-on: macos-15
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - uses: actions/setup-python@v7
-      with:
-        python-version: "3.11"
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
-      with:
-        max-size: 1000M
-        key: mac-debug
-    - name: Install Conan
-      run: |
-        pip install conan
-        conan profile detect --force
-    - run: npm install --ignore-scripts
-    - name: Build from sources
-      run: node scripts/build.mjs --debug
-      env:
-        CXX: ccache g++
-        CC: ccache gcc
-    - name: Run unit tests
-      run: npm test
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-  test_win:
-
-    runs-on: windows-2022
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [ 20.x, 22.x, 24.x, 26.x ]
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v7
-      with:
-        node-version: ${{ matrix.node-version }}
-    - uses: actions/setup-python@v7
-      with:
-        python-version: "3.11"
-    - name: Install Conan
-      run: |
-        pip install conan
-        conan profile detect --force
-    - run: npm install --ignore-scripts
-    - name: Build from sources
-      run: node scripts/build.mjs
-    - name: Run unit tests
-      run: npm test
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
-
-  test_win_debug:
-
-    runs-on: windows-2022
-
-    steps:
-    - uses: actions/checkout@v7
-    - name: Use Node.js 24.x
-      uses: actions/setup-node@v7
-      with:
-        node-version: 24.x
-    - uses: actions/setup-python@v7
-      with:
-        python-version: "3.11"
-    - name: Install Conan
-      run: |
-        pip install conan
-        conan profile detect --force
-    - run: npm install --ignore-scripts
-    - name: Build from sources
-      run: node scripts/build.mjs --debug
-    - name: Run unit tests
-      run: npm test
-      env:
-        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+        for f in build.log test.log; do
+          if [ -f "${f}" ]; then
+            # awk, GNU and BSD sed disagree on the ':a;N;$!ba;' idiom
+            echo "::error title=${f}::$(tail -c 3000 "${f}" | awk '{gsub(/\r/,""); gsub(/%/,"%25"); printf "%s%%0A", $0}')"
+          fi
+        done
+        exit 1

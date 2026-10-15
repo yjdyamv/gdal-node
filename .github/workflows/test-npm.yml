@@ -1,4 +1,4 @@
-name: Test npm package
+name: Tests (npm package)
 
 on:
   workflow_dispatch:
@@ -9,6 +9,8 @@ on:
 
 jobs:
   test_npm_binaries:
+
+    name: Published binaries
 
     runs-on: ${{ matrix.platform }}
 
@@ -22,10 +24,7 @@ jobs:
           - macos-14
           - macos-15-intel
           - macos-15
-        node-version: [ 22, 24, 26 ]
-        include:
-          - platform: ubuntu-22.04
-            node-version: 20
+        node-version: [ 24 ]
 
     steps:
     - name: Use Node.js ${{ matrix.node-version }}
@@ -54,6 +53,8 @@ jobs:
 
   test_npm_rebuild:
 
+    name: Rebuild from source
+
     runs-on: ${{ matrix.platform }}
 
     strategy:
@@ -66,10 +67,7 @@ jobs:
           - macos-14
           - macos-15-intel
           - macos-15
-        node-version: [ 22, 24, 26 ]
-        include:
-          - platform: ubuntu-22.04
-            node-version: 20
+        node-version: [ 24 ]
 
     steps:
     - name: Use Node.js ${{ matrix.node-version }}

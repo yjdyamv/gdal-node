@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# A failing step aborts the test run: a failed build must never be followed
+# by the test suite, which would then only report the confusing secondary
+# errors caused by the missing binding
+set -e
+
 export HOME=/target
 SEP="\n=======================================================\n"
 echo -e "${SEP}Preparing source tree${SEP}"
@@ -36,7 +41,25 @@ fi
 
 if [ "${GDAL}" != "shared" ]; then
   echo -e "${SEP}Preparing Conan${SEP}"
-  conan profile detect --force
+  # Conan takes CC and CXX for the name of the compiler executable: the two-word
+  # "ccache gcc" of the masquerade above ends up detected as no compiler at all,
+  # and the profile it writes then rejects the compiler.cppstd=20 of the install
+  # with "'settings.compiler' value not defined"
+  env -u CC -u CXX conan profile detect --force
+
+  # "ccache gcc" is not a compiler CMake can use: CMake keeps ccache as the
+  # compiler and gcc as its first, permanent argument, and a recipe that calls the
+  # compiler itself - libpng preprocesses its configuration with it - ends up
+  # running "ccache -E".  A real compiler with ccache as its launcher is the way
+  # CMake expects both the compiler and ccache to be given
+  CONFS=""
+  if [ -x /usr/bin/gcc ] && which ccache >/dev/null; then
+    CONFS="${CONFS}tools.build:compiler_executables={\"c\": \"gcc\", \"cpp\": \"g++\"}\n"
+    CONFS="${CONFS}tools.cmake.cmaketoolchain:extra_variables={\"CMAKE_C_COMPILER_LAUNCHER\": \"ccache\", \"CMAKE_CXX_COMPILER_LAUNCHER\": \"ccache\"}\n"
+  fi
+  if [ -n "${CONFS}" ]; then
+    printf '[conf]\n%b' "${CONFS}" >> ${HOME}/.conan2/profiles/default
+  fi
 fi
 
 case ${1} in
@@ -44,7 +67,7 @@ case ${1} in
     echo -e "${SEP}Testing current version against ${GDAL_NAME} GDAL${SEP}"
     node scripts/build.mjs ${GDAL_OPT}
     npm test
-    R=$?
+    R=0
     ;;
 
   RELEASE)
@@ -53,7 +76,7 @@ case ${1} in
     node scripts/install.mjs
     npx yatag
     npm test
-    R=$?
+    R=0
     ;;
 
   PUBLISH)
@@ -62,7 +85,7 @@ case ${1} in
     npm test
     npm run package
     npx node-pre-gyp-github publish
-    R=$?
+    R=0
     ;;
 
   ASAN)
@@ -71,12 +94,12 @@ case ${1} in
     export LDFLAGS="-fsanitize=address"
     node scripts/build.mjs ${GDAL_OPT} --debug
     LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.5.0.0 npm test 2> asan.output
-    ! egrep -q "node_gdal|GDAL" asan.output
-    R=$?
-    if [ "$R" -ne 0 ]; then
+    if egrep -q "node_gdal|GDAL" asan.output; then
       echo ${SEP}${SEP}Memory leaks detected${SEP}${SEP}
       cat asan.output
+      exit 1
     fi
+    R=0
     ;;
 esac
 
@@ -86,4 +109,4 @@ if [ ! -z "${2}" ]; then
   exec $@
 fi
 
-exit $R
+exit ${R:-0}

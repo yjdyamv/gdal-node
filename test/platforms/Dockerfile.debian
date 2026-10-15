@@ -1,4 +1,4 @@
-ARG VERSION=bookworm
+ARG VERSION=trixie
 FROM debian:${VERSION}
 
 ARG NODEJS=lts

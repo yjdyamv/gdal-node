@@ -204,6 +204,9 @@ if(WIN32)
 elseif(APPLE)
   target_compile_definitions(gdal PRIVATE DARWIN)
   target_link_libraries(gdal PRIVATE "-framework Security")
+  # a bundle on macOS refuses undefined symbols: the symbols of Node.js are
+  # resolved at load time from the executable, exactly as node-gyp does it
+  target_link_options(gdal PRIVATE "-Wl,-undefined,dynamic_lookup")
 else()
   target_compile_definitions(gdal PRIVATE LINUX)
   target_link_options(gdal PRIVATE "-Wl,--exclude-libs,ALL")
@@ -232,4 +235,9 @@ set(BINDING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/binding/${NODE_PRE_GYP_DIR})
 add_custom_command(TARGET gdal POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${BINDING_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:gdal> ${BINDING_DIR}/gdal.node
+  # lib/index.d.ts is the TypeScript declaration of the addon.  It is generated
+  # from the JSDoc comments of the sources, it is not committed (it is listed in
+  # .gitignore) and the tests do not compile without it.
+  COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}
+          ${NODE_EXECUTABLE} node_modules/yatag/yatag.js
   VERBATIM)

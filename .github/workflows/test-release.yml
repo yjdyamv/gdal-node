@@ -1,4 +1,4 @@
-name: Test release
+name: Tests (release binaries)
 
 on:
   release:
@@ -10,27 +10,15 @@ on:
 jobs:
   test_linux:
 
+    name: Linux containers
+
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
-        linux-version:
-        - ubuntu:24.04
-        - ubuntu:26.04
-        - debian:trixie
-        # CentOS is disabled because of
-        # https://bugzilla.redhat.com/show_bug.cgi?id=2376350
-        # - centos:stream10
-        node-version: [ 22, 24, 26 ]
-        include:
-          - linux-version: ubuntu:22.04
-            node-version: 20
-          - linux-version: fedora:42
-            node-version: 24
-          - linux-version: debian-archive:bullseye
-            node-version: 20
-          - linux-version: amazonlinux:2023
-            node-version: 22
+        linux-version: [ 'ubuntu:24.04', 'debian:trixie', 'amazonlinux:2023' ]
+        node-version: [ 24 ]
 
     steps:
     - uses: actions/checkout@v7
@@ -45,12 +33,14 @@ jobs:
 
   test_winmac:
 
+    name: Windows and macOS
+
     runs-on: ${{ matrix.platforms }}
 
     strategy:
       matrix:
         platforms: [ windows-2022, macos-14, macos-15-intel, macos-15 ]
-        node-version: [ 20, 22, 24, 26 ]
+        node-version: [ 24 ]
 
     steps:
     - uses: actions/checkout@v7

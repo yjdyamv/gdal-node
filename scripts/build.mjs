@@ -53,12 +53,47 @@ const run = (command, args, env) => {
 export const buildFromSource = (debug = false, sharedGdal = false) => {
   const toolchain = path.join(root, 'build-conan', 'conan_toolchain.cmake')
   const env = { ...process.env }
+  // CMake 4 refuses the cmake_minimum_required() older than 3.5 that several
+  // of the dependencies still declare when Conan has to build them.  This has
+  // to be an environment variable: a variable set by the generated toolchain
+  // is set too late for the projects that need it
+  env.CMAKE_POLICY_VERSION_MINIMUM = '3.5'
   if (!sharedGdal) {
     log('resolving the dependencies with Conan')
+    // conan/recipes/gdal is a fork of the recipe of conan-center: it also
+    // carries the ExprTk and muparser options the addon needs.  Exporting it
+    // here makes the CI and the developers use the very same recipe
+    if (!run('conan', [ 'export', path.join(root, 'conan', 'recipes', 'gdal') ])) {
+      return false
+    }
+
     // --build=missing so that a toolchain without prebuilt dependencies
     // (a distribution that Conan has no binaries for) still works
+    // C++20 because the addon needs it for the V8 headers and the profile
+    // written by `conan profile detect` may default to a lower standard
+    // In the CI the pinned profiles of conan/profiles are used instead: they
+    // name the compilers that conan-center has published the binaries with,
+    // while the compilers of a runner are usually newer - Conan would then
+    // rebuild the whole dependency tree from source on every run.  They also
+    // select Ninja over the MSBuild generator that Conan picks by default on
+    // Windows.  Keep them in sync with the runners pinned by
+    // .github/workflows/test-dev.yml
+    // The architecture is part of the name for every platform that has a
+    // profile of each: a profile that pins an architecture the machine does
+    // not have cross-compiles the dependencies, and the executables of the
+    // build context - the sqlite3 that generates proj.db, for one - are then
+    // built for a CPU that cannot run them
+    const arm64 = process.arch === 'arm64'
+    const pinnedPlatform = {
+      darwin: `macos-${arm64 ? 'arm64' : 'x64'}`,
+      linux: 'linux',
+      win32: 'windows'
+    }[process.platform]
+    const pinned = pinnedPlatform ? path.join(root, 'conan', 'profiles', pinnedPlatform) : null
+    const profiles = process.env.CI && pinned && existsSync(pinned) ? [ `-pr:h=${pinned}`, `-pr:b=${pinned}` ] : []
     if (!run('conan', [ 'install', '.', '-of', 'build-conan', '--build=missing',
-      '-s', `build_type=${debug ? 'Debug' : 'Release'}` ])) {
+      '-s', `build_type=${debug ? 'Debug' : 'Release'}`, '-s', 'compiler.cppstd=20',
+      ...profiles ])) {
       log('install Conan from https://conan.io/downloads and try again')
       return false
     }

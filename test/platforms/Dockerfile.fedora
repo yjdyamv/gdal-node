@@ -1,4 +1,4 @@
-ARG VERSION=36
+ARG VERSION=42
 FROM fedora:${VERSION}
 
 ARG NODEJS=lts
@@ -8,9 +8,7 @@ ENV GDAL=${GDAL}
 RUN \
   dnf install -y curl rsync && \
   curl -fsSL https://rpm.nodesource.com/setup_${NODEJS}.x | bash - && \
-  if [ "${NODEJS}" -le 16 ]; \
-  then dnf module install -y nodejs:${NODEJS}/development; \
-  else dnf install -y nodejs; fi && \
+  dnf install -y nodejs && \
   dnf group install -y development-tools && \
   dnf install -y g++ git python ccache && \
   mkdir -p /target && chmod 777 /target

@@ -1,0 +1,20 @@
+diff --git a/frmts/hdf5/CMakeLists.txt b/frmts/hdf5/CMakeLists.txt
+--- a/frmts/hdf5/CMakeLists.txt
++++ b/frmts/hdf5/CMakeLists.txt
+@@ -115,7 +115,15 @@
+   target_compile_definitions(gdal_HDF5 PRIVATE -DWIN32)
+ endif ()
+ target_include_directories(gdal_HDF5 SYSTEM PRIVATE ${HDF5_INCLUDE_DIRS})
+-gdal_target_link_libraries(gdal_HDF5 PRIVATE ${HDF5_C_LIBRARIES})
++# HDF5 is found in CONFIG mode (see ConanFindPackage.cmake), which defines
++# HDF5::HDF5 and the hdf5::* component targets but not the module-mode
++# HDF5_C_LIBRARIES variable that this file reads - and linking an empty list
++# makes gdal_target_link_libraries() reject its PRIVATE argument.
++if (TARGET hdf5::hdf5)
++  gdal_target_link_libraries(gdal_HDF5 PRIVATE hdf5::hdf5)
++else ()
++  gdal_target_link_libraries(gdal_HDF5 PRIVATE ${HDF5_C_LIBRARIES})
++endif ()
+
+ if (HDF5_BUILD_SHARED_LIBS)
+   target_compile_definitions(gdal_HDF5 PRIVATE -DH5_BUILT_AS_DYNAMIC_LIB)

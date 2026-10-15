@@ -1,4 +1,4 @@
-ARG VERSION=stream9
+ARG VERSION=stream10
 FROM quay.io/centos/centos:${VERSION}
 
 ARG NODEJS=lts

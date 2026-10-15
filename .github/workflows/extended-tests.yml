@@ -1,0 +1,101 @@
+name: Extended tests
+
+# These tests are slow - a debug build, a build with AddressSanitizer and the
+# build of the addon inside a dozen of containers - they are not run on every
+# push, only manually.
+
+on:
+  workflow_dispatch:
+    inputs:
+      testNetwork:
+        description: 'Run the tests that require network connectivity'
+        required: false
+        default: '1'
+
+jobs:
+  coverage:
+
+    name: Code coverage
+
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24.x
+    - name: Install Conan
+      run: pip install conan
+    - name: Detect the Conan profile
+      run: conan profile detect --force
+    - name: Cache the Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-coverage-${{ hashFiles('conanfile.py') }}
+    - run: npm install --ignore-scripts
+    - name: Build the addon with coverage
+      run: node scripts/build.mjs --debug
+      env:
+        CXXFLAGS: --coverage
+        LDFLAGS: --coverage
+    - name: Run the tests
+      run: npx c8 npm test
+      env:
+        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+    - name: Collect the coverage
+      run: |
+        npm run gcov
+        npm run lcov
+    - uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: coverage
+
+  asan:
+
+    name: AddressSanitizer
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24.x
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        max-size: 1000M
+        key: asan
+    - run: npm run container asan ubuntu:22.04 24 bundled
+      env:
+        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+
+  distros:
+
+    name: ${{ matrix.linux-version }}, bundled GDAL
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        linux-version: [ 'amazonlinux:2023', 'ubuntu:24.04', 'debian:trixie' ]
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24.x
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        max-size: 1000M
+        key: distros-bundled-${{ matrix.linux-version }}
+    - run: npm run container dev ${{ matrix.linux-version }} 24 bundled
+      env:
+        MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
  - The build system is now CMake.js with Conan: `binding.gyp`, node-gyp and `@mapbox/node-pre-gyp` have been removed, the native addon is built from `CMakeLists.txt` with `npm run build:cmake` and the prebuilt binaries are packed and installed by the new `scripts/package.mjs` and `scripts/install.mjs`
  - The build dependencies (GDAL, PROJ, GEOS, curl, HDF5, netCDF, ...) are no longer vendored under `deps/`; they are resolved with `conan install` and the only files still shipped in `deps/` are the GDAL and PROJ data files and the curl root certificates. `npm install --build-from-source` builds with Conan, so a compiler and Conan are required to build from source
+ - The container test matrix now uses currently supported distributions: Ubuntu 22.04/24.04/26.04, Debian Bookworm/Trixie, Fedora 42, CentOS Stream 10, Arch Linux and Amazon Linux 2023. The `debian-archive` image (Debian Bullseye and older, with the Debian archive keyring) has been removed and the Linux prebuilt binaries are now built on Ubuntu 22.04 (minimum glibc 2.35) instead of Debian Bullseye
 
 # [3.13.0]
 

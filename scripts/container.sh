@@ -5,7 +5,7 @@ DIST=$2
 NODEJS=$3
 GDAL=$4
 if [ -z "${OP}" ]; then
-  echo "container.sh <release|dev|shell> [ubuntu:{xx.yy}|centos:stream9|fedora:{36|37|38}|debian:{trixie|bookworm}|debian-archive:{bullseye}|amazonlinux:2022] [<Node.js version>] [shared]"
+  echo "container.sh <release|dev|publish|asan|shell> [ubuntu:{22.04|24.04|26.04}|centos:stream10|fedora:42|debian:{bookworm|trixie}|archlinux:latest|amazonlinux:2023] [<Node.js version>] [shared]"
   exit 1
 fi
 if [ ! -d "test/platforms" ]; then
@@ -15,7 +15,7 @@ fi
 
 if [ -z "${DIST}" ]; then
   DIST=ubuntu
-  VERSION=16.04
+  VERSION=24.04
 else
   VERSION=`echo ${DIST} | cut -f 2 -d":"`
   DIST=`echo ${DIST} | cut -f 1 -d":"`

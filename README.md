@@ -327,10 +327,11 @@ The async bindings, the curve geometries, the TypeScript support, the built-in n
 Before submitting pull requests, please update the [tests](test) and make sure they all pass.
 
 ```sh
-$ npm test # test against bundled gdal
-$ npm run test:shared # test against most major versions
-# test against shared gdal on given Linux version and Node.js version
-$ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazon}:{version} 14|16|18|20|lts shared
+$ npm test # test against the bundled gdal
+# the CI matrix tests the bundled gdal only
+$ npm run test:shared # against the system gdal of a few distributions
+# test against the shared gdal of a given Linux version and Node.js version
+$ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{version} 20|22|24|lts shared
 ```
 
 ## License
@@ -349,6 +350,6 @@ Since 3.12, the current minimum requirements for the prebuilt binaries are:
 
 - Windows - virtually all x86-64 versions
 - macOS - macOS 15 on both x86-64 and arm8-64
-- Linux - glibc at least 2.31 (Debian Bullseye / Ubuntu 22.04) on x84-64 with the exception of the Node 25 prebuilt binaries which require at least 2.41 (Debian Trixie / Ubuntu 24.04)
+- Linux - glibc at least 2.35 (Ubuntu 22.04 / Debian 12) on x84-64 with the exception of the Node 25 prebuilt binaries which require at least 2.41 (Debian Trixie / Ubuntu 24.04)
 
 When rebuilding from source, the earliest unit tested GDAL is GDAL 3.10.2 (default one on Ubuntu 22.04) although all 3.x versions should work.

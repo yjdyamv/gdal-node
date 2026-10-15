@@ -1,0 +1,37 @@
+# The profile the CI uses on macOS x86_64 (the macos-15-intel image).
+#
+# It is not detected, but pinned to the compiler of the binaries published by
+# conan-center: the Xcode of the runner is much newer and Conan would rebuild
+# the whole dependency tree from source on every run.
+# Keep in sync with conan-center and with the Xcode that the workflow selects.
+# conan/profiles/macos-arm64 is the same profile for the arm64 runners; the two
+# only differ by the architecture, which is also the reason why they exist at
+# all: a profile that names an architecture the machine does not have - armv8
+# on an intel runner - makes Conan cross-compile the dependencies, and the
+# executables of the build context (the sqlite3 that generates proj.db, for
+# one) cannot be run at the end of the build of PROJ: macOS answers EBADARCH,
+# which Node.js reports as "Unknown system error -86".
+[settings]
+os=Macos
+arch=x86_64
+compiler=apple-clang
+compiler.version=17
+compiler.libcxx=libc++
+compiler.cppstd=20
+build_type=Release
+
+[conf]
+# Without this Conan keeps the platform default generator of CMake (Unix
+# Makefiles, or Xcode on macOS), which is slower on a build as large as the
+# ~1300 translation units of GDAL.  GDAL is always built
+# from source here: the recipe of conan/recipes/gdal carries the ExprTk and
+# muparser options of the addon, so no binary of it exists on conan-center.
+# Ninja is part of the runner image; when using this profile by hand, install
+# it first.
+tools.cmake.cmaketoolchain:generator=Ninja
+
+[buildenv]
+# Several dependencies still declare compatibility with CMake < 3.5, which
+# CMake 4 rejects outright when it has to build them from source.  Only the
+# environment variable is honored by those projects.
+CMAKE_POLICY_VERSION_MINIMUM=3.5
