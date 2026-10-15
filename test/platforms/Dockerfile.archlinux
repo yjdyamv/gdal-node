@@ -10,7 +10,7 @@ RUN \
   pacman --noconfirm -Sy nodejs npm && \
   mkdir -p /target && chmod 777 /target
 
-RUN pacman --noconfirm -Sy python-pip && (pip3 install --break-system-packages conan || pip3 install conan)
+RUN pacman --noconfirm -Sy python-pip && (pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0")
 
 COPY entrypoint.sh /
 

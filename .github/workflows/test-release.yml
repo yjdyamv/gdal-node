@@ -6,6 +6,8 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: read
 
 jobs:
   test_linux:
@@ -13,6 +15,8 @@ jobs:
     name: Linux containers
 
     runs-on: ubuntu-latest
+
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -37,6 +41,8 @@ jobs:
 
     runs-on: ubuntu-24.04-arm
 
+    timeout-minutes: 60
+
     steps:
     - uses: actions/checkout@v7
     - name: Use Node.js 24.x
@@ -53,6 +59,8 @@ jobs:
     name: Windows and macOS
 
     runs-on: ${{ matrix.platforms }}
+
+    timeout-minutes: 60
 
     strategy:
       matrix:

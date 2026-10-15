@@ -10,7 +10,7 @@ RUN \
   alternatives --install /usr/bin/python python /usr/bin/python3 60 && \
   mkdir -p /target && chmod 777 /target
 
-RUN yum install -y python3-pip && (pip3 install --break-system-packages conan || pip3 install conan)
+RUN yum install -y python3-pip && (pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0")
 
 COPY entrypoint.sh /
 

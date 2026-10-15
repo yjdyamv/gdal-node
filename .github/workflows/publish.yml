@@ -2,6 +2,9 @@ name: Publish
 
 on: workflow_dispatch
 
+permissions:
+  contents: read
+
 jobs:
 
   publish-linux:
@@ -9,6 +12,8 @@ jobs:
     name: Linux
 
     runs-on: ubuntu-latest
+
+    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v7
@@ -26,6 +31,8 @@ jobs:
     name: Linux arm64
 
     runs-on: ubuntu-24.04-arm
+
+    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v7
@@ -46,6 +53,8 @@ jobs:
     name: Windows and macOS
 
     runs-on: ${{ matrix.platforms }}
+
+    timeout-minutes: 120
 
     strategy:
       matrix:
@@ -73,8 +82,17 @@ jobs:
         fi
     - name: Install Conan
       run: |
-        pip install conan
+        pip install "conan==2.33.0"
         conan profile detect --force
+    - name: Cache the Conan packages
+      # The pinned profiles reuse the binaries of conan-center, but GDAL is
+      # always built from source here, and it is most of the time of the job
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'conan/profiles/**') }}
+        restore-keys: |
+          conan-${{ runner.os }}-${{ runner.arch }}-
     - run: npm install --ignore-scripts
     - name: Build the addon
       run: npm run build:cmake

@@ -59,7 +59,7 @@ jobs:
         fi
     - name: Install Conan
       if: matrix.mode == 'rebuild'
-      run: pip3 install --break-system-packages conan || pip3 install conan
+      run: pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0"
     - name: Detect the Conan profile
       if: matrix.mode == 'rebuild'
       run: |

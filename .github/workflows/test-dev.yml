@@ -4,7 +4,8 @@ on:
   push:
     branches: [ main ]
     paths-ignore:
-      '*.md'
+      - '*.md'
+      - 'doc/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -20,12 +21,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
 
     name: ${{ matrix.name }}
 
     runs-on: ${{ matrix.os }}
+
+    # A build of the dependency tree that stalls - a locked cache, a mirror
+    # that never answers - must not hold a runner for the six hours of the
+    # default timeout
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -77,7 +86,7 @@ jobs:
           command -v ninja >/dev/null || choco install ninja --no-progress -y
         fi
     - name: Install Conan
-      run: pip3 install --break-system-packages conan || pip3 install conan
+      run: pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0"
     - name: Detect the Conan profile
       run: |
         conan profile detect --force
@@ -109,19 +118,47 @@ jobs:
       run: npm test 2>&1 | tee test.log
       env:
         MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+    - name: Keep the logs
+      # The annotation of a check run is a summary: the whole log of a failed
+      # build of the dependency tree, which is where most of the failures are,
+      # does not fit there.  This step comes before the one that fails the job,
+      # because a step that follows a failing step is skipped unless it opts
+      # out of the shortcut of the implicit `success()` - and the log of the
+      # failure itself would be the one lost with the runner
+      if: steps.build.outcome == 'failure' || steps.test.outcome == 'failure'
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-${{ matrix.name }}
+        path: |
+          build.log
+          test.log
+        if-no-files-found: ignore
     - name: Report the failure
       # The log of a job is only visible to the owner of the repository, but
-      # the annotations of a check run are public: send the tail of the log
-      # there so that a failure can be diagnosed without that access.  GitHub
-      # keeps only the first 4096 characters of an annotation, so the tail has
-      # to stay well below that after the escaping of the newlines
+      # the annotations of a check run are public: send the log there so that
+      # a failure can be diagnosed without that access.  GitHub keeps only the
+      # first 4096 characters of an annotation, so what is sent has to stay
+      # well below that after the escaping of the newlines
       if: steps.build.outcome == 'failure' || steps.test.outcome == 'failure'
       shell: bash
+      env:
+        BUILD: ${{ steps.build.outcome }}
+        TEST: ${{ steps.test.outcome }}
       run: |
-        for f in build.log test.log; do
-          if [ -f "${f}" ]; then
-            # awk, GNU and BSD sed disagree on the ':a;N;$!ba;' idiom
-            echo "::error title=${f}::$(tail -c 3000 "${f}" | awk '{gsub(/\r/,""); gsub(/%/,"%25"); printf "%s%%0A", $0}')"
+        # awk, GNU and BSD sed disagree on the ':a;N;$!ba;' idiom
+        escape() { awk '{gsub(/\r/,""); gsub(/%/,"%25"); printf "%s%%0A", $0}'; }
+        # Only the log of the step that failed: the tail of a successful build
+        # is a wall of warnings about the source of the addon, and it reads
+        # like the failure that it is not
+        if [ "${BUILD}" = failure ] && [ -f build.log ]; then
+          echo "::error title=build.log (last 3000 characters)::$(tail -c 3000 build.log | escape)"
+        fi
+        # The tail of the log of a failed test run is a page of passes: put
+        # the name and the error of every failing test in its own annotation
+        if [ "${TEST}" = failure ] && [ -f test.log ]; then
+          if grep -q '^not ok ' test.log; then
+            echo "::error title=test.log (failing tests)::$(grep -A 8 '^not ok ' test.log | head -c 2500 | escape)"
           fi
-        done
+          echo "::error title=test.log (last 3000 characters)::$(tail -c 3000 test.log | escape)"
+        fi
         exit 1

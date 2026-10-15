@@ -2,7 +2,8 @@ name: Extended tests
 
 # These tests are slow - a debug build, a build with AddressSanitizer and the
 # build of the addon inside a dozen of containers - they are not run on every
-# push, only manually.
+# push.  They run once a week, which catches the drift of the toolchains, of the
+# containers and of Conan long before a release, and on demand.
 
 on:
   workflow_dispatch:
@@ -11,6 +12,11 @@ on:
         description: 'Run the tests that require network connectivity'
         required: false
         default: '1'
+  schedule:
+    - cron: '0 3 * * 0'
+
+permissions:
+  contents: read
 
 jobs:
   coverage:
@@ -19,6 +25,8 @@ jobs:
 
     runs-on: ubuntu-22.04
 
+    timeout-minutes: 90
+
     steps:
     - uses: actions/checkout@v7
     - name: Use Node.js 24.x
@@ -26,7 +34,7 @@ jobs:
       with:
         node-version: 24.x
     - name: Install Conan
-      run: pip install conan
+      run: pip install "conan==2.33.0"
     - name: Detect the Conan profile
       run: conan profile detect --force
     - name: Cache the Conan packages
@@ -59,6 +67,8 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    timeout-minutes: 90
+
     steps:
     - uses: actions/checkout@v7
     - name: Use Node.js 24.x
@@ -79,6 +89,8 @@ jobs:
     name: ${{ matrix.linux-version }}
 
     runs-on: ubuntu-latest
+
+    timeout-minutes: 90
 
     strategy:
       fail-fast: false
