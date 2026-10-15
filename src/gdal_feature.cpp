@@ -45,6 +45,14 @@ void Feature::Initialize(Napi::Object target) {
   constructor.SuppressDestruct();
 }
 
+/**
+ * A vector feature.
+ *
+ * @constructor
+ * @class Feature
+ * @param {Layer|FeatureDefn} layer_or_defn The layer or the feature definition
+ * the feature will be created from
+ */
 Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info), this_(nullptr), owned_(true) {
   if (info.Length() > 0 && info[0].IsExternal()) {
     this_ = static_cast<OGRFeature *>(info[0].As<Napi::External<void>>().Data());

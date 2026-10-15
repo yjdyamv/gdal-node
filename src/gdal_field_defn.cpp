@@ -29,6 +29,14 @@ void FieldDefn::Initialize(Napi::Object target) {
   constructor.SuppressDestruct();
 }
 
+/**
+ * A field definition of a {@link FeatureDefn}.
+ *
+ * @constructor
+ * @class FieldDefn
+ * @param {string} name The name of the field
+ * @param {string} type The type of the field (see {@link OFT|OFT constants})
+ */
 FieldDefn::FieldDefn(const Napi::CallbackInfo &info) : GDALObject<FieldDefn>(info), this_(nullptr), owned_(false) {
   if (info.Length() > 0 && info[0].IsExternal()) {
     this_ = static_cast<OGRFieldDefn *>(info[0].As<Napi::External<void>>().Data());
