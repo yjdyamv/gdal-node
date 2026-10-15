@@ -7,7 +7,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference DatasetBands::constructor;
+thread_local Napi::FunctionReference DatasetBands::constructor;
 
 void DatasetBands::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

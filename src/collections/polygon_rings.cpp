@@ -6,7 +6,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference PolygonRings::constructor;
+thread_local Napi::FunctionReference PolygonRings::constructor;
 
 void PolygonRings::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

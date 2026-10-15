@@ -17,7 +17,7 @@ namespace node_gdal {
 class MultiLineString : public GeometryCollectionBase<MultiLineString, OGRMultiLineString> {
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using GeometryCollectionBase<MultiLineString, OGRMultiLineString>::GeometryCollectionBase;
 
   static void Initialize(Napi::Object target);

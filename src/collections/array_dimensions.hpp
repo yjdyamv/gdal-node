@@ -22,7 +22,7 @@ class ArrayDimensions : public GroupCollection<ArrayDimensions, GDALDimension, G
     public:
   using GroupCollection<ArrayDimensions, GDALDimension, GDALMDArray, Dimension, MDArray>::GroupCollection;
   static constexpr const char *_className = "ArrayDimensions";
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static int __getIdx(std::shared_ptr<GDALMDArray> parent, std::string const &name);
   static std::shared_ptr<GDALDimension> __get(std::shared_ptr<GDALMDArray> parent, std::string const &name);
   static std::shared_ptr<GDALDimension> __get(std::shared_ptr<GDALMDArray> parent, size_t idx);

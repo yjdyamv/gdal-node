@@ -15,7 +15,7 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-Napi::FunctionReference Group::constructor;
+thread_local Napi::FunctionReference Group::constructor;
 
 void Group::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

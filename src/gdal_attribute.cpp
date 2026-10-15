@@ -14,7 +14,7 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-Napi::FunctionReference Attribute::constructor;
+thread_local Napi::FunctionReference Attribute::constructor;
 
 void Attribute::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

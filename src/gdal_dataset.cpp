@@ -13,7 +13,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Dataset::constructor;
+thread_local Napi::FunctionReference Dataset::constructor;
 
 void Dataset::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

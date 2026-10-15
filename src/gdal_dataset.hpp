@@ -18,7 +18,7 @@ namespace node_gdal {
 
 class Dataset : public GDALObject<Dataset> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALDataset *ds, GDALDataset *parent = nullptr, bool close = true);
   static NAPI_METHOD(toString);

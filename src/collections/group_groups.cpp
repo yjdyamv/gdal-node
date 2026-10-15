@@ -9,7 +9,7 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-Napi::FunctionReference GroupGroups::constructor;
+thread_local Napi::FunctionReference GroupGroups::constructor;
 
 std::shared_ptr<GDALGroup> GroupGroups::__get(std::shared_ptr<GDALGroup> parent, std::string const &name) {
   return parent->OpenGroup(name);

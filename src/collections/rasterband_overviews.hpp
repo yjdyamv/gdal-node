@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class RasterBandOverviews : public GDALObject<RasterBandOverviews> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value band_obj);

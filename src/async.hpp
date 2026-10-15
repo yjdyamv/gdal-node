@@ -10,11 +10,15 @@
 
 namespace node_gdal {
 
-// The id of the main V8 thread
-extern std::thread::id mainV8ThreadId;
+// The id of the thread of the environment of this addon instance (the main
+// thread or a worker_thread) - per-thread, the addon can be loaded in several
+// V8 isolates
+extern thread_local std::thread::id mainV8ThreadId;
 
-// Set by the env cleanup hook: from then on the JS world may not be touched
-extern bool gdalShuttingDown;
+// Set by the env cleanup hook: from then on the JS world of this thread may not
+// be touched. Per-thread, so that a worker exiting does not stop the pending
+// callbacks of the main environment.
+extern thread_local bool gdalShuttingDown;
 
 // This generates method definitions for 2 methods: sync and async version and a hidden common block
 #define GDAL_ASYNCABLE_DEFINE(method)                                                                                  \
@@ -137,6 +141,22 @@ class AsyncGuard {
   shared_ptr<vector<AsyncLock>> locks;
 };
 
+// The same role as AsyncGuard, for the objects of the JS world that are needed
+// by an aux thread: the locks are resolved on the JS thread before the worker
+// is queued (the ObjectStore maps are thread-local) and are only acquired here.
+class AsyncWorkerGuard {
+    public:
+  inline AsyncWorkerGuard(const vector<AsyncLock> &locks) : locks(locks) {
+    object_store.lockLocks(locks);
+  }
+  inline ~AsyncWorkerGuard() {
+    object_store.unlockDatasets(locks);
+  }
+
+    private:
+  const vector<AsyncLock> &locks;
+};
+
 // This is trivially copyable so that it can be queued across threads
 struct GDALProgressInfo {
   double complete;
@@ -206,6 +226,10 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   const GDALMainFunc doit;
   const GDALRValFunc rval;
   const std::vector<long> ds_uids;
+  // The dataset locks, resolved in the constructor on the JS thread and
+  // acquired in Execute() on the aux thread
+  std::vector<AsyncLock> locks;
+  std::string lockError;
   GDALType raw;
 
   // Napi::AsyncWorker has no inheritable persistent store of its own (the old
@@ -226,6 +250,21 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
     for (auto i = objects.begin(); i != objects.end(); i++) SaveToPersistent(i->first, i->second);
     for (auto i = ds_uids.begin(); i != ds_uids.end(); i++)
       if (*i != 0) SaveToPersistent("ds" + std::to_string(*i), object_store.get<GDALDataset *>(*i));
+  }
+
+  // The locks of the datasets of this operation have to be resolved while the
+  // JS thread is still running: the ObjectStore maps are thread-local and the
+  // aux thread cannot look up the datasets there. The error is kept and
+  // reported from Execute(), exactly like a failing GDAL call.
+  inline void resolveDatasetLocks() {
+    try {
+      locks = object_store.resolveLocks(ds_uids);
+    } catch (const char *err) {
+      lockError = err != nullptr && *err != '\0' ? err : "Operation failed";
+    } catch (const std::exception &err) {
+      const char *what = err.what();
+      lockError = what != nullptr && *what != '\0' ? what : "Operation failed";
+    }
   }
 
     public:
@@ -268,6 +307,7 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
     rval(rval),
     ds_uids(ds_uids) {
   // Main thread with the JS world running
+  resolveDatasetLocks();
   // Turn the JS handles collected by the job into persistent references
   RestoreObjects(objects);
 }
@@ -285,11 +325,12 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
     doit(doit),
     rval(rval),
     ds_uids(ds_uids) {
+  resolveDatasetLocks();
   RestoreObjects(objects);
 }
 
 template <class GDALType> Napi::Value GDALAsyncWorker<GDALType>::ProduceRVal() {
-  if (gdalShuttingDown) return Napi::Value();
+  if (gdalShuttingDown) return Env().Undefined();
   return rval(raw, [this](const char *key) { return this->GetFromPersistent(key); });
 }
 
@@ -297,8 +338,13 @@ template <class GDALType> void GDALAsyncWorker<GDALType>::Execute(const Executio
   // Aux thread with the JS world running
   // V8 objects are not acessible here
   try {
+    // An error in the lock resolution that happened on the main thread
+    if (!lockError.empty()) {
+      this->SetError(lockError);
+      return;
+    }
     GDALExecutionProgress executionProgress(&progress);
-    AsyncGuard lock(ds_uids);
+    AsyncWorkerGuard lock(locks);
     raw = doit(executionProgress);
   } catch (const char *err) {
     // node-addon-api decides success from `_error.size() == 0`, so an empty
@@ -348,8 +394,16 @@ template <class GDALType> class GDALCallbackWorker : public GDALAsyncWorker<GDAL
   using GDALAsyncWorker<GDALType>::GDALAsyncWorker;
 
     protected:
+  void OnOK() override {
+    // The environment is being torn down, the callback cannot be delivered
+    if (gdalShuttingDown) {
+      return;
+    }
+    Napi::AsyncWorker::OnOK();
+  }
   std::vector<napi_value> GetResult(Napi::Env env) override {
-    return {env.Null(), this->ProduceRVal()};
+    std::vector<napi_value> r = {env.Null(), this->ProduceRVal()};
+    return r;
   }
 };
 
@@ -390,7 +444,9 @@ GDALPromiseWorker<GDALType>::GDALPromiseWorker(
 }
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnOK() {
-  if (gdalShuttingDown) return;
+  if (gdalShuttingDown) {
+    return;
+  }
   deferred.Resolve(this->ProduceRVal());
 }
 

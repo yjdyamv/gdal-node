@@ -19,7 +19,7 @@ namespace node_gdal {
 class GeometryCollection : public GeometryCollectionBase<GeometryCollection, OGRGeometryCollection> {
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using GeometryCollectionBase<GeometryCollection, OGRGeometryCollection>::GeometryCollectionBase;
 
   static void Initialize(Napi::Object target);

@@ -13,6 +13,7 @@
 // ogr
 #include <ogrsf_frmts.h>
 
+#include <atomic>
 #include <list>
 #include <map>
 
@@ -20,7 +21,21 @@ using namespace std;
 
 namespace node_gdal {
 
-typedef shared_ptr<uv_sem_t> AsyncLock;
+// The lock of a Dataset. The semaphore serializes the asynchronous operations
+// on a Dataset and its closing. `alive` allows a worker thread that is waiting
+// for the lock to notice that the Dataset has been destroyed in the meantime:
+// the operation must fail instead of using the closed Dataset.
+struct AsyncLockState {
+  uv_sem_t sem;
+  std::atomic<bool> alive;
+  AsyncLockState() : alive(true) {
+    uv_sem_init(&sem, 1);
+  }
+  ~AsyncLockState() {
+    uv_sem_destroy(&sem);
+  }
+};
+typedef shared_ptr<AsyncLockState> AsyncLock;
 
 template <typename GDALPTR> struct ObjectStoreItem {
   long uid;
@@ -51,10 +66,6 @@ template <> struct ObjectStoreItem<GDALDataset *> {
   ObjectStoreItem(Napi::Reference<Napi::Object> &obj);
 };
 
-struct uv_sem_deleter {
-  void operator()(uv_sem_t *p);
-};
-
 class ObjectStore {
     public:
   template <typename GDALPTR> long add(GDALPTR ptr, Napi::Reference<Napi::Object> &obj, long parent_uid);
@@ -64,16 +75,16 @@ class ObjectStore {
   void dispose(long uid, bool manual = false);
   bool isAlive(long uid);
   inline void lockDataset(AsyncLock lock) {
-    uv_sem_wait(lock.get());
+    uv_sem_wait(&lock->sem);
   }
   inline void unlockDataset(AsyncLock lock) {
-    uv_sem_post(lock.get());
+    uv_sem_post(&lock->sem);
     uv_mutex_lock(&master_lock);
     uv_cond_broadcast(&master_sleep);
     uv_mutex_unlock(&master_lock);
   }
   inline void unlockDatasets(vector<AsyncLock> locks) {
-    for (const AsyncLock &l : locks) uv_sem_post(l.get());
+    for (const AsyncLock &l : locks) uv_sem_post(&l->sem);
     uv_mutex_lock(&master_lock);
     uv_cond_broadcast(&master_sleep);
     uv_mutex_unlock(&master_lock);
@@ -82,6 +93,11 @@ class ObjectStore {
   vector<AsyncLock> lockDatasets(vector<long> uids);
   AsyncLock tryLockDataset(long uid, bool &result);
   vector<AsyncLock> tryLockDatasets(vector<long> uids, bool &result);
+  // resolveLocks() has to be called from the thread of the environment that
+  // owns the datasets (the maps are thread-local), lockLocks() can then be
+  // called from any other thread
+  vector<AsyncLock> resolveLocks(vector<long> uids);
+  void lockLocks(const vector<AsyncLock> &locks);
 
   template <typename GDALPTR> bool has(GDALPTR ptr);
   template <typename GDALPTR> Napi::Object get(GDALPTR ptr);

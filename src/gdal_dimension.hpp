@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class Dimension : public GDALObject<Dimension> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALDimension> group, GDALDataset *parent_ds);
   static NAPI_METHOD(toString);

@@ -74,12 +74,14 @@ namespace node_gdal {
 FILE *log_file = NULL;
 ObjectStore object_store;
 bool eventLoopWarn = true;
-::napi_env napi_env_storage = nullptr;
+thread_local ::napi_env napi_env_storage = nullptr;
 
 // Set by the env cleanup hook, see async.hpp. This definition has to stay outside
 // the `extern "C"` block below - async.hpp declares it with C++ linkage, and
 // `extern "C"` would give this definition C linkage instead.
-bool gdalShuttingDown = false;
+// Per-thread: the addon can be loaded in several V8 isolates and the cleanup of
+// a worker_thread must not stop the callbacks of the main environment.
+thread_local bool gdalShuttingDown = false;
 
 static NAPI_GETTER(LastErrorGetter) {
 
@@ -334,6 +336,7 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   // process. Each call gets its own empty exports object, so the registration
   // has to run every time - a guard here would hand the second one back empty.
   // everything that goes through the ambient node_gdal::napi_env() needs this
+  // both of these are thread-local: every isolate has its own environment
   napi_env_storage = env;
   mainV8ThreadId = std::this_thread::get_id();
 

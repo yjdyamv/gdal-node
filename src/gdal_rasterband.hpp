@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class RasterBand : public GDALObject<RasterBand> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALRasterBand *band, GDALDataset *parent);
   static NAPI_METHOD(toString);

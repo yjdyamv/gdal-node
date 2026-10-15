@@ -119,7 +119,12 @@
 				"_FILE_OFFSET_BITS=64",
 				# keep in sync with the napi-v8 in binary.module_path in
 				# package.json and with NAPI_BUILD_VERSION in CMakeLists.txt
-				"NAPI_VERSION=8"
+				"NAPI_VERSION=8",
+				# node-addon-api throws an exception when it cannot deliver one:
+				# while the environment is terminating (worker.terminate() with an
+				# operation in flight) the throw would unwind through node's C
+				# callback and abort the process
+				"NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS"
 			],
 			"xcode_settings": {
 				"GCC_ENABLE_CPP_EXCEPTIONS": "YES",

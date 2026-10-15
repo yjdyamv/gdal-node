@@ -10,7 +10,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference SimpleCurve::constructor;
+thread_local Napi::FunctionReference SimpleCurve::constructor;
 
 void SimpleCurve::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

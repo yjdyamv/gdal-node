@@ -10,7 +10,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference MultiPoint::constructor;
+thread_local Napi::FunctionReference MultiPoint::constructor;
 
 void MultiPoint::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

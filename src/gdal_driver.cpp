@@ -8,7 +8,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Driver::constructor;
+thread_local Napi::FunctionReference Driver::constructor;
 
 void Driver::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

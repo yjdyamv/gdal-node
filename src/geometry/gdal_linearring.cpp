@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference LinearRing::constructor;
+thread_local Napi::FunctionReference LinearRing::constructor;
 
 void LinearRing::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

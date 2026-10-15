@@ -17,7 +17,7 @@ namespace node_gdal {
 class MultiCurve : public GeometryCollectionBase<MultiCurve, OGRMultiCurve> {
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using GeometryCollectionBase<MultiCurve, OGRMultiCurve>::GeometryCollectionBase;
 
   static void Initialize(Napi::Object target);

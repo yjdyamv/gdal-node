@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class Attribute : public GDALObject<Attribute> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALAttribute> group, GDALDataset *parent_ds);
   static NAPI_METHOD(toString);

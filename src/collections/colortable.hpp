@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class ColorTable : public GDALObject<ColorTable> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALColorTable *raw, Napi::Value band);

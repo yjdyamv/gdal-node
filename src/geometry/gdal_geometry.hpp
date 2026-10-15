@@ -17,7 +17,7 @@ namespace node_gdal {
 
 class Geometry : public GeometryBase<Geometry, OGRGeometry> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   // Not constructible from JS: use Geometry.fromWKT()/fromWKB() or a concrete type
   Geometry(const Napi::CallbackInfo &info);
 

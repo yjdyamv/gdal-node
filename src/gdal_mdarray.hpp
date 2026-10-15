@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class MDArray : public GDALObject<MDArray> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALMDArray> group, GDALDataset *parent_ds);
   GDAL_ASYNCABLE_DECLARE(read);

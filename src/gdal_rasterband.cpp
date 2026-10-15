@@ -16,7 +16,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference RasterBand::constructor;
+thread_local Napi::FunctionReference RasterBand::constructor;
 
 void RasterBand::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

@@ -19,7 +19,7 @@ class Polygon : public CurveBase<Polygon, OGRPolygon, PolygonRings> {
   friend CurveBase;
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using CurveBase<Polygon, OGRPolygon, PolygonRings>::CurveBase;
 
   static void Initialize(Napi::Object target);

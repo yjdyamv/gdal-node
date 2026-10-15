@@ -22,7 +22,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Geometry::constructor;
+thread_local Napi::FunctionReference Geometry::constructor;
 
 void Geometry::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

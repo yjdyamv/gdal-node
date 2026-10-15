@@ -5,7 +5,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference LayerFeatures::constructor;
+thread_local Napi::FunctionReference LayerFeatures::constructor;
 
 void LayerFeatures::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

@@ -17,7 +17,7 @@ namespace node_gdal {
 class MultiPolygon : public GeometryCollectionBase<MultiPolygon, OGRMultiPolygon> {
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using GeometryCollectionBase<MultiPolygon, OGRMultiPolygon>::GeometryCollectionBase;
 
   static void Initialize(Napi::Object target);

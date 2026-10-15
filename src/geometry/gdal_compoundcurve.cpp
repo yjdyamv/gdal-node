@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference CompoundCurve::constructor;
+thread_local Napi::FunctionReference CompoundCurve::constructor;
 
 void CompoundCurve::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

@@ -6,7 +6,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference SpatialReference::constructor;
+thread_local Napi::FunctionReference SpatialReference::constructor;
 
 void SpatialReference::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

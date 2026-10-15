@@ -22,8 +22,10 @@ extern FILE *log_file;
 extern ObjectStore object_store;
 extern bool eventLoopWarn;
 // Napi::Env has no default constructor, so the environment is stored raw and
-// wrapped on demand (gdal-async is a single-instance addon, it is set once in Init)
-extern ::napi_env napi_env_storage;
+// wrapped on demand. It is per-thread: the addon can be loaded in more than one
+// V8 isolate (a worker_thread in addition to the main thread) and Init() runs
+// once per isolate, in the thread of that isolate.
+extern thread_local ::napi_env napi_env_storage;
 inline Napi::Env napi_env() {
   return Napi::Env(napi_env_storage);
 }
@@ -426,14 +428,15 @@ template <typename T> class GDALObject : public Napi::ObjectWrap<T> {
 // The old binding had SetPrivate/GetPrivate, keyed by a *name* and interned by
 // V8. N-API only has napi_create_symbol, which yields a fresh symbol on every
 // call, so the keys have to be registered to keep behaving like the originals.
-// gdal-async supports a single instance per V8 isolate (enforced in Init), so a
-// process-wide registry is safe; the references are never released because
-// static destruction happens after the environment is gone.
+// The registry is per-thread: every V8 isolate (the main thread and each
+// worker_thread) has its own environment and a symbol created in one isolate
+// cannot be used in another. The references are never released because thread
+// destruction happens after the environment is gone.
 //
 namespace node_gdal {
 
 inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
-  static std::map<std::string, Napi::Reference<Napi::Symbol>> keys;
+  static thread_local std::map<std::string, Napi::Reference<Napi::Symbol>> keys;
   auto i = keys.find(name);
   if (i != keys.end()) return i->second.Value();
   Napi::Symbol s = Napi::Symbol::New(env, name);

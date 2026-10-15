@@ -13,7 +13,7 @@ namespace node_gdal {
 
 class GDALDrivers : public GDALObject<GDALDrivers> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
 
   static void Initialize(Napi::Object target);
   static Napi::Value New();

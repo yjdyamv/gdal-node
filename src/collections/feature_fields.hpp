@@ -13,7 +13,7 @@ namespace node_gdal {
 
 class FeatureFields : public GDALObject<FeatureFields> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value layer_obj);

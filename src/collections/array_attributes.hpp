@@ -22,7 +22,7 @@ class ArrayAttributes : public GroupCollection<ArrayAttributes, GDALAttribute, G
     public:
   using GroupCollection<ArrayAttributes, GDALAttribute, GDALMDArray, Attribute, MDArray>::GroupCollection;
   static constexpr const char *_className = "ArrayAttributes";
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static std::shared_ptr<GDALAttribute> __get(std::shared_ptr<GDALMDArray> parent, std::string const &name);
   static std::shared_ptr<GDALAttribute> __get(std::shared_ptr<GDALMDArray> parent, size_t idx);
   static std::vector<std::string> __getNames(std::shared_ptr<GDALMDArray> parent);

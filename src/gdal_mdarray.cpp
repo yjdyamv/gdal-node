@@ -14,7 +14,7 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-Napi::FunctionReference MDArray::constructor;
+thread_local Napi::FunctionReference MDArray::constructor;
 
 void MDArray::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

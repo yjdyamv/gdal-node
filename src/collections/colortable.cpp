@@ -7,7 +7,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference ColorTable::constructor;
+thread_local Napi::FunctionReference ColorTable::constructor;
 
 void ColorTable::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

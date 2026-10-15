@@ -8,7 +8,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference GeometryCollection::constructor;
+thread_local Napi::FunctionReference GeometryCollection::constructor;
 
 /**
  * A collection of 1 or more geometry objects.

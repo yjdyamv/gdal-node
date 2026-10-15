@@ -11,7 +11,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference CircularString::constructor;
+thread_local Napi::FunctionReference CircularString::constructor;
 
 void CircularString::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

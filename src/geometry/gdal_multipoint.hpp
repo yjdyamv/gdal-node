@@ -17,7 +17,7 @@ namespace node_gdal {
 class MultiPoint : public GeometryCollectionBase<MultiPoint, OGRMultiPoint> {
 
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   using GeometryCollectionBase<MultiPoint, OGRMultiPoint>::GeometryCollectionBase;
 
   static void Initialize(Napi::Object target);

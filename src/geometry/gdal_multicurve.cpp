@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference MultiCurve::constructor;
+thread_local Napi::FunctionReference MultiCurve::constructor;
 
 void MultiCurve::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

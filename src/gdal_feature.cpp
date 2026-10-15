@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Feature::constructor;
+thread_local Napi::FunctionReference Feature::constructor;
 
 void Feature::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

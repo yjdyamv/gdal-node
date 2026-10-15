@@ -8,7 +8,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference RasterBandPixels::constructor;
+thread_local Napi::FunctionReference RasterBandPixels::constructor;
 
 void RasterBandPixels::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

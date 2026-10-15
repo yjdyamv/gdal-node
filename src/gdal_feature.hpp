@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class Feature : public GDALObject<Feature> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(OGRFeature *feature);
   static Napi::Value New(OGRFeature *feature, bool owned);

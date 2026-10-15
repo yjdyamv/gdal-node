@@ -6,7 +6,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Point::constructor;
+thread_local Napi::FunctionReference Point::constructor;
 
 void Point::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

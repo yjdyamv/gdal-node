@@ -140,6 +140,12 @@ endif()
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 
 add_library(gdal MODULE ${SOURCES})
+
+# node-addon-api throws an exception when it cannot deliver one - which happens
+# when the environment is terminating (worker.terminate() with an operation in
+# flight). Unwinding through node's C callback aborts the whole process.
+target_compile_definitions(gdal PRIVATE NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS)
+
 set_target_properties(gdal PROPERTIES PREFIX "" SUFFIX ".node")
 
 target_include_directories(gdal PRIVATE

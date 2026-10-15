@@ -8,7 +8,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference Polygon::constructor;
+thread_local Napi::FunctionReference Polygon::constructor;
 
 void Polygon::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

@@ -10,7 +10,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference LineString::constructor;
+thread_local Napi::FunctionReference LineString::constructor;
 
 void LineString::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

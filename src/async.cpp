@@ -2,7 +2,8 @@
 
 namespace node_gdal {
 
-std::thread::id mainV8ThreadId;
+// Per-thread: the addon can be loaded in several V8 isolates at the same time
+thread_local std::thread::id mainV8ThreadId;
 
 // *message coming from GDAL points to a statically allocated buffer
 GDALProgressInfo::GDALProgressInfo(double complete, const char *message) : complete(complete), message(message) {

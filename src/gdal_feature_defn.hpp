@@ -13,7 +13,7 @@ namespace node_gdal {
 
 class FeatureDefn : public GDALObject<FeatureDefn> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(const OGRFeatureDefn *def);
   static Napi::Value New(OGRFeatureDefn *def, bool owned);

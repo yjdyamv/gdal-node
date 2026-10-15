@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference MultiPolygon::constructor;
+thread_local Napi::FunctionReference MultiPolygon::constructor;
 
 void MultiPolygon::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

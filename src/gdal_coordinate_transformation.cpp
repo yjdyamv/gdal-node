@@ -9,7 +9,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference CoordinateTransformation::constructor;
+thread_local Napi::FunctionReference CoordinateTransformation::constructor;
 
 void CoordinateTransformation::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

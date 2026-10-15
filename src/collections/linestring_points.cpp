@@ -6,7 +6,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference LineStringPoints::constructor;
+thread_local Napi::FunctionReference LineStringPoints::constructor;
 
 void LineStringPoints::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

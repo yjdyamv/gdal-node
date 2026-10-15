@@ -5,7 +5,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference GeometryCollectionChildren::constructor;
+thread_local Napi::FunctionReference GeometryCollectionChildren::constructor;
 
 void GeometryCollectionChildren::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

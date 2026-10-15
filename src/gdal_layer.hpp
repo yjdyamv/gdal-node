@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class Layer : public GDALObject<Layer> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set);

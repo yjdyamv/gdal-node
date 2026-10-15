@@ -5,7 +5,7 @@
 
 namespace node_gdal {
 
-Napi::FunctionReference FieldDefn::constructor;
+thread_local Napi::FunctionReference FieldDefn::constructor;
 
 void FieldDefn::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();

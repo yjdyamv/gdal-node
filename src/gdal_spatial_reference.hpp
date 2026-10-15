@@ -21,7 +21,7 @@ typedef const char OGRChar;
 
 class SpatialReference : public GDALObject<SpatialReference> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(const OGRSpatialReference *srs);
   static Napi::Value New(OGRSpatialReference *srs, bool owned);

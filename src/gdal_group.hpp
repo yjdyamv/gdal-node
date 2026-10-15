@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class Group : public GDALObject<Group> {
     public:
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALGroup> group, Napi::Object parent_ds);
   static Napi::Value New(std::shared_ptr<GDALGroup> group, GDALDataset *parent_ds);

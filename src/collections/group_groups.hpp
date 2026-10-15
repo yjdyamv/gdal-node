@@ -21,7 +21,7 @@ class GroupGroups : public GroupCollection<GroupGroups, GDALGroup, GDALGroup, Gr
     public:
   using GroupCollection<GroupGroups, GDALGroup, GDALGroup, Group, Group>::GroupCollection;
   static constexpr const char *_className = "GroupGroups";
-  static Napi::FunctionReference constructor;
+  static thread_local Napi::FunctionReference constructor;
   static std::shared_ptr<GDALGroup> __get(std::shared_ptr<GDALGroup> parent, std::string const &name);
   static std::shared_ptr<GDALGroup> __get(std::shared_ptr<GDALGroup> parent, size_t idx);
   static std::vector<std::string> __getNames(std::shared_ptr<GDALGroup> parent);
