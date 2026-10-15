@@ -19,10 +19,7 @@ class GdalAsyncDependencies(ConanFile):
     is what the CMakeDeps generator provides.
 
     GDAL comes from conan/recipes/gdal, the fork of the recipe of conan-center
-    that carries the ExprTk and muparser options of the addon.  To build
-    against the GDAL that the system already has, skip Conan altogether with
-
-        node scripts/build.mjs --shared-gdal
+    that carries the ExprTk and muparser options of the addon.
     """
 
     settings = "os", "arch", "compiler", "build_type"

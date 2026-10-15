@@ -2,8 +2,6 @@ ARG VERSION=42
 FROM fedora:${VERSION}
 
 ARG NODEJS=lts
-ARG GDAL=""
-ENV GDAL=${GDAL}
 
 RUN \
   dnf install -y curl rsync && \
@@ -13,8 +11,7 @@ RUN \
   dnf install -y g++ git python ccache && \
   mkdir -p /target && chmod 777 /target
 
-RUN if [ "${GDAL}" = "shared" ]; then dnf install -y gdal-devel; fi
-RUN if [ "${GDAL}" != "shared" ]; then dnf install -y python3-pip && (pip3 install --break-system-packages conan || pip3 install conan); fi
+RUN dnf install -y python3-pip && (pip3 install --break-system-packages conan || pip3 install conan)
 
 COPY entrypoint.sh /
 

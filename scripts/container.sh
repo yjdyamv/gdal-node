@@ -3,9 +3,8 @@
 OP=$1
 DIST=$2
 NODEJS=$3
-GDAL=$4
 if [ -z "${OP}" ]; then
-  echo "container.sh <release|dev|publish|asan|shell> [ubuntu:{22.04|24.04|26.04}|centos:stream10|fedora:42|debian:{bookworm|trixie}|archlinux:latest|amazonlinux:2023] [<Node.js version>] [shared]"
+  echo "container.sh <release|dev|publish|asan|shell> [ubuntu:{22.04|24.04|26.04}|centos:stream10|fedora:42|debian:{bookworm|trixie}|archlinux:latest|amazonlinux:2023] [<Node.js version>]"
   exit 1
 fi
 if [ ! -d "test/platforms" ]; then
@@ -23,16 +22,13 @@ fi
 if [ -z "${NODEJS}" ]; then
   NODEJS=lts
 fi
-if [ -z "${GDAL}" ]; then
-  GDAL="bundled"
-fi
 
-CONTAINER="${DIST}-node-gdal:${VERSION}_${NODEJS}_${GDAL}"
+CONTAINER="${DIST}-node-gdal:${VERSION}_${NODEJS}"
 SEP="\n=======================================================\n"
 echo -e "${SEP}Building container ${CONTAINER}${SEP}"
 
 docker build \
-        --build-arg VERSION=${VERSION} --build-arg NODEJS=${NODEJS} --build-arg GDAL=${GDAL} \
+        --build-arg VERSION=${VERSION} --build-arg NODEJS=${NODEJS} \
         -t ${CONTAINER} -f test/platforms/Dockerfile.${DIST} test/platforms
 
 PTRACE_ARGS="--cap-add=SYS_PTRACE --security-opt seccomp=unconfined"

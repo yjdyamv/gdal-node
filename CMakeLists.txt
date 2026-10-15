@@ -14,9 +14,6 @@
 #   cmake -G Ninja -S . -B build -DCMAKE_TOOLCHAIN_FILE=build-conan/conan_toolchain.cmake
 #   cmake --build build
 #
-# Without Conan it falls back to a GDAL pointed at with -DGDAL_INCLUDE_DIR=<dir
-# with gdal.h> and -DGDAL_LIBRARY=<libgdal>.
-#
 # The binding lands in lib/binding/napi-v8-<platform>-<arch>/gdal.node, the
 # directory that lib/gdal.js and scripts/install.mjs look in.  The dependencies
 # are not vendored anymore, they come from Conan.
@@ -62,62 +59,24 @@ set(NODE_PRE_GYP_DIR "napi-v${NAPI_BUILD_VERSION}-${NODE_PLATFORM_ARCH}")
 # ---------------------------------------------------------------------------
 # GDAL
 #
-# GDAL_INCLUDE_DIR/GDAL_LIBRARY win when given; otherwise the package from
-# Conan's CMakeDeps generator (which conan_toolchain.cmake puts on
-# CMAKE_PREFIX_PATH) or a distro GDAL CMake package is used.
+# The package from Conan's CMakeDeps generator, which conan_toolchain.cmake
+# puts on CMAKE_PREFIX_PATH.  The addon always ships the GDAL it was built
+# with: linking against the GDAL of the system is not supported anymore.
 # ---------------------------------------------------------------------------
-# An explicit GDAL_INCLUDE_DIR/GDAL_LIBRARY wins, so a caller pointing at a
-# specific GDAL (a toolchain, a sysroot) always gets exactly that one.
-if(GDAL_INCLUDE_DIR AND GDAL_LIBRARY)
-  message(STATUS "GDAL: using GDAL_INCLUDE_DIR/GDAL_LIBRARY")
-  set(GDAL_TARGET ${GDAL_LIBRARY})
-  set(GDAL_FROM_PACKAGE FALSE)
-else()
-  # Conan's CMakeDeps generates gdal-config.cmake with a gdal::gdal target; a
-  # distro GDAL ships a gdal-config.cmake with GDAL::GDAL. The two files have the
-  # same name, so accept whichever target actually turns up.
-  find_package(gdal CONFIG QUIET)
+find_package(gdal CONFIG REQUIRED)
 
-  if(TARGET gdal::gdal)
-    message(STATUS "GDAL: using the Conan package (gdal::gdal)")
-    set(GDAL_TARGET gdal::gdal)
-    set(GDAL_FROM_PACKAGE TRUE)
-  elseif(TARGET GDAL::GDAL)
-    message(STATUS "GDAL: using the GDAL CMake package (GDAL::GDAL)")
-    set(GDAL_TARGET GDAL::GDAL)
-    set(GDAL_FROM_PACKAGE TRUE)
-  else()
-    message(STATUS "GDAL: no CMake package, searching for gdal.h and libgdal")
-    find_path(GDAL_INCLUDE_DIR NAMES gdal.h PATH_SUFFIXES gdal)
-    find_library(GDAL_LIBRARY NAMES gdal)
-
-    if(NOT GDAL_INCLUDE_DIR OR NOT GDAL_LIBRARY)
-      message(FATAL_ERROR
-        "GDAL not found. Run 'conan install .' to provide it, or point CMake at it "
-        "with -DGDAL_INCLUDE_DIR=<dir containing gdal.h> and -DGDAL_LIBRARY=<path to libgdal>.")
-    endif()
-
-    set(GDAL_TARGET ${GDAL_LIBRARY})
-    set(GDAL_FROM_PACKAGE FALSE)
-  endif()
+if(NOT TARGET gdal::gdal)
+  message(FATAL_ERROR
+    "gdal::gdal is missing. Run 'conan install . -of build-conan' to provide it.")
 endif()
 
-# BUNDLED_GDAL makes the module report itself as shipping its own GDAL and PROJ
-# data: lib/gdal.js then points GDAL_DATA, PROJ_LIB and CURL_CA_BUNDLE at the
-# data files in deps/.  That is what the released binaries do - the GDAL from
-# Conan has its data files in the Conan cache, which is not shipped.  A GDAL of
-# the system brings its own data, so it is only used with -DBUNDLED_GDAL=ON.
-if(DEFINED BUNDLED_GDAL)
-  set(BUNDLED_GDAL_DEFAULT ${BUNDLED_GDAL})
-elseif(GDAL_FROM_PACKAGE)
-  set(BUNDLED_GDAL_DEFAULT ON)
-else()
-  set(BUNDLED_GDAL_DEFAULT OFF)
-endif()
+message(STATUS "GDAL: using the Conan package (gdal::gdal)")
+set(GDAL_TARGET gdal::gdal)
 
-option(BUNDLED_GDAL
-  "Define BUNDLED_GDAL: the module reports itself as shipping its own GDAL/PROJ data"
-  ${BUNDLED_GDAL_DEFAULT})
+# The GDAL of Conan keeps its data files in the Conan cache, which is not
+# shipped, so the addon always carries the GDAL and PROJ data files of deps/:
+# BUNDLED_GDAL makes the module report that and lib/gdal.js points GDAL_DATA,
+# PROJ_LIB and CURL_CA_BUNDLE at them.
 option(ENABLE_LOGGING "Compile the logging API (gdal.startLogging and friends)" OFF)
 
 # gdal_coordinate_transformation.cpp includes <proj.h> in every configuration, but
@@ -125,14 +84,9 @@ option(ENABLE_LOGGING "Compile the logging API (gdal.startLogging and friends)" 
 # so the library ends up on the link line while its include directories do not.
 # Conan's PROJ package also declares no include directories of its own (its
 # locations only end up in CMAKE_INCLUDE_PATH), so look for the header first,
-# then for a PROJ CMake package that does carry them, then next to GDAL.
+# then for a PROJ CMake package that does carry them.
 find_package(proj CONFIG QUIET)
 find_path(PROJ_INCLUDE_DIR NAMES proj.h)
-if(NOT PROJ_INCLUDE_DIR AND GDAL_INCLUDE_DIR)
-  # a system GDAL usually sits next to PROJ, e.g. .../include/gdal and .../include
-  get_filename_component(GDAL_INCLUDE_ROOT ${GDAL_INCLUDE_DIR} DIRECTORY)
-  find_path(PROJ_INCLUDE_DIR NAMES proj.h HINTS ${GDAL_INCLUDE_ROOT})
-endif()
 if(NOT PROJ_INCLUDE_DIR)
   # a PROJ whose CMake package carries the include directories itself
   if(TARGET proj::proj)
@@ -163,7 +117,6 @@ target_include_directories(gdal PRIVATE
   ${CMAKE_JS_INC}
   ${NODE_ADDON_API_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${GDAL_INCLUDE_DIR}
   ${PROJ_INCLUDE_DIR})
 
 target_compile_definitions(gdal PRIVATE
@@ -175,9 +128,8 @@ target_compile_definitions(gdal PRIVATE
   HAVE_LIBZ=1
   NAPI_VERSION=${NAPI_BUILD_VERSION})
 
-if(BUNDLED_GDAL)
-  target_compile_definitions(gdal PRIVATE BUNDLED_GDAL=1)
-endif()
+# The addon always ships the GDAL it was built with and its PROJ data
+target_compile_definitions(gdal PRIVATE BUNDLED_GDAL=1)
 
 if(ENABLE_LOGGING)
   target_compile_definitions(gdal PRIVATE ENABLE_LOGGING=1)

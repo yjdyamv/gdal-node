@@ -31,41 +31,30 @@ rm -rf lib/binding package-lock.json
 git checkout test/data
 npm install --ignore-scripts
 
-if [ "${GDAL}" == "shared" ]; then
-  GDAL_OPT="--shared-gdal"
-  GDAL_NAME="system-installed"
-else
-  GDAL_OPT=""
-  GDAL_NAME="bundled"
+echo -e "${SEP}Preparing Conan${SEP}"
+# Conan takes CC and CXX for the name of the compiler executable: the two-word
+# "ccache gcc" of the masquerade above ends up detected as no compiler at all,
+# and the profile it writes then rejects the compiler.cppstd=20 of the install
+# with "'settings.compiler' value not defined"
+env -u CC -u CXX conan profile detect --force
+
+# "ccache gcc" is not a compiler CMake can use: CMake keeps ccache as the
+# compiler and gcc as its first, permanent argument, and a recipe that calls the
+# compiler itself - libpng preprocesses its configuration with it - ends up
+# running "ccache -E".  A real compiler with ccache as its launcher is the way
+# CMake expects both the compiler and ccache to be given
+CONFS=""
+if [ -x /usr/bin/gcc ] && which ccache >/dev/null; then
+  CONFS="${CONFS}tools.build:compiler_executables={\"c\": \"gcc\", \"cpp\": \"g++\"}\n"
+  CONFS="${CONFS}tools.cmake.cmaketoolchain:extra_variables={\"CMAKE_C_COMPILER_LAUNCHER\": \"ccache\", \"CMAKE_CXX_COMPILER_LAUNCHER\": \"ccache\"}\n"
 fi
-
-if [ "${GDAL}" != "shared" ]; then
-  echo -e "${SEP}Preparing Conan${SEP}"
-  # Conan takes CC and CXX for the name of the compiler executable: the two-word
-  # "ccache gcc" of the masquerade above ends up detected as no compiler at all,
-  # and the profile it writes then rejects the compiler.cppstd=20 of the install
-  # with "'settings.compiler' value not defined"
-  env -u CC -u CXX conan profile detect --force
-
-  # "ccache gcc" is not a compiler CMake can use: CMake keeps ccache as the
-  # compiler and gcc as its first, permanent argument, and a recipe that calls the
-  # compiler itself - libpng preprocesses its configuration with it - ends up
-  # running "ccache -E".  A real compiler with ccache as its launcher is the way
-  # CMake expects both the compiler and ccache to be given
-  CONFS=""
-  if [ -x /usr/bin/gcc ] && which ccache >/dev/null; then
-    CONFS="${CONFS}tools.build:compiler_executables={\"c\": \"gcc\", \"cpp\": \"g++\"}\n"
-    CONFS="${CONFS}tools.cmake.cmaketoolchain:extra_variables={\"CMAKE_C_COMPILER_LAUNCHER\": \"ccache\", \"CMAKE_CXX_COMPILER_LAUNCHER\": \"ccache\"}\n"
-  fi
-  if [ -n "${CONFS}" ]; then
-    printf '[conf]\n%b' "${CONFS}" >> ${HOME}/.conan2/profiles/default
-  fi
+if [ -n "${CONFS}" ]; then
+  printf '[conf]\n%b' "${CONFS}" >> ${HOME}/.conan2/profiles/default
 fi
-
 case ${1} in
   DEV)
-    echo -e "${SEP}Testing current version against ${GDAL_NAME} GDAL${SEP}"
-    node scripts/build.mjs ${GDAL_OPT}
+    echo -e "${SEP}Testing the current version against the bundled GDAL${SEP}"
+    node scripts/build.mjs
     npm test
     R=0
     ;;
@@ -89,10 +78,10 @@ case ${1} in
     ;;
 
   ASAN)
-    echo -e "${SEP}Testing w/ASAN current version against ${GDAL_NAME} GDAL${SEP}"
+    echo -e "${SEP}Testing the current version with ASAN${SEP}"
     export CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
     export LDFLAGS="-fsanitize=address"
-    node scripts/build.mjs ${GDAL_OPT} --debug
+    node scripts/build.mjs --debug
     LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.5.0.0 npm test 2> asan.output
     if egrep -q "node_gdal|GDAL" asan.output; then
       echo ${SEP}${SEP}Memory leaks detected${SEP}${SEP}

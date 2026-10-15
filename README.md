@@ -57,21 +57,6 @@ Pre-built binaries are provided for most recent Linux distributions, Windows 64 
 npm install gdal-async
 ```
 
-### Linking with your own version of GDAL
-
-By default all dependencies are the latest versions and bundled out of the box, but if you would like to link against a custom GDAL library you will have to rebuild it when installing using the following flags:
-
-```sh
-# --shared_gdal allows linking to the OS-provided libgdal, requires libgdal-dev
-# (debian: sudo apt-get install libgdal-dev)
-$ npm install gdal-async --build-from-source --shared_gdal
-```
-
-If you have multiple versions of GDAL or your library is not in its standard location, you can use the usual `CXXFLAGS` and `LDFLAGS` variables:
-```sh
-$ CXXFLAGS="-I/some/path/include" LDFLAGS="-L/some/path/lib" npm install gdal-async --build-from-source --shared_gdal
-```
-
 ## Sample usage
 
 ### Synchronous
@@ -314,8 +299,6 @@ export default {
 When using the bundled GDAL version, the following drivers will be available:
 `AAIGrid`, `ACE2`, `ADRG`, `AIG`, `AVCBin`, `AVCE00`, `AirSAR`, `BMP`, `BT`, `carto`, `CEOS`, `COASP`, `COG`, `COSAR`, `CPG`, `CSV`, `CTG`, `CTable2`, `DGN`, `DIMAP`, `DOQ1`, `DOQ2`, `DTED`, `DXF`, `ECRGTOC`, `EDIGEO`, `EHdr`, `EIR`, `ELAS`, `ENVI`, `ERS`, `ESAT`, `ESRI Shapefile`, `MapInfo File`, `MBTiles`, `FAST`, `FIT`, `FlatGeobuf`, `GFF`, `GML`, `GPSBabel`, `GPSTrackMaker`, `GPX`, `GRASSASCIIGrid`, `GRIB`, `GS7BG`, `GSAG`, `GSBG`, `GSC`, `GTX`, `GTiff`, `GenBin`, `GeoJSON`, `GeoRSS`, `Geoconcept`, `GPKG`, `HDF5`, `HF2`, `HFA`, `ILWIS`, `IRIS`, `ISIS2`, `ISIS3`, `Idrisi`, `JAXAPALSAR`, `JDEM`, `JPEG`, `JSONFG`, `KMLSUPEROVERLAY`, `KML`, `KRO`, `L1B`, `LAN`, `LCP`, `LIBERTIFF`, `LOSLAS`, `Leveller`, `MAP`, `MEM`, `Memory`, `MFF2`, `MFF`, `MITAB`, `MVT`, `NDF`, `NetCDF`, `NGSGEOID`, `NITF`, `NTv2`, `NWT_GRC`, `NWT_GRD`, `OGR_PDS`, `OGR_SDTS`, `OGR_VRT`, `OpenJPEG`, `OSM`, `OpenFileGDB`, `PAux`, `PCIDSK`, `PDS`, `PGDUMP`, `PNG`, `PMTiles`, `PNM`, `RMF`, `ROI_PAC`, `RPFTOC`, `RS2`, `RST`, `S57`, `S100`, `S102`, `SAGA`, `SAR_CEOS`, `SNODAS`, `SQLite`, `SRP`, `SRTMHGT`, `SVG`, `SXF`, `TIL`, `TSX`, `Terragen`, `UK .NTF`, `USGSDEM`, `VICAR`, `VRT`, `vsiaz`, `vsicurl`, `vsigs`, `vsigzip`, `vsimem`, `vsioss`, `vsis3`, `WAsP`, `WCS`, `WMS`, `WMTS`, `XYZ`, `ZMap`
 
-When compiling against a system-installed shared GDAL, all drivers and projections supported by it, should also be supported by `gdal-async`.
-
 ## Contributors
 
 This binding was originally the product of a collaboration between [Natural Atlas](https://github.com/naturalatlas) and [Mapbox](https://github.com/mapbox). Its contributors are [Brandon Reavis](https://github.com/brandonreavis), [Brian Reavis](https://github.com/brianreavis), [Dane Springmeyer](https://github.com/springmeyer), [Zac McCormick](https://github.com/zhm), and [others](https://github.com/naturalatlas/node-gdal/graphs/contributors).
@@ -327,11 +310,9 @@ The async bindings, the curve geometries, the TypeScript support, the built-in n
 Before submitting pull requests, please update the [tests](test) and make sure they all pass.
 
 ```sh
-$ npm test # test against the bundled gdal
-# the CI matrix tests the bundled gdal only
-$ npm run test:shared # against the system gdal of a few distributions
-# test against the shared gdal of a given Linux version and Node.js version
-$ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{version} 20|22|24|lts shared
+$ npm test # test the addon built from the current sources
+# test a given Linux version and Node.js version in a container
+$ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{version} 20|22|24|lts
 ```
 
 ## License

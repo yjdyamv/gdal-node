@@ -2,8 +2,6 @@ ARG VERSION=latest
 FROM archlinux:${VERSION}
 
 ARG NODEJS=lts
-ARG GDAL=""
-ENV GDAL=${GDAL}
 ENV USER=root
 
 RUN \
@@ -12,8 +10,7 @@ RUN \
   pacman --noconfirm -Sy nodejs npm && \
   mkdir -p /target && chmod 777 /target
 
-RUN if [ "${GDAL}" = "shared" ]; then pacman --noconfirm -Sy gdal; fi
-RUN if [ "${GDAL}" != "shared" ]; then pacman --noconfirm -Sy python-pip && (pip3 install --break-system-packages conan || pip3 install conan); fi
+RUN pacman --noconfirm -Sy python-pip && (pip3 install --break-system-packages conan || pip3 install conan)
 
 COPY entrypoint.sh /
 

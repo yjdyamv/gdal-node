@@ -33,19 +33,6 @@
       "group": "build"
     },
     {
-      "label": "Build against the GDAL of the system",
-      "type": "shell",
-      "command": "node scripts/build.mjs --shared-gdal",
-      "problemMatcher": {
-        "base": "$gcc",
-        "fileLocation": [
-          "relative",
-          "${workspaceFolder}/build"
-        ]
-      },
-      "group": "build"
-    },
-    {
       "label": "Clean",
       "type": "shell",
       "command": "npx cmake-js clean",
