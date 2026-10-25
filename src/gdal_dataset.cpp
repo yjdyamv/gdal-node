@@ -13,7 +13,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Dataset::constructor;
+Napi::FunctionReference &Dataset::constructor() {
+  return node_gdal::env_context().constructor<Dataset>();
+}
 
 void Dataset::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -48,8 +50,7 @@ void Dataset::Initialize(Napi::Object target) {
 
   target.Set("Dataset", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 
@@ -80,7 +81,7 @@ Dataset::Dataset(const Napi::CallbackInfo &info) : GDALObject<Dataset>(info), ui
   }
 #endif
   GDAL_SET_PRIVATE(info.This(), "bands_", bandsObj);
-  if (parent_ds) GDAL_SET_PRIVATE(info.This(), "parent_", object_store.get(parent_ds));
+  if (parent_ds) GDAL_SET_PRIVATE(info.This(), "parent_", object_store().get(parent_ds));
 }
 Dataset::~Dataset() {
   // Destroy at garbage collection time if not already explicitly destroyed
@@ -91,7 +92,7 @@ void Dataset::dispose(bool manual) {
   if (this_dataset) {
     LOG("Disposing Dataset [%p]", this_dataset);
 
-    object_store.dispose(uid, manual);
+    object_store().dispose(uid, manual);
 
     LOG("Disposed Dataset [%p]", this_dataset);
 
@@ -117,7 +118,7 @@ void Dataset::dispose(bool manual) {
 Napi::Value Dataset::New(GDALDataset *raw, GDALDataset *parent, bool close, bool shared_lock) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   long parent_uid = 0;
   if (parent != nullptr) {
@@ -125,16 +126,16 @@ Napi::Value Dataset::New(GDALDataset *raw, GDALDataset *parent, bool close, bool
      * to - a readonly Dataset created by the algebra operators must not be able
      * to deadlock (or release) the locks of the Dataset it was derived from.
      */
-    Dataset *parent_ds = node_gdal::UnwrapWrapped<Dataset>(object_store.get(parent));
+    Dataset *parent_ds = node_gdal::UnwrapWrapped<Dataset>(object_store().get(parent));
     parent_uid = parent_ds->uid;
   }
 
   node_gdal::detail::PendingObjectGuard pending(raw);
   std::vector<napi_value> args;
-  Napi::Object obj = Dataset::constructor.Value().New(args);
+  Napi::Object obj = Dataset::constructor().Value().New(args);
   Dataset *wrapped = node_gdal::UnwrapWrapped<Dataset>(obj);
 
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid, close, shared_lock);
+  wrapped->uid = object_store().add(raw, *wrapped, parent_uid, close, shared_lock);
 
   return obj;
 }

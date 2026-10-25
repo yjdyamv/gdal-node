@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class Dimension : public GDALObject<Dimension> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALDimension> group, GDALDataset *parent_ds);
   static NAPI_METHOD(toString);
@@ -43,7 +43,7 @@ class Dimension : public GDALObject<Dimension> {
   long parent_uid;
 
   inline bool isAlive() {
-    return this_ && object_store.isAlive(uid);
+    return this_ && object_store().isAlive(uid);
   }
 
     private:

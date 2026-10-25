@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class RasterBand : public GDALObject<RasterBand> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALRasterBand *band, GDALDataset *parent, bool owned = false);
   static NAPI_METHOD(toString);
@@ -66,7 +66,7 @@ class RasterBand : public GDALObject<RasterBand> {
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself
   ~RasterBand();
   inline bool isAlive() {
-    return this_ && object_store.isAlive(uid);
+    return this_ && object_store().isAlive(uid);
   }
   inline GDALRasterBand *get() {
     return this_;

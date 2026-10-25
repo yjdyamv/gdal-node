@@ -14,7 +14,9 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-thread_local Napi::FunctionReference MDArray::constructor;
+Napi::FunctionReference &MDArray::constructor() {
+  return node_gdal::env_context().constructor<MDArray>();
+}
 
 void MDArray::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -43,8 +45,7 @@ void MDArray::Initialize(Napi::Object target) {
 
   target.Set("MDArray", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 MDArray::MDArray(const Napi::CallbackInfo &info) : GDALObject<MDArray>(info), uid(0), this_(nullptr) {
@@ -71,7 +72,7 @@ void MDArray::dispose() {
 
     LOG("Disposing array [%p]", this_.get());
 
-    object_store.dispose(uid);
+    object_store().dispose(uid);
 
     LOG("Disposed array [%p]", this_.get());
   }
@@ -86,13 +87,13 @@ void MDArray::dispose() {
 Napi::Value MDArray::New(std::shared_ptr<GDALMDArray> raw, GDALDataset *parent_ds) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   // add reference to datasource so datasource doesnt get GC'ed while group is
   // alive
   Napi::Object ds;
-  if (object_store.has(parent_ds)) {
-    ds = object_store.get(parent_ds);
+  if (object_store().has(parent_ds)) {
+    ds = object_store().get(parent_ds);
   } else {
     LOG("MDArray's parent dataset disappeared from cache (array = %p, dataset = %p)", raw.get(), parent_ds);
     Napi::Error::New(node_gdal::napi_env(), "MDArray's parent dataset disappeared from cache").ThrowAsJavaScriptException();
@@ -101,7 +102,7 @@ Napi::Value MDArray::New(std::shared_ptr<GDALMDArray> raw, GDALDataset *parent_d
 
   node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
   std::vector<napi_value> args = {ds};
-  Napi::Object obj = MDArray::constructor.Value().New(args);
+  Napi::Object obj = MDArray::constructor().Value().New(args);
   MDArray *wrapped = node_gdal::UnwrapWrapped<MDArray>(obj);
 
   size_t dim = raw->GetDimensionCount();
@@ -109,7 +110,7 @@ Napi::Value MDArray::New(std::shared_ptr<GDALMDArray> raw, GDALDataset *parent_d
   Dataset *unwrapped_ds = node_gdal::UnwrapWrapped<Dataset>(ds);
   long parent_uid = unwrapped_ds->uid;
 
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid);
+  wrapped->uid = object_store().add(raw, *wrapped, parent_uid);
   wrapped->parent_ds = parent_ds;
   wrapped->parent_uid = parent_uid;
   wrapped->dimensions = dim;

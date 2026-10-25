@@ -9,7 +9,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference CompoundCurve::constructor;
+Napi::FunctionReference &CompoundCurve::constructor() {
+  return node_gdal::env_context().constructor<CompoundCurve>();
+}
 
 void CompoundCurve::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -23,12 +25,11 @@ void CompoundCurve::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor.Value());
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
 
   target.Set("CompoundCurve", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 void CompoundCurve::SetPrivate(Napi::Object _this, Napi::Value value) {

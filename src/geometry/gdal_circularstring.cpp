@@ -11,7 +11,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference CircularString::constructor;
+Napi::FunctionReference &CircularString::constructor() {
+  return node_gdal::env_context().constructor<CircularString>();
+}
 
 void CircularString::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -24,12 +26,11 @@ void CircularString::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, SimpleCurve::constructor.Value());
+  node_gdal::Inherit(lcons, SimpleCurve::constructor().Value());
 
   target.Set("CircularString", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 /**

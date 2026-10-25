@@ -4,7 +4,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference RasterBandOverviews::constructor;
+Napi::FunctionReference &RasterBandOverviews::constructor() {
+  return node_gdal::env_context().constructor<RasterBandOverviews>();
+}
 
 void RasterBandOverviews::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -21,8 +23,7 @@ void RasterBandOverviews::Initialize(Napi::Object target) {
 
   target.Set("RasterBandOverviews", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 RasterBandOverviews::RasterBandOverviews(const Napi::CallbackInfo &info) : GDALObject<RasterBandOverviews>(info) {
@@ -45,7 +46,7 @@ RasterBandOverviews::~RasterBandOverviews() {
 Napi::Value RasterBandOverviews::New(Napi::Value band_obj) {
 
   std::vector<napi_value> args = {band_obj};
-  Napi::Object obj = RasterBandOverviews::constructor.Value().New(args);
+  Napi::Object obj = RasterBandOverviews::constructor().Value().New(args);
 
   return obj;
 }

@@ -16,6 +16,8 @@
 #include <atomic>
 #include <list>
 #include <map>
+#include <memory>
+#include <typeindex>
 
 using namespace std;
 
@@ -79,6 +81,15 @@ template <> struct ObjectStoreItem<GDALDataset *> {
   ObjectStoreItem(Napi::Reference<Napi::Object> &obj);
 };
 
+// The maps of the store, one pair per wrapped pointer type. They used to be
+// thread_local function-local statics: their constructors are not run when the
+// addon is dlopen()-ed by node and their lifetime was the thread's rather than
+// the environment's, which made the teardown order a matter of luck. They are
+// now part of the store, which is created by Init() and destroyed by the
+// instance data finalizer of its environment.
+template <typename GDALPTR> using UidMap = map<long, shared_ptr<ObjectStoreItem<GDALPTR>>>;
+template <typename GDALPTR> using PtrMap = map<GDALPTR, shared_ptr<ObjectStoreItem<GDALPTR>>>;
+
 class ObjectStore {
     public:
   template <typename GDALPTR>
@@ -123,6 +134,16 @@ class ObjectStore {
   ~ObjectStore();
 
     private:
+  template <typename GDALPTR> struct Maps {
+    UidMap<GDALPTR> by_uid;
+    PtrMap<GDALPTR> by_ptr;
+  };
+
+  // The type-erased holder: maps<GDALPTR>() creates the pair of maps of a type on
+  // first use, so that the class does not have to enumerate the wrapped types
+  template <typename GDALPTR> Maps<GDALPTR> &maps();
+  map<type_index, shared_ptr<void>> typed_maps;
+
   long uid;
   uv_mutex_t master_lock;
   uv_cond_t master_sleep;

@@ -6,7 +6,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference FeatureDefn::constructor;
+Napi::FunctionReference &FeatureDefn::constructor() {
+  return node_gdal::env_context().constructor<FeatureDefn>();
+}
 
 void FeatureDefn::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -26,8 +28,7 @@ void FeatureDefn::Initialize(Napi::Object target) {
 
   target.Set("FeatureDefn", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDefn>(info), this_(nullptr), owned_(true) {
@@ -76,7 +77,7 @@ Napi::Value FeatureDefn::New(OGRFeatureDefn *def, bool owned) {
 
   node_gdal::detail::PendingObjectGuard pending(def);
   std::vector<napi_value> args;
-  Napi::Object obj = FeatureDefn::constructor.Value().New(args);
+  Napi::Object obj = FeatureDefn::constructor().Value().New(args);
   FeatureDefn *wrapped = node_gdal::UnwrapWrapped<FeatureDefn>(obj);
 
   return obj;

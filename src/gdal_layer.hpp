@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class Layer : public GDALObject<Layer> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set);
@@ -46,7 +46,7 @@ class Layer : public GDALObject<Layer> {
     return this_;
   }
   inline bool isAlive() {
-    return this_ && object_store.isAlive(uid);
+    return this_ && object_store().isAlive(uid);
   }
   inline GDALDataset *getParent() {
     return parent_ds;

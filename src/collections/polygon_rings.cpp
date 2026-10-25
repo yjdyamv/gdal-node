@@ -6,7 +6,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference PolygonRings::constructor;
+Napi::FunctionReference &PolygonRings::constructor() {
+  return node_gdal::env_context().constructor<PolygonRings>();
+}
 
 void PolygonRings::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -23,8 +25,7 @@ void PolygonRings::Initialize(Napi::Object target) {
 
   target.Set("PolygonRings", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 PolygonRings::PolygonRings(const Napi::CallbackInfo &info) : GDALObject<PolygonRings>(info) {
@@ -47,7 +48,7 @@ PolygonRings::~PolygonRings() {
 Napi::Value PolygonRings::New(Napi::Value geom) {
 
   std::vector<napi_value> args = {geom};
-  Napi::Object obj = PolygonRings::constructor.Value().New(args);
+  Napi::Object obj = PolygonRings::constructor().Value().New(args);
 
   return obj;
 }

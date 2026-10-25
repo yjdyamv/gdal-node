@@ -8,7 +8,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference GeometryCollection::constructor;
+Napi::FunctionReference &GeometryCollection::constructor() {
+  return node_gdal::env_context().constructor<GeometryCollection>();
+}
 
 /**
  * A collection of 1 or more geometry objects.
@@ -31,12 +33,11 @@ void GeometryCollection::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor.Value());
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
 
   target.Set("GeometryCollection", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 NAPI_METHOD(GeometryCollection::toString) {

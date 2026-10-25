@@ -6,6 +6,7 @@
 #include <functional>
 #include <thread>
 #include <stdio.h>
+#include <source_location>
 #include <string>
 #include <memory>
 #include <vector>
@@ -13,6 +14,7 @@
 // napi
 #include "napi-wrapper.h"
 
+#include "utils/env_context.hpp"
 #include "utils/ptr_manager.hpp"
 
 #if GDAL_VERSION_MAJOR < 2 || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 2)
@@ -21,15 +23,39 @@
 
 namespace node_gdal {
 extern FILE *log_file;
-extern ObjectStore object_store;
 extern bool eventLoopWarn;
+
+// The context of the environment of the calling thread. Every path which touches
+// the state of an environment runs in a Node-API callback (or in the destructor
+// of a wrapper) of an environment which went through Init(), and an environment
+// is only ever served by one thread, so the context of that thread is the
+// context of the environment. The thread of an asynchronous operation serves no
+// environment and has no context.
+inline EnvContext &env_context(std::source_location loc = std::source_location::current()) {
+  EnvContext *ctx = EnvContext::active();
+  if (ctx == nullptr) {
+    fprintf(stderr, "[gdal] no Node-API environment is being served by this thread (%s:%d)\n", loc.file_name(), loc.line());
+    abort();
+  }
+  return *ctx;
+}
+
+// The context of an environment which is at hand, see above
+inline EnvContext &env_context(::napi_env env) {
+  EnvContext *ctx = EnvContext::find(env);
+  if (ctx == nullptr) { abort(); }
+  return *ctx;
+}
+
 // Napi::Env has no default constructor, so the environment is stored raw and
-// wrapped on demand. It is per-thread: the addon can be loaded in more than one
-// V8 isolate (a worker_thread in addition to the main thread) and Init() runs
-// once per isolate, in the thread of that isolate.
-extern thread_local ::napi_env napi_env_storage;
+// wrapped on demand
 inline Napi::Env napi_env() {
-  return Napi::Env(napi_env_storage);
+  return Napi::Env(env_context().env());
+}
+
+// The object store of the environment of the calling thread
+inline ObjectStore &object_store() {
+  return env_context().store();
 }
 } // namespace node_gdal
 
@@ -395,7 +421,7 @@ template <typename T> inline T *UnwrapWrapped(const Napi::Object &obj) {
 }
 
 template <typename T> inline bool IsInstanceOf(const Napi::Value &obj) {
-  return obj.IsObject() && obj.As<Napi::Object>().InstanceOf(T::constructor.Value());
+  return obj.IsObject() && obj.As<Napi::Object>().InstanceOf(T::constructor().Value());
 }
 
 } // namespace node_gdal
@@ -439,82 +465,39 @@ template <typename T> class GDALObject : public Napi::ObjectWrap<T> {
 //
 namespace node_gdal {
 
-namespace detail {
-
-struct PrivateKeys {
-  std::map<std::string, Napi::Reference<Napi::Symbol>> keys;
-  // `napi_env` is also the name of the accessor in this namespace, so the type
-  // needs to be qualified
-  ::napi_env env = nullptr;
-};
-
-inline thread_local PrivateKeys private_keys;
-
-inline void releasePrivateKeys(void *data) {
-  static_cast<PrivateKeys *>(data)->keys.clear();
-}
-
 //
-// Every wrapped class keeps a persistent reference to its constructor in a
-// thread_local static, because every object of that class needs it to create a
-// new wrapper. The reference has to outlive the objects, but not the
-// environment: a worker_thread destroys its environment when it terminates, and
-// the reference would keep the constructor alive after that. The references are
-// therefore registered per environment and released by an environment cleanup
-// hook, exactly like the private keys above.
+// The interned private property symbols. The old binding had SetPrivate/GetPrivate
+// keyed by a *name* and interned by V8; N-API only has napi_create_symbol, which
+// yields a fresh symbol on every call, so the keys are registered per environment
+// to keep behaving like the originals. The registry lives in the EnvContext of the
+// environment, which releases it while the environment is still usable.
 //
-struct ConstructorReferences {
-  std::vector<std::function<void()>> resetters;
-  ::napi_env env = nullptr;
-};
-
-inline thread_local ConstructorReferences constructor_references;
-
-inline void releaseConstructorReferences(void *data) {
-  ConstructorReferences *refs = static_cast<ConstructorReferences *>(data);
-  for (auto &reset : refs->resetters) { reset(); }
-  refs->resetters.clear();
-  refs->env = nullptr;
-}
-
-} // namespace detail
-
 inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
-  ::napi_env raw_env = env;
-  detail::PrivateKeys &store = detail::private_keys;
-  if (store.env != raw_env) {
-    // A thread can only host one environment at a time, but clear the leftovers
-    // first in case it hosted one before
-    store.keys.clear();
-    store.env = raw_env;
-    napi_add_env_cleanup_hook(raw_env, detail::releasePrivateKeys, &store);
+  EnvContext *ctx = EnvContext::find(env);
+  if (ctx == nullptr) {
+    // Reachable only when the addon did not go through Init(); the symbol is
+    // still usable, it just will not be interned
+    return Napi::Symbol::New(env, name);
   }
-  auto i = store.keys.find(name);
-  if (i != store.keys.end()) return i->second.Value();
+
+  auto &keys = ctx->symbols();
+  auto i = keys.find(name);
+  if (i != keys.end()) return i->second.Value();
+
   Napi::Symbol s = Napi::Symbol::New(env, name);
-  store.keys.emplace(name, Napi::Persistent(s));
+  keys.emplace(name, Napi::Persistent(s));
   return s;
 }
 
-// Makes the thread_local constructor reference of a wrapped class release its
-// reference when the environment is destroyed. The reference destructor is
-// suppressed because the thread_local variables of the main thread are
-// destroyed after its environment is gone, but the reference is always empty by
-// then.
-inline void OwnConstructorReference(Napi::Env env, Napi::Reference<Napi::Function> &reference) {
-  reference.SuppressDestruct();
-  ::napi_env raw_env = env;
-  detail::ConstructorReferences &store = detail::constructor_references;
-  if (store.env != raw_env) {
-    // A thread can only host one environment at a time, but clear the leftovers
-    // first in case it hosted one before
-    store.resetters.clear();
-    store.env = raw_env;
-    napi_add_env_cleanup_hook(raw_env, detail::releaseConstructorReferences, &store);
-  }
-  store.resetters.push_back([&reference]() { reference.Reset(); });
-}
-
+//
+// Every wrapped class keeps a persistent reference to its constructor, because
+// every object of that class needs it to create a new wrapper. The reference has
+// to outlive the objects, but not the environment: a worker_thread destroys its
+// environment when it terminates, and the reference would keep the constructor
+// alive after that. The references are therefore kept in the EnvContext of the
+// environment, which releases them while the environment is still usable, see
+// EnvContext::constructor().
+//
 } // namespace node_gdal
 
 // `.As<Napi::Object>()` keeps these usable with either an Object or a Value
@@ -541,21 +524,20 @@ namespace node_gdal {
 // a weak callback when the wrapper is garbage collected - and a wrapper which is
 // still alive when its environment is destroyed (a terminating worker thread, a
 // process that exits with open datasets) is never collected, so every such
-// External showed up as a leak. The pointer is handed over in a thread_local
-// slot instead: the constructor runs synchronously inside New() and takes it
-// back, and the guard restores the slot even when the constructor throws.
+// External showed up as a leak. The pointer is handed over in a slot of the
+// EnvContext instead: the constructor runs synchronously inside New() and takes
+// it back, and the guard restores the slot even when the constructor throws.
 //
 namespace detail {
 
-inline thread_local const void *pending_object = nullptr;
-
 struct PendingObjectGuard {
+  EnvContext &ctx;
   const void *previous;
-  explicit PendingObjectGuard(const void *ptr) : previous(pending_object) {
-    pending_object = ptr;
+  explicit PendingObjectGuard(const void *ptr) : ctx(env_context()), previous(ctx.pending_object()) {
+    ctx.pending_object() = ptr;
   }
   ~PendingObjectGuard() {
-    pending_object = previous;
+    ctx.pending_object() = previous;
   }
 };
 
@@ -565,8 +547,9 @@ struct PendingObjectGuard {
 // Returns nullptr when the object is created directly from JS, which the
 // constructors report as an error.
 template <typename T> inline T *TakePendingObject() {
-  const void *ptr = detail::pending_object;
-  detail::pending_object = nullptr;
+  const void *&slot = env_context().pending_object();
+  const void *ptr = slot;
+  slot = nullptr;
   return const_cast<T *>(static_cast<const T *>(ptr));
 }
 
@@ -580,8 +563,9 @@ template <typename T> inline void *ExportShared(const std::shared_ptr<T> &p) {
 // (Group, MDArray, Attribute, Dimension): the factory allocates an owning copy
 // of the shared_ptr, which this takes and frees.
 template <typename T> inline std::shared_ptr<T> TakePendingShared() {
-  auto *ptr = static_cast<std::shared_ptr<T> *>(const_cast<void *>(detail::pending_object));
-  detail::pending_object = nullptr;
+  const void *&slot = env_context().pending_object();
+  auto *ptr = static_cast<std::shared_ptr<T> *>(const_cast<void *>(slot));
+  slot = nullptr;
   if (ptr == nullptr) { return std::shared_ptr<T>(); }
   std::shared_ptr<T> r = *ptr;
   delete ptr;

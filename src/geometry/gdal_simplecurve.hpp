@@ -18,7 +18,7 @@ namespace node_gdal {
 class SimpleCurve : public CurveBase<SimpleCurve, OGRSimpleCurve, LineStringPoints> {
 
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   // Abstract in JS
   SimpleCurve(const Napi::CallbackInfo &info);
 

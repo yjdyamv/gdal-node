@@ -72,16 +72,7 @@
 namespace node_gdal {
 
 FILE *log_file = NULL;
-ObjectStore object_store;
 bool eventLoopWarn = true;
-thread_local ::napi_env napi_env_storage = nullptr;
-
-// Set by the env cleanup hook, see async.hpp. This definition has to stay outside
-// the `extern "C"` block below - async.hpp declares it with C++ linkage, and
-// `extern "C"` would give this definition C linkage instead.
-// Per-thread: the addon can be loaded in several V8 isolates and the cleanup of
-// a worker_thread must not stop the callbacks of the main environment.
-thread_local bool gdalShuttingDown = false;
 
 static NAPI_GETTER(LastErrorGetter) {
 
@@ -323,22 +314,22 @@ static NAPI_METHOD(isAlive) {
   long uid;
   NODE_ARG_INT(0, "uid", uid);
 
-  return Napi::Boolean::New(info.Env(), object_store.isAlive(uid));
+  return Napi::Boolean::New(info.Env(), object_store().isAlive(uid));
 }
 
 void Cleanup(void *) {
-  gdalShuttingDown = true;
-  object_store.cleanup();
+  env_context().shutting_down() = true;
+  object_store().cleanup();
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object target) {
   // Note: the CJS and the ESM loader can both register the addon in the same
   // process. Each call gets its own empty exports object, so the registration
   // has to run every time - a guard here would hand the second one back empty.
-  // everything that goes through the ambient node_gdal::napi_env() needs this
-  // both of these are thread-local: every isolate has its own environment
-  napi_env_storage = env;
-  mainV8ThreadId = std::this_thread::get_id();
+  // The per-environment state: installed first, so that it is in place before
+  // the first object is wrapped. Everything which goes through the ambient
+  // node_gdal::napi_env()/object_store() finds it through the thread's context
+  EnvContext::find(env);
 
   GDAL_SetAsyncableMethod(env, target, "open", gdal_open);
   GDAL_SetMethod(env, target, "setConfigOption", setConfigOption);

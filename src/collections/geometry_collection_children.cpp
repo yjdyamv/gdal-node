@@ -5,7 +5,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference GeometryCollectionChildren::constructor;
+Napi::FunctionReference &GeometryCollectionChildren::constructor() {
+  return node_gdal::env_context().constructor<GeometryCollectionChildren>();
+}
 
 void GeometryCollectionChildren::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -23,8 +25,7 @@ void GeometryCollectionChildren::Initialize(Napi::Object target) {
 
   target.Set("GeometryCollectionChildren", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 GeometryCollectionChildren::GeometryCollectionChildren(const Napi::CallbackInfo &info) : GDALObject<GeometryCollectionChildren>(info) {
@@ -47,7 +48,7 @@ GeometryCollectionChildren::~GeometryCollectionChildren() {
 Napi::Value GeometryCollectionChildren::New(Napi::Value geom) {
 
   std::vector<napi_value> args = {geom};
-  Napi::Object obj = GeometryCollectionChildren::constructor.Value().New(args);
+  Napi::Object obj = GeometryCollectionChildren::constructor().Value().New(args);
 
   return obj;
 }

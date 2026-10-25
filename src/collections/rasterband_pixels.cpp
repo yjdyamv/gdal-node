@@ -8,7 +8,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference RasterBandPixels::constructor;
+Napi::FunctionReference &RasterBandPixels::constructor() {
+  return node_gdal::env_context().constructor<RasterBandPixels>();
+}
 
 void RasterBandPixels::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -30,8 +32,7 @@ void RasterBandPixels::Initialize(Napi::Object target) {
 
   target.Set("RasterBandPixels", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 RasterBandPixels::RasterBandPixels(const Napi::CallbackInfo &info) : GDALObject<RasterBandPixels>(info) {
@@ -75,7 +76,7 @@ RasterBand *RasterBandPixels::parent(const Napi::CallbackInfo &info) {
 Napi::Value RasterBandPixels::New(Napi::Value band_obj) {
 
   std::vector<napi_value> args = {band_obj};
-  Napi::Object obj = RasterBandPixels::constructor.Value().New(args);
+  Napi::Object obj = RasterBandPixels::constructor().Value().New(args);
 
   return obj;
 }

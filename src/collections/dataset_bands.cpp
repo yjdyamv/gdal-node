@@ -7,7 +7,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference DatasetBands::constructor;
+Napi::FunctionReference &DatasetBands::constructor() {
+  return node_gdal::env_context().constructor<DatasetBands>();
+}
 
 void DatasetBands::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -25,8 +27,7 @@ void DatasetBands::Initialize(Napi::Object target) {
 
   target.Set("DatasetBands", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 DatasetBands::DatasetBands(const Napi::CallbackInfo &info) : GDALObject<DatasetBands>(info) {
@@ -53,7 +54,7 @@ DatasetBands::~DatasetBands() {
 Napi::Value DatasetBands::New(Napi::Value ds_obj) {
 
   std::vector<napi_value> args = {ds_obj};
-  Napi::Object obj = DatasetBands::constructor.Value().New(args);
+  Napi::Object obj = DatasetBands::constructor().Value().New(args);
 
   return obj;
 }

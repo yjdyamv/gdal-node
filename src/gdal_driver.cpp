@@ -8,7 +8,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Driver::constructor;
+Napi::FunctionReference &Driver::constructor() {
+  return node_gdal::env_context().constructor<Driver>();
+}
 
 void Driver::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -30,8 +32,7 @@ void Driver::Initialize(Napi::Object target) {
 
   target.Set("Driver", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 Driver::Driver(const Napi::CallbackInfo &info)
@@ -59,7 +60,7 @@ Driver::~Driver() {
 void Driver::dispose() {
   if (this_gdaldriver) {
     LOG("Disposing GDAL Driver [%p]", this_gdaldriver);
-    object_store.dispose(uid);
+    object_store().dispose(uid);
     LOG("Disposed GDAL Driver [%p]", this_gdaldriver);
     this_gdaldriver = NULL;
   }
@@ -80,15 +81,15 @@ Napi::Value Driver::New(GDALDriver *driver) {
   Napi::Env env = node_gdal::napi_env();
 
   if (!driver) { return env.Null(); }
-  if (object_store.has(driver)) { return object_store.get(driver); }
+  if (object_store().has(driver)) { return object_store().get(driver); }
 
   node_gdal::detail::PendingObjectGuard pending(driver);
   std::vector<napi_value> args;
-  Napi::Object obj = constructor.Value().New(args);
+  Napi::Object obj = constructor().Value().New(args);
   Driver *wrapped = node_gdal::UnwrapWrapped<Driver>(obj);
 
   // LOG("ADDING DRIVER TO CACHE [%p]", driver);
-  wrapped->uid = object_store.add(driver, *wrapped, 0);
+  wrapped->uid = object_store().add(driver, *wrapped, 0);
   // LOG("DONE ADDING DRIVER TO CACHE [%p]", driver);
 
   return obj;

@@ -781,7 +781,7 @@ static CPLErr pixelFunc(
     eBufType,
     std::move(pfArgsMap),
     nullptr};
-  if (std::this_thread::get_id() == mainV8ThreadId) {
+  if (EnvContext::active() != nullptr) {
     // Main thread = sync mode
     // Here we are abusing an uninitialized uv_async_t as a data holder
     callJSpfn(async);

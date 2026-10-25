@@ -5,7 +5,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference LayerFields::constructor;
+Napi::FunctionReference &LayerFields::constructor() {
+  return node_gdal::env_context().constructor<LayerFields>();
+}
 
 void LayerFields::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -29,8 +31,7 @@ void LayerFields::Initialize(Napi::Object target) {
 
   target.Set("LayerFields", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 LayerFields::LayerFields(const Napi::CallbackInfo &info) : GDALObject<LayerFields>(info) {
@@ -51,7 +52,7 @@ LayerFields::~LayerFields() {
 Napi::Value LayerFields::New(Napi::Value layer_obj) {
 
   std::vector<napi_value> args = {layer_obj};
-  Napi::Object obj = LayerFields::constructor.Value().New(args);
+  Napi::Object obj = LayerFields::constructor().Value().New(args);
 
   return obj;
 }

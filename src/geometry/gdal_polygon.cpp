@@ -8,7 +8,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Polygon::constructor;
+Napi::FunctionReference &Polygon::constructor() {
+  return node_gdal::env_context().constructor<Polygon>();
+}
 
 void Polygon::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -23,12 +25,11 @@ void Polygon::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor.Value());
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
 
   target.Set("Polygon", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 void Polygon::SetPrivate(Napi::Object _this, Napi::Value value) {

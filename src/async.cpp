@@ -3,7 +3,6 @@
 namespace node_gdal {
 
 // Per-thread: the addon can be loaded in several V8 isolates at the same time
-thread_local std::thread::id mainV8ThreadId;
 
 // *message coming from GDAL points to a statically allocated buffer
 GDALProgressInfo::GDALProgressInfo(double complete, const char *message) : complete(complete), message(message) {
@@ -70,7 +69,8 @@ void GDALAbortSignal::disarm() {
   if (listener.IsEmpty() && signal.IsEmpty()) return;
   // Once the JS world is being torn down there is nothing left to unregister
   // and the V8 handles may not be used anymore
-  if (!gdalShuttingDown && mainV8ThreadId == std::this_thread::get_id()) {
+  EnvContext *ctx = EnvContext::active();
+  if (ctx != nullptr && !ctx->shutting_down()) {
     try {
       // Calling into JS while an exception is pending would clear it - this
       // happens when the operation is aborted before it even starts and the

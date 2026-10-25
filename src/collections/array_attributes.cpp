@@ -10,7 +10,9 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-thread_local Napi::FunctionReference ArrayAttributes::constructor;
+Napi::FunctionReference &ArrayAttributes::constructor() {
+  return node_gdal::env_context().constructor<ArrayAttributes>();
+}
 
 std::shared_ptr<GDALAttribute> ArrayAttributes::__get(std::shared_ptr<GDALMDArray> parent, std::string const &name) {
   return parent->GetAttribute(name);

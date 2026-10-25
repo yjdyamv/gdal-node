@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class ColorTable : public GDALObject<ColorTable> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALColorTable *raw, Napi::Value band);
@@ -45,7 +45,7 @@ class ColorTable : public GDALObject<ColorTable> {
   long parent_uid;
 
   inline bool isAlive() {
-    return this_ && object_store.isAlive(uid) && (parent_uid == 0 || object_store.isAlive(parent_uid));
+    return this_ && object_store().isAlive(uid) && (parent_uid == 0 || object_store().isAlive(parent_uid));
   }
 
     private:

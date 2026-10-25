@@ -5,7 +5,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference FeatureDefnFields::constructor;
+Napi::FunctionReference &FeatureDefnFields::constructor() {
+  return node_gdal::env_context().constructor<FeatureDefnFields>();
+}
 
 void FeatureDefnFields::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -29,8 +31,7 @@ void FeatureDefnFields::Initialize(Napi::Object target) {
 
   target.Set("FeatureDefnFields", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 FeatureDefnFields::FeatureDefnFields(const Napi::CallbackInfo &info) : GDALObject<FeatureDefnFields>(info) {
@@ -53,7 +54,7 @@ FeatureDefnFields::~FeatureDefnFields() {
 Napi::Value FeatureDefnFields::New(Napi::Value feature_defn) {
 
   std::vector<napi_value> args = {feature_defn};
-  Napi::Object obj = FeatureDefnFields::constructor.Value().New(args);
+  Napi::Object obj = FeatureDefnFields::constructor().Value().New(args);
 
   return obj;
 }

@@ -8,7 +8,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference DatasetLayers::constructor;
+Napi::FunctionReference &DatasetLayers::constructor() {
+  return node_gdal::env_context().constructor<DatasetLayers>();
+}
 
 void DatasetLayers::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -28,8 +30,7 @@ void DatasetLayers::Initialize(Napi::Object target) {
 
   target.Set("DatasetLayers", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 DatasetLayers::DatasetLayers(const Napi::CallbackInfo &info) : GDALObject<DatasetLayers>(info) {
@@ -56,7 +57,7 @@ DatasetLayers::~DatasetLayers() {
 Napi::Value DatasetLayers::New(Napi::Value ds_obj) {
 
   std::vector<napi_value> args = {ds_obj};
-  Napi::Object obj = DatasetLayers::constructor.Value().New(args);
+  Napi::Object obj = DatasetLayers::constructor().Value().New(args);
 
 
   return obj;

@@ -6,7 +6,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference LineStringPoints::constructor;
+Napi::FunctionReference &LineStringPoints::constructor() {
+  return node_gdal::env_context().constructor<LineStringPoints>();
+}
 
 void LineStringPoints::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -26,8 +28,7 @@ void LineStringPoints::Initialize(Napi::Object target) {
 
   target.Set("LineStringPoints", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 LineStringPoints::LineStringPoints(const Napi::CallbackInfo &info) : GDALObject<LineStringPoints>(info) {
@@ -50,7 +51,7 @@ LineStringPoints::~LineStringPoints() {
 Napi::Value LineStringPoints::New(Napi::Value geom) {
 
   std::vector<napi_value> args = {geom};
-  Napi::Object obj = LineStringPoints::constructor.Value().New(args);
+  Napi::Object obj = LineStringPoints::constructor().Value().New(args);
 
   return obj;
 }

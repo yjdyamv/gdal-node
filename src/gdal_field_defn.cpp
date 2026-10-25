@@ -5,7 +5,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference FieldDefn::constructor;
+Napi::FunctionReference &FieldDefn::constructor() {
+  return node_gdal::env_context().constructor<FieldDefn>();
+}
 
 void FieldDefn::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -25,8 +27,7 @@ void FieldDefn::Initialize(Napi::Object target) {
 
   target.Set("FieldDefn", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 /**
@@ -91,7 +92,7 @@ Napi::Value FieldDefn::New(OGRFieldDefn *def, bool owned) {
 
   node_gdal::detail::PendingObjectGuard pending(def);
   std::vector<napi_value> args;
-  Napi::Object obj = FieldDefn::constructor.Value().New(args);
+  Napi::Object obj = FieldDefn::constructor().Value().New(args);
   FieldDefn *wrapped = node_gdal::UnwrapWrapped<FieldDefn>(obj);
   // The pointer is always ours: it is either the copy made above or the one the
   // caller handed over. Without this the wrapper is not freed with the object

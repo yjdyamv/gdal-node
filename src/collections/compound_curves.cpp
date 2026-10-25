@@ -7,7 +7,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference CompoundCurveCurves::constructor;
+Napi::FunctionReference &CompoundCurveCurves::constructor() {
+  return node_gdal::env_context().constructor<CompoundCurveCurves>();
+}
 
 void CompoundCurveCurves::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -24,8 +26,7 @@ void CompoundCurveCurves::Initialize(Napi::Object target) {
 
   target.Set("CompoundCurveCurves", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 CompoundCurveCurves::CompoundCurveCurves(const Napi::CallbackInfo &info) : GDALObject<CompoundCurveCurves>(info) {
@@ -48,7 +49,7 @@ CompoundCurveCurves::~CompoundCurveCurves() {
 Napi::Value CompoundCurveCurves::New(Napi::Value geom) {
 
   std::vector<napi_value> args = {geom};
-  Napi::Object obj = CompoundCurveCurves::constructor.Value().New(args);
+  Napi::Object obj = CompoundCurveCurves::constructor().Value().New(args);
 
   return obj;
 }

@@ -9,7 +9,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference CoordinateTransformation::constructor;
+Napi::FunctionReference &CoordinateTransformation::constructor() {
+  return node_gdal::env_context().constructor<CoordinateTransformation>();
+}
 
 void CoordinateTransformation::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -24,8 +26,7 @@ void CoordinateTransformation::Initialize(Napi::Object target) {
 
   target.Set("CoordinateTransformation", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &info)
@@ -59,7 +60,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
     return;
   }
 
-  if (info[1].As<Napi::Object>().InstanceOf(SpatialReference::constructor.Value())) {
+  if (info[1].As<Napi::Object>().InstanceOf(SpatialReference::constructor().Value())) {
     // srs -> srs
     if (!node_gdal::IsInstanceOf<SpatialReference>(info[1])) {
       Napi::TypeError::New(info.Env(), "target must be an instance of SpatialReference").ThrowAsJavaScriptException();
@@ -77,7 +78,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
       return;
     }
     this_ = transform;
-  } else if (info[1].As<Napi::Object>().InstanceOf(Dataset::constructor.Value())) {
+  } else if (info[1].As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
     // srs -> px/line
     // todo: allow additional options using StringList
 
@@ -146,7 +147,7 @@ Napi::Value CoordinateTransformation::New(OGRCoordinateTransformation *transform
 
   node_gdal::detail::PendingObjectGuard pending(transform);
   std::vector<napi_value> args;
-  Napi::Object obj = CoordinateTransformation::constructor.Value().New(args);
+  Napi::Object obj = CoordinateTransformation::constructor().Value().New(args);
   CoordinateTransformation *wrapped = node_gdal::UnwrapWrapped<CoordinateTransformation>(obj);
 
   return obj;

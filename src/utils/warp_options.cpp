@@ -124,7 +124,7 @@ int WarpOptions::parse(Napi::Value value) {
   }
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "src"))) {
     prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "src"));
-    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor.Value())) {
+    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
       this->src_obj = prop.As<Napi::Object>();
       this->src = node_gdal::UnwrapWrapped<Dataset>(this->src_obj);
 #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
@@ -146,7 +146,7 @@ int WarpOptions::parse(Napi::Value value) {
   }
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "dst"))) {
     prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "dst"));
-    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor.Value())) {
+    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
       this->dst_obj = prop.As<Napi::Object>();
       this->dst = node_gdal::UnwrapWrapped<Dataset>(this->dst_obj);
 #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
@@ -240,7 +240,7 @@ int WarpOptions::parse(Napi::Value value) {
   }
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "cutline"))) {
     prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "cutline"));
-    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Geometry::constructor.Value())) {
+    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Geometry::constructor().Value())) {
       options->hCutline = node_gdal::UnwrapWrapped<Geometry>(prop.As<Napi::Object>())->get();
     } else if (!prop.IsUndefined() && !prop.IsNull()) {
       Napi::TypeError::New(node_gdal::napi_env(), "cutline property must be a Geometry object").ThrowAsJavaScriptException();

@@ -9,7 +9,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference LinearRing::constructor;
+Napi::FunctionReference &LinearRing::constructor() {
+  return node_gdal::env_context().constructor<LinearRing>();
+}
 
 void LinearRing::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -24,12 +26,11 @@ void LinearRing::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, LineString::constructor.Value());
+  node_gdal::Inherit(lcons, LineString::constructor().Value());
 
   target.Set("LinearRing", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
@@ -46,7 +47,7 @@ Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
 
   node_gdal::detail::PendingObjectGuard pending(geom);
   std::vector<napi_value> args;
-  Napi::Object obj = LinearRing::constructor.Value().New(args);
+  Napi::Object obj = LinearRing::constructor().Value().New(args);
   LinearRing *wrapped = node_gdal::UnwrapWrapped<LinearRing>(obj);
 
   return obj;

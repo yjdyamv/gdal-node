@@ -22,7 +22,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Geometry::constructor;
+Napi::FunctionReference &Geometry::constructor() {
+  return node_gdal::env_context().constructor<Geometry>();
+}
 
 void Geometry::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -91,8 +93,7 @@ void Geometry::Initialize(Napi::Object target) {
 
   target.Set("Geometry", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 /**
@@ -1899,20 +1900,20 @@ Napi::Value Geometry::getConstructor(OGRwkbGeometryType type) {
 
   type = wkbFlatten(type);
   switch (type) {
-    case wkbPoint: return Point::constructor.Value();
-    case wkbLineString: return LineString::constructor.Value();
-    case wkbLinearRing: return LinearRing::constructor.Value();
-    case wkbPolygon: return Polygon::constructor.Value();
+    case wkbPoint: return Point::constructor().Value();
+    case wkbLineString: return LineString::constructor().Value();
+    case wkbLinearRing: return LinearRing::constructor().Value();
+    case wkbPolygon: return Polygon::constructor().Value();
     case wkbGeometryCollection:
-      return GeometryCollection::constructor.Value();
-    case wkbMultiPoint: return MultiPoint::constructor.Value();
+      return GeometryCollection::constructor().Value();
+    case wkbMultiPoint: return MultiPoint::constructor().Value();
     case wkbMultiLineString:
-      return MultiLineString::constructor.Value();
-    case wkbMultiPolygon: return MultiPolygon::constructor.Value();
+      return MultiLineString::constructor().Value();
+    case wkbMultiPolygon: return MultiPolygon::constructor().Value();
     case wkbCircularString:
-      return CircularString::constructor.Value();
-    case wkbCompoundCurve: return CompoundCurve::constructor.Value();
-    case wkbMultiCurve: return MultiCurve::constructor.Value();
+      return CircularString::constructor().Value();
+    case wkbCompoundCurve: return CompoundCurve::constructor().Value();
+    case wkbMultiCurve: return MultiCurve::constructor().Value();
     default: return node_gdal::napi_env().Null();
   }
 }

@@ -18,7 +18,7 @@ namespace node_gdal {
 
 class Dataset : public GDALObject<Dataset> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALDataset *ds, GDALDataset *parent = nullptr, bool close = true, bool shared_lock = true);
   static NAPI_METHOD(toString);
@@ -61,7 +61,7 @@ class Dataset : public GDALObject<Dataset> {
   long parent_uid;
 
   inline bool isAlive() {
-    return this_dataset && object_store.isAlive(uid);
+    return this_dataset && object_store().isAlive(uid);
   }
 
     private:

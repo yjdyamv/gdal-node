@@ -10,7 +10,9 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-thread_local Napi::FunctionReference GroupArrays::constructor;
+Napi::FunctionReference &GroupArrays::constructor() {
+  return node_gdal::env_context().constructor<GroupArrays>();
+}
 
 std::shared_ptr<GDALMDArray> GroupArrays::__get(std::shared_ptr<GDALGroup> parent, std::string const &name) {
   return parent->OpenMDArray(name);

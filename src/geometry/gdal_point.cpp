@@ -6,7 +6,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Point::constructor;
+Napi::FunctionReference &Point::constructor() {
+  return node_gdal::env_context().constructor<Point>();
+}
 
 void Point::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -22,14 +24,13 @@ void Point::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor.Value());
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
 
   // properties
 
   target.Set("Point", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 /**

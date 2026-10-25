@@ -10,7 +10,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference MultiLineString::constructor;
+Napi::FunctionReference &MultiLineString::constructor() {
+  return node_gdal::env_context().constructor<MultiLineString>();
+}
 
 void MultiLineString::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -24,12 +26,11 @@ void MultiLineString::Initialize(Napi::Object target) {
     });
 
   // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, GeometryCollection::constructor.Value());
+  node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
 
   target.Set("MultiLineString", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 /**

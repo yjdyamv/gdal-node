@@ -15,7 +15,9 @@ namespace node_gdal {
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
-thread_local Napi::FunctionReference Group::constructor;
+Napi::FunctionReference &Group::constructor() {
+  return node_gdal::env_context().constructor<Group>();
+}
 
 void Group::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -35,8 +37,7 @@ void Group::Initialize(Napi::Object target) {
 
   target.Set("Group", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 Group::Group(const Napi::CallbackInfo &info) : GDALObject<Group>(info), uid(0), this_(nullptr), parent_ds(0) {
@@ -66,7 +67,7 @@ void Group::dispose() {
 
     LOG("Disposing group [%p]", this_.get());
 
-    object_store.dispose(uid);
+    object_store().dispose(uid);
 
     LOG("Disposed group [%p]", this_.get());
   }
@@ -80,8 +81,8 @@ void Group::dispose() {
 
 Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, GDALDataset *parent_ds) {
 
-  if (object_store.has(parent_ds)) {
-    Napi::Object ds = object_store.get(parent_ds);
+  if (object_store().has(parent_ds)) {
+    Napi::Object ds = object_store().get(parent_ds);
     return Group::New(raw, ds);
   } else {
     LOG("Group's parent dataset disappeared from cache (group = %p, dataset = %p)", raw.get(), parent_ds);
@@ -93,11 +94,11 @@ Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, GDALDataset *parent_ds) {
 Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, Napi::Object parent_ds) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
   std::vector<napi_value> args = {parent_ds};
-  Napi::Object obj = Group::constructor.Value().New(args);
+  Napi::Object obj = Group::constructor().Value().New(args);
   Group *wrapped = node_gdal::UnwrapWrapped<Group>(obj);
 
   long parent_group_uid = 0;
@@ -106,7 +107,7 @@ Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, Napi::Object parent_ds) {
   Dataset *unwrapped_ds = node_gdal::UnwrapWrapped<Dataset>(parent_ds);
   long parent_uid = unwrapped_ds->uid;
 
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid);
+  wrapped->uid = object_store().add(raw, *wrapped, parent_uid);
   wrapped->parent_ds = unwrapped_ds->get();
   wrapped->parent_uid = parent_uid;
   if (parent_group_uid != 0) GDAL_SET_PRIVATE(obj, "parent_", parent);

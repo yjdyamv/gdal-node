@@ -6,7 +6,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference SpatialReference::constructor;
+Napi::FunctionReference &SpatialReference::constructor() {
+  return node_gdal::env_context().constructor<SpatialReference>();
+}
 
 void SpatialReference::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -61,8 +63,7 @@ void SpatialReference::Initialize(Napi::Object target) {
 
   target.Set("SpatialReference", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 SpatialReference::~SpatialReference() {
@@ -72,7 +73,7 @@ SpatialReference::~SpatialReference() {
 void SpatialReference::dispose() {
   if (this_) {
     LOG("Disposing SpatialReference [%p] (%s)", this_, owned_ ? "owned" : "unowned");
-    object_store.dispose(uid);
+    object_store().dispose(uid);
     if (owned_) {
       // Decrements the reference count by one, and destroy if zero.
       this_->Release();
@@ -127,7 +128,7 @@ SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
 
   this_ = srs;
   owned_ = true;
-  uid = object_store.add(srs, *this, 0);
+  uid = object_store().add(srs, *this, 0);
   LOG("Created SpatialReference [%p]", this_);
 }
 
@@ -148,18 +149,18 @@ Napi::Value SpatialReference::New(OGRSpatialReference *raw, bool owned) {
   Napi::Env env = node_gdal::napi_env();
 
   if (!raw) { return env.Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   OGRSpatialReference *cloned_srs = raw;
   if (!owned) cloned_srs = raw->Clone();
 
   node_gdal::detail::PendingObjectGuard pending(cloned_srs);
   std::vector<napi_value> args;
-  Napi::Object obj = constructor.Value().New(args);
+  Napi::Object obj = constructor().Value().New(args);
   SpatialReference *wrapped = node_gdal::UnwrapWrapped<SpatialReference>(obj);
   wrapped->owned_ = true;
 
-  wrapped->uid = object_store.add(raw, *wrapped, 0);
+  wrapped->uid = object_store().add(raw, *wrapped, 0);
 
   return obj;
 }

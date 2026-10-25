@@ -7,7 +7,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference ColorTable::constructor;
+Napi::FunctionReference &ColorTable::constructor() {
+  return node_gdal::env_context().constructor<ColorTable>();
+}
 
 void ColorTable::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -29,8 +31,7 @@ void ColorTable::Initialize(Napi::Object target) {
 
   target.Set("ColorTable", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 
@@ -63,7 +64,7 @@ ColorTable::ColorTable(const Napi::CallbackInfo &info) : GDALObject<ColorTable>(
     this_ = new GDALColorTable(gpi);
   }
 
-  uid = object_store.add(this_, *this, parent_uid);
+  uid = object_store().add(this_, *this, parent_uid);
 }
 
 ColorTable::~ColorTable() {
@@ -73,7 +74,7 @@ ColorTable::~ColorTable() {
 void ColorTable::dispose() {
   if (this_) {
     LOG("Disposing ColorTable [%p]", this_);
-    object_store.dispose(uid, false);
+    object_store().dispose(uid, false);
     if (parent_uid == 0 && this_ != nullptr) delete this_;
     this_ = nullptr;
   }
@@ -97,13 +98,13 @@ void ColorTable::dispose() {
 Napi::Value ColorTable::New(GDALColorTable *raw, Napi::Value parent) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   RasterBand *band = node_gdal::UnwrapWrapped<RasterBand>(parent.As<Napi::Object>());
 
   node_gdal::detail::PendingObjectGuard pending(raw);
   std::vector<napi_value> args = {Napi::Number::New(node_gdal::napi_env(), band->parent_uid)};
-  Napi::Object obj = ColorTable::constructor.Value().New(args);
+  Napi::Object obj = ColorTable::constructor().Value().New(args);
   GDAL_SET_PRIVATE(obj, "parent_", parent);
 
   return obj;
@@ -115,11 +116,11 @@ Napi::Value ColorTable::New(GDALColorTable *raw, Napi::Value parent) {
 Napi::Value ColorTable::New(GDALColorTable *raw) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   node_gdal::detail::PendingObjectGuard pending(raw);
   std::vector<napi_value> args = {Napi::Number::New(node_gdal::napi_env(), 0)};
-  Napi::Object obj = ColorTable::constructor.Value().New(args);
+  Napi::Object obj = ColorTable::constructor().Value().New(args);
 
   return obj;
 }

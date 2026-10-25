@@ -20,7 +20,7 @@ namespace node_gdal {
 
 class Attribute : public GDALObject<Attribute> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALAttribute> group, GDALDataset *parent_ds);
   static NAPI_METHOD(toString);
@@ -41,7 +41,7 @@ class Attribute : public GDALObject<Attribute> {
   long parent_uid;
 
   inline bool isAlive() {
-    return this_ && object_store.isAlive(uid);
+    return this_ && object_store().isAlive(uid);
   }
 
     private:

@@ -15,7 +15,7 @@ namespace node_gdal {
 
 class CompoundCurveCurves : public GDALObject<CompoundCurveCurves> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value geom);

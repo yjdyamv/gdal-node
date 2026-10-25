@@ -15,7 +15,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference Layer::constructor;
+Napi::FunctionReference &Layer::constructor() {
+  return node_gdal::env_context().constructor<Layer>();
+}
 
 void Layer::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -44,8 +46,7 @@ void Layer::Initialize(Napi::Object target) {
 
   target.Set("Layer", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 
@@ -72,7 +73,7 @@ void Layer::dispose() {
 
     LOG("Disposing layer [%p]", this_);
 
-    object_store.dispose(uid);
+    object_store().dispose(uid);
 
     LOG("Disposed layer [%p]", this_);
     this_ = NULL;
@@ -92,18 +93,18 @@ Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent) {
 Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
-  if (object_store.has(raw)) { return object_store.get(raw); }
+  if (object_store().has(raw)) { return object_store().get(raw); }
 
   node_gdal::detail::PendingObjectGuard pending(raw);
   std::vector<napi_value> args;
-  Napi::Object obj = Layer::constructor.Value().New(args);
+  Napi::Object obj = Layer::constructor().Value().New(args);
   Layer *wrapped = node_gdal::UnwrapWrapped<Layer>(obj);
 
   // add reference to datasource so datasource doesnt get GC'ed while layer is
   // alive
   Napi::Object ds;
-  if (object_store.has(raw_parent)) {
-    ds = object_store.get(raw_parent);
+  if (object_store().has(raw_parent)) {
+    ds = object_store().get(raw_parent);
   } else {
     LOG("Layer's parent dataset disappeared from cache (layer = %p, dataset = %p)", raw, raw_parent);
     Napi::Error::New(node_gdal::napi_env(), "Layer's parent dataset disappeared from cache").ThrowAsJavaScriptException();
@@ -114,7 +115,7 @@ Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set) 
   Dataset *unwrapped = node_gdal::UnwrapWrapped<Dataset>(ds);
   long parent_uid = unwrapped->uid;
 
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid, result_set);
+  wrapped->uid = object_store().add(raw, *wrapped, parent_uid, result_set);
   wrapped->parent_ds = raw_parent;
   wrapped->parent_uid = parent_uid;
 

@@ -403,7 +403,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
 
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "src"))) {
     prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "src"));
-    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor.Value())) {
+    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
       ds = node_gdal::UnwrapWrapped<Dataset>(prop.As<Napi::Object>());
       if (!ds->get()) {
         Napi::Error::New(node_gdal::napi_env(), "src dataset already closed").ThrowAsJavaScriptException();

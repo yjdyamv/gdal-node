@@ -5,7 +5,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference LayerFeatures::constructor;
+Napi::FunctionReference &LayerFeatures::constructor() {
+  return node_gdal::env_context().constructor<LayerFeatures>();
+}
 
 void LayerFeatures::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -27,8 +29,7 @@ void LayerFeatures::Initialize(Napi::Object target) {
 
   target.Set("LayerFeatures", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 LayerFeatures::LayerFeatures(const Napi::CallbackInfo &info) : GDALObject<LayerFeatures>(info) {
@@ -52,7 +53,7 @@ LayerFeatures::~LayerFeatures() {
 Napi::Value LayerFeatures::New(Napi::Value layer_obj) {
 
   std::vector<napi_value> args = {layer_obj};
-  Napi::Object obj = LayerFeatures::constructor.Value().New(args);
+  Napi::Object obj = LayerFeatures::constructor().Value().New(args);
 
   return obj;
 }
@@ -306,8 +307,8 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::count) {
   }
 
   Napi::Object ds;
-  if (object_store.has(layer->getParent())) {
-    ds = object_store.get(layer->getParent());
+  if (object_store().has(layer->getParent())) {
+    ds = object_store().get(layer->getParent());
   } else {
     Napi::Error::New(node_gdal::napi_env(), "Dataset object already destroyed").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
@@ -372,7 +373,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::set) {
   }
 
   Napi::Object ds;
-  if (object_store.has(layer->getParent())) { ds = object_store.get(layer->getParent()); }
+  if (object_store().has(layer->getParent())) { ds = object_store().get(layer->getParent()); }
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Dataset object already destroyed").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();

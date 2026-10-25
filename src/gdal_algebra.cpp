@@ -82,7 +82,7 @@ void Initialize(Napi::Object target) {
   if (info[num].IsNumber()) {                                                                                         \
     var##_number = info[num].As<Napi::Number>().DoubleValue();                                                             \
     var##_band = nullptr;                                                                                              \
-  } else if (info[num].IsObject() && info[num].As<Napi::Object>().InstanceOf(RasterBand::constructor.Value())) {                     \
+  } else if (info[num].IsObject() && info[num].As<Napi::Object>().InstanceOf(RasterBand::constructor().Value())) {                     \
     var##_number = NAN;                                                                                                \
     var##_band = node_gdal::UnwrapWrapped<RasterBand>(info[num].As<Napi::Object>());                                          \
   } else {                                                                                                             \

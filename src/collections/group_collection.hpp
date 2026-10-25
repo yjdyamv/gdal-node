@@ -34,8 +34,7 @@ class GroupCollection : public GDALObject<SELF> {
 
     target.Set(SELF::_className, lcons);
 
-    SELF::constructor = Napi::Persistent(lcons);
-    node_gdal::OwnConstructorReference(env, SELF::constructor);
+    SELF::constructor() = Napi::Persistent(lcons);
   }
 
   static NAPI_METHOD(toString) {
@@ -47,7 +46,7 @@ class GroupCollection : public GDALObject<SELF> {
     // tell an internal construction (from a parent object) apart from a direct
     // `new gdal.X()` from JS
     std::vector<napi_value> args = {parent, parent_ds};
-    return SELF::constructor.Value().New(args);
+    return SELF::constructor().Value().New(args);
   }
 
   static std::shared_ptr<GDALOBJ> __get(std::shared_ptr<GDALPARENT> parent, std::string const &name) {

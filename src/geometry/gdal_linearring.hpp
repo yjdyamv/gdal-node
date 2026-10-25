@@ -18,7 +18,7 @@ namespace node_gdal {
 class LinearRing : public CurveBase<LinearRing, OGRLinearRing, LineStringPoints> {
 
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   using CurveBase<LinearRing, OGRLinearRing, LineStringPoints>::CurveBase;
 
   static void Initialize(Napi::Object target);

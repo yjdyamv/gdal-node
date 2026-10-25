@@ -4,7 +4,9 @@
 
 namespace node_gdal {
 
-thread_local Napi::FunctionReference GDALDrivers::constructor;
+Napi::FunctionReference &GDALDrivers::constructor() {
+  return node_gdal::env_context().constructor<GDALDrivers>();
+}
 
 void GDALDrivers::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -23,8 +25,7 @@ void GDALDrivers::Initialize(Napi::Object target) {
 
   target.Set("GDALDrivers", lcons);
 
-  constructor = Napi::Persistent(lcons);
-  node_gdal::OwnConstructorReference(env, constructor);
+  constructor() = Napi::Persistent(lcons);
 }
 
 GDALDrivers::GDALDrivers(const Napi::CallbackInfo &info) : GDALObject<GDALDrivers>(info) {
@@ -47,7 +48,7 @@ GDALDrivers::~GDALDrivers() {
 Napi::Value GDALDrivers::New() {
 
   std::vector<napi_value> args = {Napi::Boolean::New(node_gdal::napi_env(), true)};
-  Napi::Object obj = GDALDrivers::constructor.Value().New(args);
+  Napi::Object obj = GDALDrivers::constructor().Value().New(args);
 
   return obj;
 }

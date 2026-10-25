@@ -115,7 +115,7 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
   // object over directly - unlike the old binding
   node_gdal::detail::PendingObjectGuard pending(geom);
   std::vector<napi_value> args;
-  Napi::Object obj = T::constructor.Value().New(args);
+  Napi::Object obj = T::constructor().Value().New(args);
 
   T *wrapped = node_gdal::UnwrapWrapped<T>(obj);
   wrapped->owned_ = true;

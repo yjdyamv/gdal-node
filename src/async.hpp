@@ -15,12 +15,10 @@ namespace node_gdal {
 // The id of the thread of the environment of this addon instance (the main
 // thread or a worker_thread) - per-thread, the addon can be loaded in several
 // V8 isolates
-extern thread_local std::thread::id mainV8ThreadId;
 
 // Set by the env cleanup hook: from then on the JS world of this thread may not
 // be touched. Per-thread, so that a worker exiting does not stop the pending
 // callbacks of the main environment.
-extern thread_local bool gdalShuttingDown;
 
 // This generates method definitions for 2 methods: sync and async version and a hidden common block
 #define GDAL_ASYNCABLE_DEFINE(method)                                                                                  \
@@ -106,36 +104,36 @@ class AsyncGuard {
   inline AsyncGuard() : lock(nullptr), locks(nullptr) {
   }
   inline AsyncGuard(long uid) : locks(nullptr) {
-    lock = object_store.lockDataset(uid);
+    lock = object_store().lockDataset(uid);
   }
   inline AsyncGuard(vector<long> uids) : lock(nullptr), locks(nullptr) {
     if (uids.size() == 1)
-      lock = object_store.lockDataset(uids[0]);
+      lock = object_store().lockDataset(uids[0]);
     else
-      locks = make_shared<vector<AsyncLock>>(object_store.lockDatasets(uids));
+      locks = make_shared<vector<AsyncLock>>(object_store().lockDatasets(uids));
   }
   inline AsyncGuard(vector<long> uids, bool warning) : lock(nullptr), locks(nullptr) {
     bool locked = true;
     if (uids.size() == 1) {
       if (uids[0] == 0) return;
-      lock = warning ? object_store.tryLockDataset(uids[0], locked) : object_store.lockDataset(uids[0]);
-      if (!locked) { MEASURE_EXECUTION_TIME(eventLoopWarning, lock = object_store.lockDataset(uids[0])); }
+      lock = warning ? object_store().tryLockDataset(uids[0], locked) : object_store().lockDataset(uids[0]);
+      if (!locked) { MEASURE_EXECUTION_TIME(eventLoopWarning, lock = object_store().lockDataset(uids[0])); }
     } else {
-      locks = warning ? make_shared<vector<AsyncLock>>(object_store.tryLockDatasets(uids, locked))
-                      : make_shared<vector<AsyncLock>>(object_store.lockDatasets(uids));
+      locks = warning ? make_shared<vector<AsyncLock>>(object_store().tryLockDatasets(uids, locked))
+                      : make_shared<vector<AsyncLock>>(object_store().lockDatasets(uids));
       if (!locked) {
         MEASURE_EXECUTION_TIME(
-          eventLoopWarning, locks = make_shared<vector<AsyncLock>>(object_store.lockDatasets(uids)));
+          eventLoopWarning, locks = make_shared<vector<AsyncLock>>(object_store().lockDatasets(uids)));
       }
     }
   }
   inline void acquire(long uid) {
     if (lock != nullptr) throw "Trying to acquire multiple locks";
-    lock = object_store.lockDataset(uid);
+    lock = object_store().lockDataset(uid);
   }
   inline ~AsyncGuard() {
-    if (lock != nullptr) object_store.unlockDataset(lock);
-    if (locks != nullptr) object_store.unlockDatasets(*locks);
+    if (lock != nullptr) object_store().unlockDataset(lock);
+    if (locks != nullptr) object_store().unlockDatasets(*locks);
   }
 
     private:
@@ -148,14 +146,18 @@ class AsyncGuard {
 // is queued (the ObjectStore maps are thread-local) and are only acquired here.
 class AsyncWorkerGuard {
     public:
-  inline AsyncWorkerGuard(const vector<AsyncLock> &locks) : locks(locks) {
-    object_store.lockLocks(locks);
+  // The store is captured on the JS thread: the guard lives on the aux thread,
+  // which cannot look the store up by environment (only the JS thread knows the
+  // environment) - it only needs the mutexes which protect the semaphores
+  inline AsyncWorkerGuard(ObjectStore &store, const vector<AsyncLock> &locks) : store(store), locks(locks) {
+    store.lockLocks(locks);
   }
   inline ~AsyncWorkerGuard() {
-    object_store.unlockDatasets(locks);
+    store.unlockDatasets(locks);
   }
 
     private:
+  ObjectStore &store;
   const vector<AsyncLock> &locks;
 };
 
@@ -284,6 +286,9 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   const GDALMainFunc doit;
   const GDALRValFunc rval;
   const std::vector<long> ds_uids;
+  // The store of the environment, captured on the JS thread: the aux thread
+  // cannot reach it otherwise and needs its mutexes in Execute()
+  ObjectStore &store;
   // The dataset locks, resolved in the constructor on the JS thread and
   // acquired in Execute() on the aux thread
   std::vector<AsyncLock> locks;
@@ -307,7 +312,7 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   inline void RestoreObjects(const std::map<std::string, Napi::Object> &objects) {
     for (auto i = objects.begin(); i != objects.end(); i++) SaveToPersistent(i->first, i->second);
     for (auto i = ds_uids.begin(); i != ds_uids.end(); i++)
-      if (*i != 0) SaveToPersistent("ds" + std::to_string(*i), object_store.get<GDALDataset *>(*i));
+      if (*i != 0) SaveToPersistent("ds" + std::to_string(*i), object_store().get<GDALDataset *>(*i));
   }
 
   // The locks of the datasets of this operation have to be resolved while the
@@ -316,7 +321,7 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   // reported from Execute(), exactly like a failing GDAL call.
   inline void resolveDatasetLocks() {
     try {
-      locks = object_store.resolveLocks(ds_uids);
+      locks = object_store().resolveLocks(ds_uids);
     } catch (const char *err) {
       lockError = err != nullptr && *err != '\0' ? err : "Operation failed";
     } catch (const std::exception &err) {
@@ -372,7 +377,8 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
     // as they will be executed in async context!
     doit(doit),
     rval(rval),
-    ds_uids(ds_uids) {
+    ds_uids(ds_uids),
+    store(object_store()) {
   // Main thread with the JS world running
   resolveDatasetLocks();
   // Turn the JS handles collected by the job into persistent references
@@ -393,13 +399,14 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
     abort(abort),
     doit(doit),
     rval(rval),
-    ds_uids(ds_uids) {
+    ds_uids(ds_uids),
+    store(object_store()) {
   resolveDatasetLocks();
   RestoreObjects(objects);
 }
 
 template <class GDALType> Napi::Value GDALAsyncWorker<GDALType>::ProduceRVal() {
-  if (gdalShuttingDown) return Env().Undefined();
+  if (env_context().shutting_down()) return Env().Undefined();
   return rval(raw, [this](const char *key) { return this->GetFromPersistent(key); });
 }
 
@@ -419,7 +426,7 @@ template <class GDALType> void GDALAsyncWorker<GDALType>::Execute(const Executio
       return;
     }
     GDALExecutionProgress executionProgress(&progress, abort != nullptr ? abort->state : nullptr);
-    AsyncWorkerGuard lock(locks);
+    AsyncWorkerGuard lock(store, locks);
     raw = doit(executionProgress);
   } catch (const char *err) {
     // node-addon-api decides success from `_error.size() == 0`, so an empty
@@ -485,13 +492,13 @@ template <class GDALType> class GDALCallbackWorker : public GDALAsyncWorker<GDAL
     protected:
   void OnOK() override {
     // The environment is being torn down, the callback cannot be delivered
-    if (gdalShuttingDown) {
+    if (env_context().shutting_down()) {
       return;
     }
     Napi::AsyncWorker::OnOK();
   }
   void OnError(const Napi::Error &e) override {
-    if (gdalShuttingDown) {
+    if (env_context().shutting_down()) {
       return;
     }
     Napi::AsyncWorker::OnError(this->reportError(e));
@@ -541,14 +548,14 @@ GDALPromiseWorker<GDALType>::GDALPromiseWorker(
 }
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnOK() {
-  if (gdalShuttingDown) {
+  if (env_context().shutting_down()) {
     return;
   }
   deferred.Resolve(this->ProduceRVal());
 }
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnError(const Napi::Error &e) {
-  if (gdalShuttingDown) return;
+  if (env_context().shutting_down()) return;
   deferred.Reject(this->reportError(e).Value());
 }
 

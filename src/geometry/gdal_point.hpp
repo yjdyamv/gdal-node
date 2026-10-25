@@ -16,7 +16,7 @@ namespace node_gdal {
 
 class Point : public GeometryBase<Point, OGRPoint> {
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   // Point(), Point(x, y) and Point(x, y, z) are constructible from JS, so this
   // class reads its own arguments instead of inheriting the base constructor
   Point(const Napi::CallbackInfo &info);

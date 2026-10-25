@@ -19,7 +19,7 @@ class CompoundCurve : public CurveBase<CompoundCurve, OGRCompoundCurve, Compound
   friend CurveBase;
 
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   using CurveBase<CompoundCurve, OGRCompoundCurve, CompoundCurveCurves>::CurveBase;
 
   static void Initialize(Napi::Object target);

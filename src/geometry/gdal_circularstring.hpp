@@ -18,7 +18,7 @@ namespace node_gdal {
 class CircularString : public CurveBase<CircularString, OGRCircularString, LineStringPoints> {
 
     public:
-  static thread_local Napi::FunctionReference constructor;
+  static Napi::FunctionReference &constructor();
   using CurveBase<CircularString, OGRCircularString, LineStringPoints>::CurveBase;
 
   static void Initialize(Napi::Object target);
