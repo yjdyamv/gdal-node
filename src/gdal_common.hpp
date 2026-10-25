@@ -628,21 +628,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
     }                                                                                                                  \
   }
 
-#define NODE_CB_FROM_OBJ_OPT(obj, key, var)                                                                            \
-  {                                                                                                                    \
-    var = nullptr;                                                                                                     \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (!val.IsFunction()) {                                                                                          \
-        Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a function").ThrowAsJavaScriptException();      \
-        return info.Env().Undefined();                                                                                  \
-      } else {                                                                                                         \
-        var = new Napi::FunctionReference(Napi::Persistent(val.As<Napi::Function>()));                                 \
-        var->SuppressDestruct();                                                                                       \
-      }                                                                                                                \
-    }                                                                                                                  \
-  }
-
 // ----- argument conversion -------
 
 #define ARG_FIELD_ID(num, f, var)                                                                                      \
@@ -665,76 +650,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
   }
-
-#define NODE_ARG_INT(num, name, var)                                                                                   \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsNumber()) {                                                                                         \
-    Napi::TypeError::New(info.Env(), name " must be an integer").ThrowAsJavaScriptException();                         \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = static_cast<int>(info[num].As<Napi::Number>().Int64Value());
-
-#define NODE_ARG_ENUM(num, name, enum_type, var)                                                                       \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsNumber()) {                                                                                         \
-    Napi::TypeError::New(info.Env(), name " must be of type " #enum_type).ThrowAsJavaScriptException();                \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = enum_type(info[num].As<Napi::Number>().Uint32Value());
-
-#define NODE_ARG_BOOL(num, name, var)                                                                                  \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsBoolean()) {                                                                                        \
-    Napi::TypeError::New(info.Env(), name " must be an boolean").ThrowAsJavaScriptException();                         \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num].As<Napi::Boolean>().Value();
-
-#define NODE_ARG_DOUBLE(num, name, var)                                                                                \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsNumber()) {                                                                                         \
-    Napi::TypeError::New(info.Env(), name " must be a number").ThrowAsJavaScriptException();                           \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num].As<Napi::Number>().DoubleValue();
-
-#define NODE_ARG_WRAPPED(num, name, type, var)                                                                         \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (info[num].IsNull() || info[num].IsUndefined() || !node_gdal::IsInstanceOf<type>(info[num])) {                     \
-    Napi::TypeError::New(info.Env(), name " must be an instance of " #type).ThrowAsJavaScriptException();              \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = node_gdal::UnwrapWrapped<type>(info[num].As<Napi::Object>());                                                  \
-  if (!var->isAlive()) {                                                                                               \
-    Napi::Error::New(info.Env(), #type " parameter already destroyed").ThrowAsJavaScriptException();                  \
-    return info.Env().Undefined();                                                                                      \
-  }
-
-#define NODE_ARG_STR(num, name, var)                                                                                   \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsString()) {                                                                                         \
-    Napi::TypeError::New(info.Env(), name " must be a string").ThrowAsJavaScriptException();                           \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num].As<Napi::String>().Utf8Value()
 
 #define NODE_ARG_CB(num, name, var)                                                                                    \
   if (info.Length() < num + 1) {                                                                                       \
@@ -777,7 +692,10 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
         return info.Env().Undefined();                                                                                  \
       }                                                                                                                \
       progress_obj = info[num].As<Napi::Object>();                                                                     \
-      NODE_CB_FROM_OBJ_OPT(progress_obj, "progress_cb", progress_cb);                                                  \
+      Args progress_args(info);                                                                                        \
+      if (!progress_args.fromCallback(progress_obj, "progress_cb", progress_cb)) {                                     \
+        return progress_args.failed();                                                                                 \
+      }                                                                                                                \
       Napi::Value _abort_signal;                                                                                       \
       NODE_ABORT_SIGNAL_FROM_OBJ_OPT(progress_obj, _abort_signal);                                                     \
       if (!_abort_signal.IsEmpty() && !job.setAbortSignal(_abort_signal)) {                                             \
@@ -806,8 +724,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_ENUM_PARAM(                                                                  \
   klass, method, result_type, wrapped_method, enum_type, param_name)                                                   \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     enum_type param;                                                                                                   \
-    NODE_ARG_ENUM(0, #param_name, enum_type, param);                                                                   \
+    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -818,8 +737,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_INTEGER_PARAM(klass, method, result_type, wrapped_method, param_name)        \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     int param;                                                                                                         \
-    NODE_ARG_INT(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -830,8 +750,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_DOUBLE_PARAM(klass, method, result_type, wrapped_method, param_name)         \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     double param;                                                                                                      \
-    NODE_ARG_DOUBLE(0, #param_name, param);                                                                            \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -891,8 +812,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)                            \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     int param;                                                                                                         \
-    NODE_ARG_INT(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -904,8 +826,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)                             \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     double param;                                                                                                      \
-    NODE_ARG_DOUBLE(0, #param_name, param);                                                                            \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -917,8 +840,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_1_BOOLEAN_PARAM(klass, method, wrapped_method, param_name)                            \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     bool param;                                                                                                        \
-    NODE_ARG_BOOL(0, #param_name, param);                                                                              \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -930,8 +854,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_1_ENUM_PARAM(klass, method, wrapped_method, enum_type, param_name)                    \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     enum_type param;                                                                                                   \
-    NODE_ARG_ENUM(0, #param_name, enum_type, param);                                                                   \
+    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -943,8 +868,9 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define NODE_WRAPPED_METHOD_WITH_1_STRING_PARAM(klass, method, wrapped_method, param_name)                             \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     std::string param;                                                                                                 \
-    NODE_ARG_STR(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1076,8 +1002,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(                                                               \
   klass, method, result_type, wrapped_method, param_type, param_name)                                                  \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1088,8 +1015,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM(klass, method, result_type, wrapped_method, param_name)         \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     std::string param;                                                                                                 \
-    NODE_ARG_STR(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1100,8 +1028,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM_LOCKED(klass, method, result_type, wrapped_method, param_name)  \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     std::string param;                                                                                                 \
-    NODE_ARG_STR(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1113,8 +1042,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)                \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1140,8 +1070,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)  \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1154,8 +1085,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_STRING_PARAM(klass, method, wrapped_method, param_name)               \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     std::string param;                                                                                                 \
-    NODE_ARG_STR(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1168,8 +1100,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)              \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     int param;                                                                                                         \
-    NODE_ARG_INT(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1182,8 +1115,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM_LOCKED(klass, method, wrapped_method, param_name)       \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     int param;                                                                                                         \
-    NODE_ARG_INT(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1196,8 +1130,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)               \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     double param;                                                                                                      \
-    NODE_ARG_DOUBLE(0, #param_name, param);                                                                            \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1225,8 +1160,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)  \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1239,8 +1175,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_STRING_PARAM(klass, method, wrapped_method, param_name)               \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     std::string param;                                                                                                 \
-    NODE_ARG_STR(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1253,8 +1190,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)              \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     int param;                                                                                                         \
-    NODE_ARG_INT(0, #param_name, param);                                                                               \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1267,8 +1205,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)               \
   NAPI_METHOD(klass::method) {                                                                                          \
+    Args args(info);                                                                                                   \
     double param;                                                                                                      \
-    NODE_ARG_DOUBLE(0, #param_name, param);                                                                            \
+    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1328,8 +1267,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(                                                         \
   klass, async_type, method, result_type, wrapped_method, param_type, param_name)                                      \
   GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1349,8 +1289,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_ENUM_PARAM(                                                            \
   klass, async_type, method, result_type, wrapped_method, enum_type, param_name)                                       \
   GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
+    Args args(info);                                                                                                   \
     enum_type param;                                                                                                   \
-    NODE_ARG_ENUM(0, #param_name, enum_type, param);                                                                   \
+    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
@@ -1384,8 +1325,9 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(                                                  \
   klass, async_type, method, wrapped_method, param_type, param_name)                                                   \
   GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
+    Args args(info);                                                                                                   \
     param_type *param;                                                                                                 \
-    NODE_ARG_WRAPPED(0, #param_name, param_type, param);                                                               \
+    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
     klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
     if (!obj->isAlive()) {                                                                                             \
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \

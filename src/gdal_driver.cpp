@@ -286,7 +286,6 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
 
   if (!args.get(0, "filename", filename)) return args.failed();
 
-  // NODE_ARG_STR(1, "source dataset", src_dataset)
   if (info.Length() < 2) {
     Napi::Error::New(info.Env(), "source dataset must be provided").ThrowAsJavaScriptException();
     return info.Env().Undefined();
