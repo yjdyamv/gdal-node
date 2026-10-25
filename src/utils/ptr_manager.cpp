@@ -1,4 +1,5 @@
 #include "ptr_manager.hpp"
+#include "gdal_error.hpp"
 #include "../gdal_dataset.hpp"
 #include "../gdal_group.hpp"
 #include "../gdal_mdarray.hpp"
@@ -151,7 +152,7 @@ AsyncLock ObjectStore::lockDataset(long uid) {
   uv_scoped_mutex lock(&master_lock);
   while (true) {
     auto parent = maps<GDALDataset *>().by_uid.find(uid);
-    if (parent == maps<GDALDataset *>().by_uid.end()) { throw "Parent Dataset object has already been destroyed"; }
+    if (parent == maps<GDALDataset *>().by_uid.end()) { throw GDALError("Parent Dataset object has already been destroyed"); }
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 10)
     // Do not lock thread-safe datasets
     if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) { return nullptr; }
@@ -175,7 +176,7 @@ vector<AsyncLock> ObjectStore::lockDatasets(vector<long> uids) {
       bool locked;
       vector<AsyncLock> locks = _tryLockDatasets(uids, locked);
       if (locked) { return locks; }
-    } catch (const char *msg) { throw msg; }
+    } catch (const char *msg) { throw GDALError(msg); }
     uv_cond_wait(&master_sleep, &master_lock);
   }
 }
@@ -190,7 +191,7 @@ AsyncLock ObjectStore::tryLockDataset(long uid, bool &result) {
   }
   uv_scoped_mutex lock(&master_lock);
   auto parent = maps<GDALDataset *>().by_uid.find(uid);
-  if (parent == maps<GDALDataset *>().by_uid.end()) { throw "Parent Dataset object has already been destroyed"; }
+  if (parent == maps<GDALDataset *>().by_uid.end()) { throw GDALError("Parent Dataset object has already been destroyed"); }
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 10)
   if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) {
     result = true;
@@ -210,7 +211,7 @@ vector<AsyncLock> ObjectStore::_tryLockDatasets(vector<long> uids, bool &result)
   vector<AsyncLock> locks;
   for (long uid : uids) {
     auto parent = maps<GDALDataset *>().by_uid.find(uid);
-    if (parent == maps<GDALDataset *>().by_uid.end()) { throw "Parent Dataset object has already been destroyed"; }
+    if (parent == maps<GDALDataset *>().by_uid.end()) { throw GDALError("Parent Dataset object has already been destroyed"); }
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 10)
     // Skip locking thread-safe datasets
     if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) continue;
@@ -264,7 +265,7 @@ vector<AsyncLock> ObjectStore::resolveLocks(vector<long> uids) {
   uv_scoped_mutex lock(&master_lock);
   for (long uid : uids) {
     auto parent = maps<GDALDataset *>().by_uid.find(uid);
-    if (parent == maps<GDALDataset *>().by_uid.end()) { throw "Parent Dataset object has already been destroyed"; }
+    if (parent == maps<GDALDataset *>().by_uid.end()) { throw GDALError("Parent Dataset object has already been destroyed"); }
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 10)
     // Do not lock thread-safe datasets
     if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) { continue; }
@@ -289,7 +290,7 @@ void ObjectStore::lockLocks(const vector<AsyncLock> &locks) {
       // The Dataset has been destroyed while this operation was waiting for
       // its lock: the semaphore has been posted by dispose() and the operation
       // must fail instead of accessing the closed Dataset
-      if (!async_lock->alive) { throw "Parent Dataset object has already been destroyed"; }
+      if (!async_lock->alive) { throw GDALError("Parent Dataset object has already been destroyed"); }
       if (uv_sem_trywait(&async_lock->sem) != 0) break;
       acquired++;
     }

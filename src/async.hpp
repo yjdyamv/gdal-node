@@ -128,7 +128,7 @@ class AsyncGuard {
     }
   }
   inline void acquire(long uid) {
-    if (lock != nullptr) throw "Trying to acquire multiple locks";
+    if (lock != nullptr) throw GDALError("Trying to acquire multiple locks");
     lock = object_store().lockDataset(uid);
   }
   inline ~AsyncGuard() {
@@ -293,6 +293,11 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   // acquired in Execute() on the aux thread
   std::vector<AsyncLock> locks;
   std::string lockError;
+  // The class and the code of the failure which happened on the aux thread:
+  // only the message can be handed to Napi::AsyncWorker, so they are kept here
+  // and the error is rebuilt on the JS thread
+  std::string errorName;
+  std::string errorCode;
   GDALType raw;
 
   // Napi::AsyncWorker has no inheritable persistent store of its own (the old
@@ -428,6 +433,10 @@ template <class GDALType> void GDALAsyncWorker<GDALType>::Execute(const Executio
     GDALExecutionProgress executionProgress(&progress, abort != nullptr ? abort->state : nullptr);
     AsyncWorkerGuard lock(store, locks);
     raw = doit(executionProgress);
+  } catch (const GDALError &err) {
+    errorName = err.name();
+    errorCode = err.code();
+    this->SetError(err.message());
   } catch (const char *err) {
     // node-addon-api decides success from `_error.size() == 0`, so an empty
     // message would be taken for a success and the uninitialized `raw` would be
@@ -459,7 +468,10 @@ template <class GDALType> Napi::Error GDALAsyncWorker<GDALType>::reportError(con
   // Only an error which was actually caused by the interruption becomes an
   // AbortError: when the operation fails on its own while the signal is raised
   // at about the same time, the original error is what the user needs to see
-  if (abort == nullptr || !abort->interrupted()) return e;
+  if (abort == nullptr || !abort->interrupted()) {
+    if (errorName.empty() && errorCode.empty()) return e;
+    return toJS(Env(), GDALError(e.Message(), errorName, errorCode));
+  }
   return abortError(Env());
 }
 
@@ -500,8 +512,7 @@ template <class GDALType> class GDALCallbackWorker : public GDALAsyncWorker<GDAL
   void OnError(const Napi::Error &e) override {
     if (env_context().shutting_down()) {
       return;
-    }
-    Napi::AsyncWorker::OnError(this->reportError(e));
+    }    Napi::AsyncWorker::OnError(this->reportError(e));
   }
   std::vector<napi_value> GetResult(Napi::Env env) override {
     std::vector<napi_value> r = {env.Null(), this->ProduceRVal()};
@@ -682,10 +693,12 @@ template <class GDALType> class GDALAsyncableJob {
       // rval is the user function that will create the returned value
       // we give it a lambda that can access the persistent storage created for this operation
       return rval(obj, [this](const char *key) { return this->persistent[key]; });
+    } catch (const GDALError &err) {
+      reportSyncError(info.Env(), err);
     } catch (const char *err) {
-      throwError(info.Env(), err);
+      reportSyncError(info.Env(), GDALError(err != nullptr ? err : "Operation failed"));
     } catch (const std::exception &err) {
-      throwError(info.Env(), err.what());
+      reportSyncError(info.Env(), GDALError(err.what() != nullptr ? err.what() : "Operation failed"));
     }
     return info.Env().Undefined();
   }
@@ -721,27 +734,30 @@ template <class GDALType> class GDALAsyncableJob {
       // rval is the user function that will create the returned value
       // we give it a lambda that can access the persistent storage created for this operation
       return rval(obj, [this](const char *key) { return this->persistent[key]; });
+    } catch (const GDALError &err) {
+      reportSyncError(info.Env(), err);
     } catch (const char *err) {
-      throwError(info.Env(), err);
+      reportSyncError(info.Env(), GDALError(err != nullptr ? err : "Operation failed"));
     } catch (const std::exception &err) {
-      throwError(info.Env(), err.what());
+      reportSyncError(info.Env(), GDALError(err.what() != nullptr ? err.what() : "Operation failed"));
     }
     return info.Env().Undefined();
   }
 
     private:
   // Reports the failure of a synchronous operation: an interruption which made
-  // GDAL fail is an AbortError, everything else keeps its own message
-  inline void throwError(Napi::Env env, const char *message) {
+  // GDAL fail is an AbortError, everything else keeps the class and the code it
+  // was raised with
+  inline void reportSyncError(Napi::Env env, const GDALError &error) {
     if (abort != nullptr && abort->interrupted()) {
       // The listener is detached before the exception is thrown, nothing can be
       // called into JS anymore while one is pending
       abort->disarm();
       abort.reset();
-      abortError(env).ThrowAsJavaScriptException();
+      throwError(env, GDALError::aborted());
       return;
     }
-    Napi::Error::New(env, message).ThrowAsJavaScriptException();
+    throwError(env, error);
   }
 
   std::map<std::string, Napi::Object> persistent;

@@ -317,7 +317,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
         interruptible ? ProgressTrampoline : nullptr,
         interruptible ? (void *)&progress : nullptr,
         opts);
-      if (err) { throw CPLGetLastErrorMsg(); }
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
       return err;
     };
   } else {
@@ -334,7 +334,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
         interruptible ? ProgressTrampoline : nullptr,
         interruptible ? (void *)&progress : nullptr,
         opts);
-      if (err) { throw CPLGetLastErrorMsg(); }
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
       return err;
     };
   }
@@ -456,7 +456,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
     void *hGenTransformArg =
       GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), NULL, t_srs_str.c_str(), TRUE, 1000.0, 0);
 
-    if (!hGenTransformArg) { throw CPLGetLastErrorMsg(); }
+    if (!hGenTransformArg) { throw GDALError(CPLGetLastErrorMsg()); }
 
     GDALTransformerFunc pfnTransformer;
 
@@ -466,7 +466,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
 
       if (!hTransformArg) {
         GDALDestroyGenImgProjTransformer(hGenTransformArg);
-        throw CPLGetLastErrorMsg();
+        throw GDALError(CPLGetLastErrorMsg());
       }
     } else {
       hTransformArg = hGenTransformArg;
@@ -478,7 +478,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
     GDALDestroyGenImgProjTransformer(hGenTransformArg);
     if (maxError > 0.0) { GDALDestroyApproxTransformer(hTransformArg); }
 
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return r;
   };
 

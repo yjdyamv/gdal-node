@@ -84,7 +84,7 @@ class GroupCollection : public GDALObject<SELF> {
         r = SELF::__get(raw, idx);
       else
         r = SELF::__get(raw, name);
-      if (r == nullptr) throw "Invalid element";
+      if (r == nullptr) throw GDALError("Invalid element");
       return r;
     };
     job.rval = [gdal_ds](std::shared_ptr<GDALOBJ> r, const GetFromPersistentFunc &) {

@@ -1,4 +1,5 @@
 #include "gdal_fs.hpp"
+#include "utils/gdal_error.hpp"
 
 namespace node_gdal {
 
@@ -139,7 +140,7 @@ GDAL_ASYNCABLE_DEFINE(VSI::stat) {
     VSIStatBufL stat;
     CPLErrorReset();
     int r = VSIStatL(filename.c_str(), &stat);
-    if (r < 0) throw CPLGetLastErrorMsg();
+    if (r < 0) throw GDALError(CPLGetLastErrorMsg());
     return stat;
   };
 
@@ -242,7 +243,7 @@ GDAL_ASYNCABLE_DEFINE(VSI::readDir) {
     CPLErrorReset();
 
     char **names = VSIReadDir(directory.c_str());
-    if (names == nullptr) throw CPLGetLastErrorMsg();
+    if (names == nullptr) throw GDALError(CPLGetLastErrorMsg());
 
     return names;
   };

@@ -325,7 +325,7 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
   job.main =
     [buffer, gdal_mdarray, gdal_origin, gdal_span, gdal_stride, type, length, offset](const GDALExecutionProgress &) {
       int bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
-      if (bytes_per_pixel == 0) { throw "Invalid GDAL data type"; }
+      if (bytes_per_pixel == 0) { throw GDALError("Invalid GDAL data type"); }
       CPLErrorReset();
       GDALExtendedDataType gdal_type = GDALExtendedDataType::Create(type);
       bool success = gdal_mdarray->Read(
@@ -337,7 +337,7 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
         (void *)((uint8_t *)buffer + offset * bytes_per_pixel),
         buffer,
         length * bytes_per_pixel);
-      if (!success) { throw CPLGetLastErrorMsg(); }
+      if (!success) { throw GDALError(CPLGetLastErrorMsg()); }
       return success;
     };
   job.rval = [](bool success, const GetFromPersistentFunc &getter) { return getter("array"); };

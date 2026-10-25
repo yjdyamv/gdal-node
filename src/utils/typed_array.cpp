@@ -1,4 +1,5 @@
 #include "typed_array.hpp"
+#include "gdal_error.hpp"
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 11)
 #include <cpl_float.h>
@@ -114,27 +115,27 @@ Napi::Value TypedArray::New(GDALDataType type, void *data, int64_t length) {
 #endif
     case GDT_Float32: name = "Float32Array"; break;
     case GDT_Float64: name = "Float64Array"; break;
-    default: throw "Unsupported array type";
+    default: throw GDALError("Unsupported array type");
   }
 
   size_t size = GDALGetDataTypeSizeBytes(type);
-  if (size == 0) { throw "Invalid GDAL data type"; }
+  if (size == 0) { throw GDALError("Invalid GDAL data type"); }
 
   // make an ArrayBuffer with external storage, i.e. a Node.js Buffer without a
   // free callback
   Napi::Object buffer = Napi::Buffer<char>::New(env, reinterpret_cast<char *>(data), length * size);
-  if (buffer.IsEmpty()) { throw "Error getting creating Node.js Buffer"; }
+  if (buffer.IsEmpty()) { throw GDALError("Error getting creating Node.js Buffer"); }
 
   // get the underlying ArrayBuffer
   Napi::Value underlyingAB = buffer.Get("buffer");
 
   // make TypedArray
   Napi::Value val = env.Global().Get(name);
-  if (val.IsEmpty() || !val.IsFunction()) { throw "Error getting typed array constructor"; }
+  if (val.IsEmpty() || !val.IsFunction()) { throw GDALError("Error getting typed array constructor"); }
   Napi::Function constructor = val.As<Napi::Function>();
 
   Napi::Value array = constructor.New({underlyingAB});
-  if (array.IsEmpty() || !array.IsObject()) { throw "Error creating TypedArray"; }
+  if (array.IsEmpty() || !array.IsObject()) { throw GDALError("Error creating TypedArray"); }
 
   array.As<Napi::Object>().Set("_gdal_type", Napi::Number::New(env, type));
 

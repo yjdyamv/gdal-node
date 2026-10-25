@@ -111,7 +111,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::get) {
   job.main = [gdal_layer, feature_id](const GDALExecutionProgress &) {
     CPLErrorReset();
     OGRFeature *feature = gdal_layer->GetFeature(feature_id);
-    if (feature == nullptr) throw CPLGetLastErrorMsg();
+    if (feature == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return feature;
   };
   job.rval = [](OGRFeature *feature, const GetFromPersistentFunc &) { return Feature::New(feature); };
@@ -267,7 +267,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::add) {
   job.persist(layer->Value());
   job.main = [gdal_layer, gdal_f](const GDALExecutionProgress &) {
     int err = gdal_layer->CreateFeature(gdal_f);
-    if (err != CE_None) throw getOGRErrMsg(err);
+    if (err != CE_None) throw GDALError(getOGRErrMsg(err));
     return err;
   };
   job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
@@ -412,7 +412,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::set) {
   job.persist(layer->Value(), f->Value());
   job.main = [gdal_layer, gdal_feature](const GDALExecutionProgress &) {
     OGRErr err = gdal_layer->SetFeature(gdal_feature);
-    if (err != CE_None) throw getOGRErrMsg(err);
+    if (err != CE_None) throw GDALError(getOGRErrMsg(err));
     return err;
   };
 
@@ -461,7 +461,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::remove) {
   job.persist(layer->Value());
   job.main = [gdal_layer, i](const GDALExecutionProgress &) {
     int err = gdal_layer->DeleteFeature(i);
-    if (err) { throw getOGRErrMsg(err); }
+    if (err) { throw GDALError(getOGRErrMsg(err)); }
     return err;
   };
   job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };

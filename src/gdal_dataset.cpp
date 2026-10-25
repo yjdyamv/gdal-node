@@ -219,7 +219,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::setMetadata) {
   GDALAsyncableJob<CPLErr> job(ds->uid);
   job.main = [raw, options, domain](const GDALExecutionProgress &) {
     CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-    if (r == CE_Failure) throw CPLGetLastErrorMsg();
+    if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
     return r;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
@@ -401,7 +401,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::executeSQL) {
   job.main = [raw, sql, sql_dialect, geom_filter](const GDALExecutionProgress &) {
     CPLErrorReset();
     OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? NULL : sql_dialect.c_str());
-    if (layer == nullptr) throw CPLGetLastErrorMsg();
+    if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return layer;
   };
   job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, true); };
@@ -661,7 +661,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
   job.main = [raw, resampling, n_overviews, o, n_bands, b, interruptible](const GDALExecutionProgress &progress) {
     if (b != nullptr) {
       for (int i = 0; i < n_bands; i++) {
-        if (b.get()[i] > raw->GetRasterCount() || b.get()[i] < 1) { throw "invalid band id"; }
+        if (b.get()[i] > raw->GetRasterCount() || b.get()[i] < 1) { throw GDALError("invalid band id"); }
       }
     }
     CPLErrorReset();
@@ -673,7 +673,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
       b.get(),
       interruptible ? ProgressTrampoline : nullptr,
       interruptible ? (void *)&progress : nullptr);
-    if (err != CE_None) { throw CPLGetLastErrorMsg(); }
+    if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };

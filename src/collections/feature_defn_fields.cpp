@@ -139,7 +139,7 @@ NAPI_METHOD(FeatureDefnFields::get) {
 
   CPLErrorReset();
   auto r = feature_def->get()->GetFieldDefn(field_index);
-  if (r == nullptr) { throw CPLGetLastErrorMsg(); }
+  if (r == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
   return FieldDefn::New(r);
 }
 

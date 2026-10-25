@@ -127,7 +127,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::get) {
     double val;
     CPLErrorReset();
     CPLErr err = raw->RasterIO(GF_Read, x, y, 1, 1, &val, 1, 1, GDT_Float64, 0, 0);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return val;
   };
 
@@ -178,7 +178,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::set) {
   job.main = [raw, x, y, val](const GDALExecutionProgress &) {
     CPLErrorReset();
     CPLErr err = raw->RasterIO(GF_Write, x, y, 1, 1, (void *)&val, 1, 1, GDT_Float64, 0, 0);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
 
@@ -188,7 +188,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::set) {
 
 inline GDALRIOResampleAlg parseResamplingAlg(Napi::Value value) {
   if (value.IsUndefined() || value.IsNull()) { return GRIORA_NearestNeighbour; }
-  if (!value.IsString()) { throw "resampling property must be a string"; }
+  if (!value.IsString()) { throw GDALError("resampling property must be a string"); }
   std::string name = value.As<Napi::String>().Utf8Value();
 
   if (name == "NearestNeighbor") { return GRIORA_NearestNeighbour; }
@@ -201,7 +201,7 @@ inline GDALRIOResampleAlg parseResamplingAlg(Napi::Value value) {
   if (name == "Mode") { return GRIORA_Mode; }
   if (name == "Gauss") { return GRIORA_Gauss; }
 
-  throw "Invalid resampling algorithm";
+  throw GDALError("Invalid resampling algorithm");
 }
 
 /* Find the lowest possible element index for the given width, height, pixel_space, line_space and offset */
@@ -416,7 +416,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
     CPLErr err =
       gdal_band->RasterIO(GF_Read, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
 
-    if (err != CE_None) throw CPLGetLastErrorMsg();
+    if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
     return err;
   };
 
@@ -569,7 +569,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
     CPLErrorReset();
     CPLErr err =
       gdal_band->RasterIO(GF_Write, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
-    if (err != CE_None) throw CPLGetLastErrorMsg();
+    if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
     return err;
   };
   job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
@@ -646,7 +646,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
   job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
     CPLErrorReset();
     CPLErr err = gdal_band->ReadBlock(x, y, data);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &getter) { return getter("array"); };
@@ -708,7 +708,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
   job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
     CPLErrorReset();
     CPLErr err = gdal_band->WriteBlock(x, y, data);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
@@ -762,7 +762,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::clampBlock) {
     xy r;
     CPLErrorReset();
     CPLErr err = gdal_band->GetActualBlockSize(x, y, &r.x, &r.y);
-    if (err != CE_None) { throw CPLGetLastErrorMsg(); }
+    if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
     return r;
   };
   job.rval = [](xy r, const GetFromPersistentFunc &) {

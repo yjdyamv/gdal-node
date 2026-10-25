@@ -93,7 +93,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
   job.main = [band, id](const GDALExecutionProgress &) {
     CPLErrorReset();
     GDALRasterBand *result = band->get()->GetOverview(id);
-    if (result == nullptr) { throw "Specified overview not found"; }
+    if (result == nullptr) { throw GDALError("Specified overview not found"); }
     return result;
   };
   job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {
@@ -149,7 +149,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::getBySampleCount) {
   job.main = [band, n_samples](const GDALExecutionProgress &) {
     CPLErrorReset();
     GDALRasterBand *result = band->get()->GetRasterSampleOverview(n_samples);
-    if (result == nullptr) { throw "Specified overview not found"; }
+    if (result == nullptr) { throw GDALError("Specified overview not found"); }
     return result;
   };
   job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {

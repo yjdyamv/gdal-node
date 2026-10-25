@@ -110,11 +110,11 @@ GDAL_ASYNCABLE_DEFINE(Utils::translate) {
     CPLErrorReset();
     auto b = aosOptions;
     auto psOptions = GDALTranslateOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
     if (interruptible) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
     GDALDataset *r = GDALDatasetFromHandle(GDALTranslate(dst.c_str(), GDALDatasetToHandle(raw), psOptions, nullptr));
     GDALTranslateOptionsFree(psOptions);
-    if (r == nullptr) throw CPLGetLastErrorMsg();
+    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return r;
   };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -216,7 +216,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::vectorTranslate) {
     CPLErrorReset();
     if (progress_cb) aosOptions->AddString("-progress");
     auto psOptions = GDALVectorTranslateOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
 
     if (interruptible) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
@@ -225,7 +225,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::vectorTranslate) {
       GDALVectorTranslate(dst_filename.c_str(), GDALDatasetToHandle(dst_raw), 1, &srcH, psOptions, nullptr));
 
     GDALVectorTranslateOptionsFree(psOptions);
-    if (r == nullptr) throw CPLGetLastErrorMsg();
+    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return r;
   };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -283,10 +283,10 @@ GDAL_ASYNCABLE_DEFINE(Utils::info) {
   job.main = [raw, aosOptions](const GDALExecutionProgress &) {
     CPLErrorReset();
     auto psOptions = GDALInfoOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
     char *r = GDALInfo(GDALDatasetToHandle(raw), psOptions);
     GDALInfoOptionsFree(psOptions);
-    if (r == nullptr) throw CPLGetLastErrorMsg();
+    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
     std::string s(r);
     CPLFree(r);
     return s;
@@ -400,7 +400,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
     [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALWarpAppOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
       if (interruptible) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
       GDALDatasetH r = GDALWarp(
         dst_path.length() > 0 ? dst_path.c_str() : nullptr,
@@ -410,7 +410,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
         psOptions,
         nullptr);
       GDALWarpAppOptionsFree(psOptions);
-      if (r == nullptr) throw CPLGetLastErrorMsg();
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
       return GDALDatasetFromHandle(r);
     };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -532,7 +532,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
     [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALBuildVRTOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
       if (interruptible) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
       GDALDatasetH r = GDALBuildVRT(
@@ -544,7 +544,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
         nullptr);
 
       GDALBuildVRTOptionsFree(psOptions);
-      if (r == nullptr) throw CPLGetLastErrorMsg();
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
       return GDALDatasetFromHandle(r);
     };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -649,7 +649,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
   job.main = [dst_path, dst_raw, src_raw, aosOptions, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     auto psOptions = GDALRasterizeOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
     if (interruptible) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
     GDALDatasetH r = GDALRasterize(
@@ -660,7 +660,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
       nullptr);
 
     GDALRasterizeOptionsFree(psOptions);
-    if (r == nullptr) throw CPLGetLastErrorMsg();
+    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return GDALDatasetFromHandle(r);
   };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -753,7 +753,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::dem) {
   job.main = [dst_path, mode, raw, colorFilename, aosOptions, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     auto psOptions = GDALDEMProcessingOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw CPLGetLastErrorMsg();
+    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
     if (interruptible) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
     GDALDataset *r = GDALDatasetFromHandle(GDALDEMProcessing(
       dst_path.c_str(),
@@ -764,7 +764,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::dem) {
       nullptr));
 
     GDALDEMProcessingOptionsFree(psOptions);
-    if (r == nullptr) throw CPLGetLastErrorMsg();
+    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
     return GDALDatasetFromHandle(r);
   };
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };

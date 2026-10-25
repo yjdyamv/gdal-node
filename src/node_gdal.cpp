@@ -214,7 +214,7 @@ GDAL_ASYNCABLE_DEFINE(gdal_open) {
   job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
   job.main = [path, flags](const GDALExecutionProgress &) {
     GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), flags, NULL, NULL, NULL);
-    if (!ds) throw CPLGetLastErrorMsg();
+    if (!ds) throw GDALError(CPLGetLastErrorMsg());
     return ds;
   };
   return job.run(info, async, 2);

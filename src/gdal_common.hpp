@@ -15,6 +15,7 @@
 #include "napi-wrapper.h"
 
 #include "utils/env_context.hpp"
+#include "utils/gdal_error.hpp"
 #include "utils/ptr_manager.hpp"
 
 #if GDAL_VERSION_MAJOR < 2 || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 2)
@@ -401,15 +402,15 @@ inline void ThrowError(Napi::Env env, const char *msg) {
 
 inline Napi::Value RejectPromise(const Napi::CallbackInfo &info, const char *msg) {
   auto deferred = Napi::Promise::Deferred::New(info.Env());
-  deferred.Reject(Napi::Error::New(info.Env(), msg).Value());
+  deferred.Reject(toJS(info.Env(), GDALError(msg != nullptr ? msg : "Operation failed")).Value());
   return deferred.Promise();
 }
 
 } // namespace node_gdal
 
-#define NODE_THROW_LAST_CPLERR Napi::Error::New(info.Env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException()
+#define NODE_THROW_LAST_CPLERR node_gdal::throwError(info.Env(), node_gdal::GDALError::fromGDAL())
 
-#define NODE_THROW_OGRERR(err) Napi::Error::New(info.Env(), getOGRErrMsg(err)).ThrowAsJavaScriptException()
+#define NODE_THROW_OGRERR(err) node_gdal::throwError(info.Env(), node_gdal::GDALError(getOGRErrMsg(err)))
 
 //
 // Object handle helpers
@@ -1250,11 +1251,11 @@ inline Napi::Value v8_null() { return node_gdal::napi_env().Null(); }
 template <typename INPUT, typename RETURN>
 std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Env env, Napi::Array array, size_t count = 0) {
   if (array.IsEmpty()) return nullptr;
-  if (count != 0 && array.Length() != count) throw "Array size must match the number of dimensions";
+  if (count != 0 && array.Length() != count) throw node_gdal::GDALError("Array size must match the number of dimensions");
   std::shared_ptr<RETURN[]> ptr(new RETURN[array.Length()]);
   for (unsigned i = 0; i < array.Length(); i++) {
     Napi::Value val = array.Get(i);
-    if (!val.IsNumber()) throw "Array must contain only numbers";
+    if (!val.IsNumber()) throw node_gdal::GDALError("Array must contain only numbers");
     ptr.get()[i] = static_cast<RETURN>(val.As<Napi::Number>().DoubleValue());
   }
   return ptr;
@@ -1644,7 +1645,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
     GDALAsyncableJob<OGRErr> job(obj->parent_uid);                                                                     \
     job.main = [gdal_obj](const GDALExecutionProgress &) {                                                             \
       int err = gdal_obj->wrapped_method();                                                                            \
-      if (err) throw getOGRErrMsg(err);                                                                                \
+      if (err) throw GDALError(getOGRErrMsg(err));                                                                                \
       return err;                                                                                                      \
     };                                                                                                                 \
     job.rval = [](OGRErr, const GetFromPersistentFunc &) { return v8_undefined(); };                                   \
@@ -1667,7 +1668,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
     job.persist(info[0].As<Napi::Object>());                                                                           \
     job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {                                                 \
       int err = gdal_obj->wrapped_method(gdal_param);                                                                  \
-      if (err) throw getOGRErrMsg(err);                                                                                \
+      if (err) throw GDALError(getOGRErrMsg(err));                                                                                \
       return err;                                                                                                      \
     };                                                                                                                 \
     job.rval = [](async_type, const GetFromPersistentFunc &) { return v8_undefined(); };                               \

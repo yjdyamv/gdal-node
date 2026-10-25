@@ -86,7 +86,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
   job.main = [gdal_src, gdal_mask, search_dist, smooth_iterations](const GDALExecutionProgress &) {
     CPLErrorReset();
     CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, NULL, NULL, NULL);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -238,7 +238,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
       elev_field,
       interruptible ? ProgressTrampoline : nullptr,
       interruptible ? (void *)&progress : nullptr);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -341,7 +341,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
         NULL,
         interruptible ? ProgressTrampoline : nullptr,
         interruptible ? (void *)&progress : nullptr);
-      if (err) { throw CPLGetLastErrorMsg(); }
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
       return err;
     };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -414,9 +414,9 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
     CPLErrorReset();
     int r = GDALChecksumImage(gdal_src, x, y, w, h);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 6)
-    if (r == -1) throw CPLGetLastErrorMsg();
+    if (r == -1) throw GDALError(CPLGetLastErrorMsg());
 #else
-    if (CPLGetLastErrorType() != CE_None) throw CPLGetLastErrorMsg();
+    if (CPLGetLastErrorType() != CE_None) throw GDALError(CPLGetLastErrorMsg());
 #endif
     return r;
   };
@@ -540,7 +540,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr);
         if (papszOptions) CSLDestroy(papszOptions);
-        if (err) throw CPLGetLastErrorMsg();
+        if (err) throw GDALError(CPLGetLastErrorMsg());
         return err;
       };
   } else {
@@ -556,7 +556,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr);
         if (papszOptions) CSLDestroy(papszOptions);
-        if (err) throw CPLGetLastErrorMsg();
+        if (err) throw GDALError(CPLGetLastErrorMsg());
         return err;
       };
   }

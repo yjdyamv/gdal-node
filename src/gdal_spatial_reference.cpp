@@ -726,7 +726,7 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromCRSURL) {
     int err = srs->importFromCRSURL(input.c_str());
     if (err) {
       delete srs;
-      throw getOGRErrMsg(err);
+      throw GDALError(getOGRErrMsg(err));
     }
     return srs;
   };
@@ -776,7 +776,7 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromURL) {
     OGRErr err = srs->importFromUrl(input.c_str());
     if (err) {
       delete srs;
-      throw getOGRErrMsg(err);
+      throw GDALError(getOGRErrMsg(err));
     }
     return srs;
   };
@@ -854,7 +854,7 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromUserInput) {
     int err = srs->SetFromUserInput(input.c_str());
     if (err) {
       delete srs;
-      throw getOGRErrMsg(err);
+      throw GDALError(getOGRErrMsg(err));
     }
     return srs;
   };

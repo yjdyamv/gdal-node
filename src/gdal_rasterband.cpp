@@ -268,7 +268,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::fill) {
   job.main = [gdal_obj, real, imaginary](const GDALExecutionProgress &) {
     CPLErrorReset();
     CPLErr err = gdal_obj->Fill(real, imaginary);
-    if (err) { throw CPLGetLastErrorMsg(); }
+    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
     return err;
   };
   job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -441,9 +441,9 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::computeStatistics) {
     CPLErr err = gdal_obj->ComputeStatistics(approx, &stats.min, &stats.max, &stats.mean, &stats.std_dev, NULL, NULL);
     popStatsErrorHandler();
     if (!stats_file_err.empty()) {
-      throw stats_file_err.c_str();
+      throw GDALError(stats_file_err);
     } else if (err != CPLE_None) {
-      throw CPLGetLastErrorMsg();
+      throw GDALError(CPLGetLastErrorMsg());
     }
 
     return stats;
@@ -567,7 +567,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::setMetadata) {
   GDALAsyncableJob<CPLErr> job(band->parent_uid);
   job.main = [raw, options, domain](const GDALExecutionProgress &) {
     CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-    if (r == CE_Failure) throw CPLGetLastErrorMsg();
+    if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
     return r;
   };
   job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };

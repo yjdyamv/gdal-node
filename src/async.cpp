@@ -1,4 +1,5 @@
 #include "async.hpp"
+#include "utils/gdal_error.hpp"
 
 namespace node_gdal {
 
@@ -14,14 +15,8 @@ GDALProgressInfo::GDALProgressInfo(const GDALProgressInfo &o) : complete(o.compl
 GDALProgressInfo::GDALProgressInfo() : complete(0), message(nullptr) {
 }
 
-// The abort error which is delivered to the JS world, it has the same shape as
-// the AbortError of the Node.js core (node:internal/errors)
 Napi::Error abortError(Napi::Env env) {
-  Napi::Error error = Napi::Error::New(env, "The operation was aborted");
-  Napi::Object obj = error.Value();
-  obj.Set("name", "AbortError");
-  obj.Set("code", "ABORT_ERR");
-  return error;
+  return toJS(env, GDALError::aborted());
 }
 
 bool GDALAbortSignal::arm(const Napi::Value &value) {
@@ -168,7 +163,7 @@ void GDALSyncExecutionProgress::Send(GDALProgressInfo *info) const {
   try {
     progress_callback->Value().Call(argv);
   } catch (const Napi::Error &) {
-    throw "sync progress callback exception";
+    throw GDALError("sync progress callback exception");
   }
 }
 

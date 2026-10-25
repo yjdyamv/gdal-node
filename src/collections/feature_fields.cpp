@@ -397,7 +397,7 @@ NAPI_METHOD(FeatureFields::toArray) {
 Napi::Value FeatureFields::get(OGRFeature *f, int field_index) {
   //throws
 
-  if (field_index < 0 || field_index >= f->GetFieldCount()) throw "Invalid field";
+  if (field_index < 0 || field_index >= f->GetFieldCount()) throw GDALError("Invalid field");
   if (!f->IsFieldSet(field_index)) return node_gdal::napi_env().Null();
   if (f->IsFieldNull(field_index)) return node_gdal::napi_env().Null();
 
@@ -415,7 +415,7 @@ Napi::Value FeatureFields::get(OGRFeature *f, int field_index) {
     case OFTDate:
     case OFTTime:
     case OFTDateTime: return getFieldAsDateTime(f, field_index);
-    default: throw "Unsupported field type";
+    default: throw GDALError("Unsupported field type");
   }
 }
 
