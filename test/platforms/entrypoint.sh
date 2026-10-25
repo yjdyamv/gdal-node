@@ -77,23 +77,13 @@ case ${1} in
     R=0
     ;;
 
-  ASAN)
-    echo -e "${SEP}Testing the current version with ASAN${SEP}"
-    export CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
-    export LDFLAGS="-fsanitize=address"
-    node scripts/build.mjs --debug
-    # -fsanitize=address instruments the addon, but the JavaScript of the
-    # tests and of the V8 that runs it allocates outside of it: preloading the
-    # library makes ASAN see those allocations too.  Ask the compiler where it
-    # is instead of hardcoding the x86_64 path of the gcc 8 of an old distro -
-    # the library is not even the same version everywhere
-    LD_PRELOAD=$(gcc -print-file-name=libasan.so) npm test 2> asan.output
-    if egrep -q "node_gdal|GDAL" asan.output; then
-      echo ${SEP}${SEP}Memory leaks detected${SEP}${SEP}
-      cat asan.output
-      exit 1
-    fi
-    R=0
+  # The AddressSanitizer build runs on the CI runner, see
+  # .github/workflows/extended-tests.yml: it looks for the memory that the
+  # addon allocates, which does not depend on the distribution, so it has
+  # nothing to gain from running in a container
+  *)
+    echo "Unknown mode: ${1}"
+    exit 1
     ;;
 esac
 

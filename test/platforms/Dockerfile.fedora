@@ -8,7 +8,7 @@ RUN \
   curl -fsSL https://rpm.nodesource.com/setup_${NODEJS}.x | bash - && \
   dnf install -y nodejs && \
   dnf group install -y development-tools && \
-  dnf install -y g++ git python ccache && \
+  dnf install -y g++ git python ccache ninja-build && \
   mkdir -p /target && chmod 777 /target
 
 RUN dnf install -y python3-pip && (pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0")

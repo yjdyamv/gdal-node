@@ -4,7 +4,7 @@ OP=$1
 DIST=$2
 NODEJS=$3
 if [ -z "${OP}" ]; then
-  echo "container.sh <release|dev|publish|asan|shell> [ubuntu:{22.04|24.04|26.04}|centos:stream10|fedora:42|debian:{bookworm|trixie}|archlinux:latest|amazonlinux:2023] [<Node.js version>]"
+  echo "container.sh <release|dev|publish|shell> [ubuntu:{22.04|24.04|26.04}|centos:stream10|fedora:42|debian:{bookworm|trixie}|archlinux:latest|amazonlinux:2023] [<Node.js version>]"
   exit 1
 fi
 if [ ! -d "test/platforms" ]; then
@@ -62,8 +62,8 @@ case ${OP} in
     echo -e "${SEP}Testing in ${CONTAINER} and running a shell${SEP}"
     docker run -it ${COMMON_ARGS} ${CONTAINER} DEV /bin/bash
     ;;
-  asan)
-    echo -e "${SEP}Testing w/asan in ${CONTAINER}${SEP}"
-    docker run ${COMMON_ARGS} ${CONTAINER} DEV || exit 1
+  *)
+    echo "Unknown operation: ${OP}"
+    exit 1
     ;;
 esac

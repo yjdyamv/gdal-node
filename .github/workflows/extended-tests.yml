@@ -69,6 +69,11 @@ jobs:
 
     name: AddressSanitizer
 
+    # The sanitizer instruments the addon and looks for the memory that it
+    # allocates - which is the same on every distribution - so there is nothing
+    # that a container would add.  Building on the runner means the regular
+    # Ninja build, ccache and the compilation database are all exercised with
+    # the sanitizer too, and there is no image to build on every run
     runs-on: ubuntu-latest
 
     timeout-minutes: 90
@@ -84,9 +89,47 @@ jobs:
       with:
         max-size: 1000M
         key: asan
-    - run: npm run container asan ubuntu:22.04 24
+    - name: Install Conan
+      run: pip3 install --break-system-packages "conan==2.33.0" || pip3 install "conan==2.33.0"
+    - name: Detect the Conan profile
+      run: conan profile detect --force
+    - name: Cache the Conan packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.conan2/p
+        key: conan-asan-${{ hashFiles('conanfile.py') }}
+    - run: npm install --ignore-scripts
+    - name: Install the build dependencies
+      # Ninja is what scripts/build.mjs uses by default: the runner image ships
+      # it, but it is not part of the tools it guarantees
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+    - name: Build the addon with AddressSanitizer
+      run: node scripts/build.mjs --debug
+      env:
+        CXXFLAGS: -fsanitize=address -fno-omit-frame-pointer -g
+        LDFLAGS: -fsanitize=address
+    - name: Run the tests
+      # -fsanitize=address instruments the addon, but the JavaScript of the
+      # tests and of the V8 that runs it allocates outside of it: preloading
+      # the library makes ASAN see those allocations too.  Ask the compiler
+      # where it is instead of hardcoding the x86_64 path of the gcc 8 of an
+      # old distro - the library is not even the same version everywhere
+      run: |
+        LD_PRELOAD=$(gcc -print-file-name=libasan.so) npm test 2> asan.output
+        if egrep -q "node_gdal|GDAL" asan.output; then
+          echo "::error::Memory leaks detected by AddressSanitizer"
+          cat asan.output
+          exit 1
+        fi
       env:
         MOCHA_TEST_NETWORK: ${{ github.event.inputs.testNetwork }}
+    - name: Keep the sanitizer report
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: asan
+        path: asan.output
+        if-no-files-found: ignore
 
   distros:
 

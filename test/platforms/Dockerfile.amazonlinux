@@ -4,7 +4,7 @@ FROM amazonlinux:${VERSION}
 ARG NODEJS=20
 
 RUN \
-  yum install -y gcc-c++ make && \
+  yum install -y gcc-c++ make ninja-build && \
   yum install -y nodejs${NODEJS} nodejs${NODEJS}-npm && \
   yum install -y git rsync python3 byacc && \
   alternatives --install /usr/bin/python python /usr/bin/python3 60 && \
