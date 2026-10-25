@@ -183,6 +183,7 @@ findHighest(int dimensions, std::shared_ptr<size_t[]> span, std::shared_ptr<GPtr
  * @property {string} [data_type]
  * @property {T} [data]
  * @property {number} [_offset]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -204,6 +205,7 @@ findHighest(int dimensions, std::shared_ptr<size_t[]> span, std::shared_ptr<GPtr
  * @param {number[]} [options.stride] An array of strides for the output array, mandatory if the array is specified
  * @param {string} [options.data_type] See {@link GDT|GDT constants}
  * @param {T} [options.data] The `TypedArray` to put the data in. A new array is created if not given.
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {T}
  */
 
@@ -227,7 +229,7 @@ findHighest(int dimensions, std::shared_ptr<size_t[]> span, std::shared_ptr<GPtr
  * @param {number[]} [options.stride] An array of strides for the output array, mandatory if the array is specified
  * @param {string} [options.data_type] See {@link GDT|GDT constants}
  * @param {T} [options.data] The `TypedArray` to put the data in. A new array is created if not given.
- * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<T>} [callback=undefined]
  * @return {Promise<T>} A `TypedArray` of values.
  */
@@ -312,6 +314,11 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
 
   GDALAsyncableJob<bool> job(self->parent_uid);
   job.persist("array", array);
+  // GDALMDArray::Read() takes no progress callback, so an operation which is
+  // already aborted can only be refused before it is started
+  Napi::Value abort_signal;
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
+  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
 
   job.main =
     [buffer, gdal_mdarray, gdal_origin, gdal_span, gdal_stride, type, length, offset](const GDALExecutionProgress &) {

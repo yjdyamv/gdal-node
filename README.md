@@ -38,9 +38,9 @@ It adds a number of features:
 - Support for curve geometries (since 3.1)
 - Progress callbacks (since 3.2)
 - Built-in support for HDF5, NetCDF, GRIB, WMS, WMTS, WCS and FlatGeobuf (since 3.3)
+- **`worker_threads` support** - every thread gets its own isolated copy of the addon (unreleased)
+- **`AbortController` support** - long-running operations can be interrupted with an `AbortSignal` (unreleased)
 - Numerous bugfixes including a number of memory leaks
-
-Support for `worker_threads` is planned but it is not a priority project
 
 ## Long term support of this project
 
@@ -99,9 +99,39 @@ Simultaneous operations on the same dataset object are safe too but they won't r
 
 Also be particularly careful when mixing synchronous and asynchronous operations in server code. If a GDAL operation is running in the background for any given Dataset, all synchronous operations on that same Dataset on the main thread will block the event loop until the background operation is finished. **This includes synchronous getters and setters that might otherwise be instantaneous.**. It is recommended to retrieve all values such as raster size or no data value or spatial reference **before** starting any I/O operations or use the new asynchronous getters available in 3.3.2 and later.
 
-**Does not support `worker_threads` yet**
+#### `worker_threads`
+
+Each `worker_thread` gets its own Node-API environment with its own driver registry and its own object store, so the addon can be used from any number of threads.
+
+The threads are isolated from each other by design: a `Dataset`, a `Layer` or any other object that has been created in one thread is not accessible from another thread and the object ids are not shared - an id from another thread will simply not be alive. Open the same file independently in each thread instead.
+
+A worker can be terminated with `worker.terminate()` even while it has asynchronous operations in flight; the addon cleans up after the dead environment and the remaining threads continue to work normally.
 
 **The HDF5 driver is not thread safe on Windows**
+
+#### `AbortController`
+
+Long-running operations accept an `AbortSignal` in their options object; aborting the signal interrupts the operation and it fails with an `AbortError` (`err.name === 'AbortError'`, `err.code === 'ABORT_ERR'`).
+
+```js
+const controller = new AbortController()
+const pending = gdal.translateAsync('/vsimem/out.tif', dataset, [ '-r', 'lanczos' ], {
+  abort_signal: controller.signal,
+  progress_cb: (complete) => console.log(complete)
+})
+setTimeout(() => controller.abort(), 100)
+await pending // rejects with an AbortError
+```
+
+The `abort_signal` is available in the options of `gdal.translate`, `gdal.vectorTranslate`, `gdal.warp`, `gdal.buildVRT`, `gdal.rasterize` and `gdal.dem`, as well as in `Dataset.buildOverviews`, `Driver.createCopy`, `Warper.reprojectImage`, `Algorithms.contourGenerate`, `Algorithms.sieveFilter`, `Algorithms.polygonize`, `RasterBandPixels.read` and `RasterBandPixels.write`, in both their synchronous and their asynchronous forms.
+
+GDAL can only be interrupted from within its progress callback, which is why the addon installs one whenever an `AbortSignal` is given, even if no `progress_cb` was requested. When the operation finishes on its own, the signal is left untouched and it can be reused for another operation.
+
+`MDArray.read` is the only exception: `GDALMDArray::Read()` has no progress callback at all, so GDAL cannot be interrupted in the middle of a multidimensional array read. It nevertheless accepts an `abort_signal`, but the only thing it can do with it is to refuse to start an operation which has already been aborted.
+
+An interrupted operation leaves its output in an undefined state: GDAL stops in the middle of its work, so `gdal.translate`, `gdal.warp` and the other writers may leave a partially written destination behind. Remove it before retrying, or reopen it for update if the partial result is of any use.
+
+**In the synchronous methods** the event loop is blocked while the operation runs, so nothing can abort the signal from the outside. A signal which has already been aborted is nevertheless honored - the call throws immediately without doing any work - and so is a signal which is aborted from within the progress callback. Use the asynchronous versions when the operation has to be interruptible from another task.
 
 #### With callbacks
 

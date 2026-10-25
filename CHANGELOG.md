@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+### Added
+ - Support for `AbortController`: the long-running operations (`gdal.translate`, `gdal.vectorTranslate`, `gdal.warp`, `gdal.buildVRT`, `gdal.rasterize`, `gdal.dem`, `Dataset.buildOverviews`, `Driver.createCopy`, `Warper.reprojectImage`, `Algorithms.contourGenerate`, `Algorithms.sieveFilter`, `Algorithms.polygonize`, `RasterBandPixels.read` and `RasterBandPixels.write`, in both their synchronous and their asynchronous forms) accept an `abort_signal` option and fail with an `AbortError` when it is aborted. The synchronous methods can only reject a signal which has been aborted before the call, the asynchronous ones interrupt the operation while it is running. `MDArray.read` accepts an `abort_signal` too, but it can only refuse to start an already aborted read because `GDALMDArray::Read()` has no progress callback
+ - Support for `worker_threads`: every thread gets its own Node-API environment, its own driver registry and its own object store, so the addon can be used from any number of threads. The threads are isolated - the objects and the object ids of one thread are not accessible from another one. A worker can be terminated even while it has asynchronous operations in flight
+
 ### Changed
  - The build system is now CMake.js with Conan: `binding.gyp`, node-gyp and `@mapbox/node-pre-gyp` have been removed, the native addon is built from `CMakeLists.txt` with `npm run build:cmake` and the prebuilt binaries are packed and installed by the new `scripts/package.mjs` and `scripts/install.mjs`
  - The build dependencies (GDAL, PROJ, GEOS, curl, HDF5, netCDF, ...) are no longer vendored under `deps/`; they are resolved with `conan install` and the only files still shipped in `deps/` are the GDAL and PROJ data files and the curl root certificates. `npm install --build-from-source` builds with Conan, so a compiler and Conan are required to build from source

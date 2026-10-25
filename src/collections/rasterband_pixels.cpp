@@ -253,6 +253,7 @@ static inline int64_t findHighest(int64_t w, int64_t h, int64_t px, int64_t ln, 
  * @property {number} [line_space]
  * @property {string} [resampling]
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  * @property {number} [offset]
  */
 
@@ -276,6 +277,7 @@ static inline int64_t findHighest(int64_t w, int64_t h, int64_t px, int64_t ln, 
  * @param {number} [options.line_space]
  * @param {string} [options.resampling] Resampling algorithm ({@link GRA|available options})
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {T} A `TypedArray` of values.
  */
 
@@ -299,6 +301,7 @@ static inline int64_t findHighest(int64_t w, int64_t h, int64_t px, int64_t ln, 
  * @param {number} [options.line_space]
  * @param {string} [options.resampling] Resampling algorithm ({@link GRA|available options}
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<T>} [callback=undefined]
  * @return {Promise<T>} A `TypedArray` of values.
  */
@@ -315,6 +318,8 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
   Napi::Value array;
   Napi::Object obj;
   Napi::FunctionReference *cb = nullptr;
+  // An internal argument, appended by the argument mangling in lib/gdal.js
+  Napi::Value abort_signal;
   GDALDataType type;
 
   NODE_ARG_INT(0, "x_offset", x);
@@ -360,6 +365,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
   }
   offset = 0;
   NODE_ARG_INT_OPT(12, "offset", offset);
+  NODE_ABORT_SIGNAL_FROM_ARG_OPT(13, abort_signal);
 
   if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
     Napi::Error::New(node_gdal::napi_env(), "has to write before the start of the TypedArray").ThrowAsJavaScriptException();
@@ -388,14 +394,19 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
   job.persist("array", obj);
   job.persist(band->Value());
   job.progress = cb;
+  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  const bool interruptible = job.interruptible();
 
   data = (uint8_t *)data + offset * bytes_per_pixel;
-  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, resampling, cb](
+  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, resampling, interruptible](
                const GDALExecutionProgress &progress) {
     std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
     INIT_RASTERIO_EXTRA_ARG(*extra);
     extra->eResampleAlg = resampling;
-    if (cb) {
+    if (interruptible) {
       extra->pfnProgress = ProgressTrampoline;
       extra->pProgressData = (void *)&progress;
     }
@@ -411,7 +422,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
   job.rval = [](CPLErr err, const GetFromPersistentFunc &getter) {
     return getter("array");
   };
-  return job.run(info, async, 13);
+  return job.run(info, async, 14);
 }
 
 /**
@@ -422,6 +433,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
  * @property {number} [pixel_space]
  * @property {number} [line_space]
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  * @property {number} [offset]
  */
 
@@ -443,6 +455,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
  * @param {number} [options.pixel_space]
  * @param {number} [options.line_space]
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -463,6 +476,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
  * @param {number} [options.pixel_space]
  * @param {number} [options.line_space]
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -480,6 +494,8 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
   Napi::Object passed_array;
   GDALDataType type;
   Napi::FunctionReference *cb = nullptr;
+  // An internal argument, appended by the argument mangling in lib/gdal.js
+  Napi::Value abort_signal;
 
   NODE_ARG_INT(0, "x_offset", x);
   NODE_ARG_INT(1, "y_offset", y);
@@ -510,6 +526,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
   NODE_ARG_CB_OPT(9, "progress_cb", cb);
   offset = 0;
   NODE_ARG_INT_OPT(10, "offset", offset);
+  NODE_ABORT_SIGNAL_FROM_ARG_OPT(11, abort_signal);
 
   if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
     Napi::Error::New(node_gdal::napi_env(), "has to read before the start of the TypedArray").ThrowAsJavaScriptException();
@@ -532,13 +549,18 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
     job.persist(cb->Value());
     job.progress = cb;
   }
+  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  const bool interruptible = job.interruptible();
 
   data = (uint8_t *)data + offset * bytes_per_pixel;
-  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, cb](
+  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, interruptible](
                const GDALExecutionProgress &progress) {
     std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
     INIT_RASTERIO_EXTRA_ARG(*extra);
-    if (cb) {
+    if (interruptible) {
       extra->pfnProgress = ProgressTrampoline;
       extra->pProgressData = (void *)&progress;
     }
@@ -551,7 +573,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
   };
   job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
 
-  return job.run(info, async, 11);
+  return job.run(info, async, 12);
 }
 
 /**

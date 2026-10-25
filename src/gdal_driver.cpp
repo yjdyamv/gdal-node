@@ -228,6 +228,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
 /**
  * @typedef {object} CreateOptions
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -243,6 +244,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
  * @param {boolean} [strict=false] strict mode
  * @param {CreateOptions} [jsoptions] additional options
  * @param {ProgressCb} [jsoptions.progress_cb]
+ * @param {AbortSignal} [jsoptions.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -259,6 +261,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
  * @param {boolean} [strict=false] strict mode
  * @param {CreateOptions} [jsoptions] additional options
  * @param {ProgressCb} [jsoptions.progress_cb]
+ * @param {AbortSignal} [jsoptions.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -299,8 +302,10 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
 
   Napi::Object jsoptions;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(4, "jsoptions", jsoptions);
   if (!jsoptions.IsEmpty()) NODE_CB_FROM_OBJ_OPT(jsoptions, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(jsoptions, abort_signal);
 
   GDALDriver *raw = driver->getGDALDriver();
   GDALDataset *raw_ds = src_dataset->get();
@@ -308,12 +313,17 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
   job.rval = DatasetRval;
   job.persist(driver->Value());
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
 
-  job.main = [raw, filename, raw_ds, strict, options, progress_cb](const GDALExecutionProgress &progress) {
+  job.main = [raw, filename, raw_ds, strict, options, interruptible](const GDALExecutionProgress &progress) {
     std::unique_ptr<StringList> options_ptr(options);
     CPLErrorReset();
     GDALDataset *ds = raw->CreateCopy(
-      filename.c_str(), raw_ds, strict, options->get(), progress_cb ? ProgressTrampoline : nullptr, (void *)&progress);
+      filename.c_str(), raw_ds, strict, options->get(), interruptible ? ProgressTrampoline : nullptr, (void *)&progress);
     if (!ds) throw CPLGetLastErrorMsg();
     return ds;
   };

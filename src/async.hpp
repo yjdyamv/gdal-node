@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <functional>
 #include <chrono>
+#include <atomic>
+#include <memory>
 #include "napi-wrapper.h"
 #include "gdal_common.hpp"
 
@@ -168,6 +170,50 @@ struct GDALProgressInfo {
   ~GDALProgressInfo() = default;
 };
 
+// The abort state of an operation. This is the only mutable state shared
+// between the JS thread and the aux thread: the JS thread flips it from the
+// 'abort' listener of the AbortSignal, the aux thread reads it in the progress
+// trampoline, so the aux thread never has to touch V8.
+struct GDALAbortState {
+  // set by the 'abort' listener of the AbortSignal, read by the trampoline
+  std::atomic<bool> aborted{false};
+  // set when GDAL was actually told to stop (or was never started), which is
+  // what turns the failure that follows into an AbortError
+  std::atomic<bool> interrupted{false};
+};
+
+// Owns the JS side of an AbortSignal - the signal object itself and the
+// 'abort' listener which sets the flag above. Both are created, used and
+// released on the JS thread.
+class GDALAbortSignal {
+    public:
+  std::shared_ptr<GDALAbortState> state;
+
+  // Registers the 'abort' listener. Returns false and leaves a pending JS
+  // exception behind if the value is not an AbortSignal.
+  bool arm(const Napi::Value &value);
+  inline bool aborted() const {
+    return state != nullptr && state->aborted.load();
+  }
+  inline bool interrupted() const {
+    return state != nullptr && state->interrupted.load();
+  }
+  inline void markInterrupted() const {
+    if (state != nullptr) state->interrupted.store(true);
+  }
+  // Unregisters the listener, it has to be called on the JS thread
+  void disarm();
+  ~GDALAbortSignal();
+
+    private:
+  Napi::ObjectReference signal;
+  Napi::FunctionReference listener;
+};
+
+// The error reported when an operation was interrupted by its AbortSignal.
+// It has the same shape as the AbortError of the Node.js core.
+Napi::Error abortError(Napi::Env env);
+
 class GDALSyncExecutionProgress {
   Napi::FunctionReference *progress_callback;
 
@@ -189,14 +235,23 @@ class GDALExecutionProgress {
   // Only one of these is active at any given moment
   const GDALAsyncExecutionProgress *async;
   const GDALSyncExecutionProgress *sync;
+  // Shared with the JS thread, may be null when there is no AbortSignal
+  const std::shared_ptr<GDALAbortState> abort;
 
   GDALExecutionProgress() = delete;
 
     public:
-  GDALExecutionProgress(const GDALAsyncExecutionProgress *);
-  GDALExecutionProgress(const GDALSyncExecutionProgress *);
+  GDALExecutionProgress(const GDALAsyncExecutionProgress *, const std::shared_ptr<GDALAbortState> &);
+  GDALExecutionProgress(const GDALSyncExecutionProgress *, const std::shared_ptr<GDALAbortState> &);
   ~GDALExecutionProgress();
   void Send(GDALProgressInfo *info) const;
+  inline bool Aborted() const {
+    return abort != nullptr && abort->aborted.load();
+  }
+  // GDAL is being stopped because of the AbortSignal and not by its own error
+  inline void MarkInterrupted() const {
+    if (abort != nullptr) abort->interrupted.store(true);
+  }
 };
 
 // This is the progress callback trampoline
@@ -223,6 +278,9 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
 
     protected:
   Napi::FunctionReference *progressCallback;
+  // Keeps the 'abort' listener of the AbortSignal installed for the whole
+  // lifetime of the operation, it is released by the destructor on the JS thread
+  std::shared_ptr<GDALAbortSignal> abort;
   const GDALMainFunc doit;
   const GDALRValFunc rval;
   const std::vector<long> ds_uids;
@@ -271,6 +329,7 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   GDALAsyncWorker(
     const Napi::Function &resultCallback,
     Napi::FunctionReference *progressCallback,
+    const std::shared_ptr<GDALAbortSignal> &abort,
     const GDALMainFunc &doit,
     const GDALRValFunc &rval,
     const std::map<std::string, Napi::Object> &objects,
@@ -279,6 +338,7 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   GDALAsyncWorker(
     Napi::Env env,
     Napi::FunctionReference *progressCallback,
+    const std::shared_ptr<GDALAbortSignal> &abort,
     const GDALMainFunc &doit,
     const GDALRValFunc &rval,
     const std::map<std::string, Napi::Object> &objects,
@@ -289,18 +349,25 @@ template <class GDALType> class GDALAsyncWorker : public GDALAsyncProgressWorker
   void Execute(const ExecutionProgress &progress) override;
   Napi::Value ProduceRVal();
   void OnProgress(const GDALProgressInfo *data, size_t count) override;
+
+    protected:
+  // The error to report: an AbortError if the operation was interrupted by its
+  // AbortSignal, the original error otherwise. Called on the JS thread.
+  Napi::Error reportError(const Napi::Error &e);
 };
 
 template <class GDALType>
 GDALAsyncWorker<GDALType>::GDALAsyncWorker(
   const Napi::Function &resultCallback,
   Napi::FunctionReference *progressCallback,
+  const std::shared_ptr<GDALAbortSignal> &abort,
   const GDALMainFunc &doit,
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
   : GDALAsyncProgressWorker(resultCallback, "node-gdal:GDALAsyncWorker"),
     progressCallback(progressCallback),
+    abort(abort),
     // These members are not references! These functions must be copied
     // as they will be executed in async context!
     doit(doit),
@@ -316,12 +383,14 @@ template <class GDALType>
 GDALAsyncWorker<GDALType>::GDALAsyncWorker(
   Napi::Env env,
   Napi::FunctionReference *progressCallback,
+  const std::shared_ptr<GDALAbortSignal> &abort,
   const GDALMainFunc &doit,
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
   : GDALAsyncProgressWorker(env, "node-gdal:GDALAsyncWorker"),
     progressCallback(progressCallback),
+    abort(abort),
     doit(doit),
     rval(rval),
     ds_uids(ds_uids) {
@@ -343,7 +412,13 @@ template <class GDALType> void GDALAsyncWorker<GDALType>::Execute(const Executio
       this->SetError(lockError);
       return;
     }
-    GDALExecutionProgress executionProgress(&progress);
+    // The signal was already aborted before the operation was started
+    if (abort != nullptr && abort->aborted()) {
+      abort->markInterrupted();
+      this->SetError("The operation was aborted");
+      return;
+    }
+    GDALExecutionProgress executionProgress(&progress, abort != nullptr ? abort->state : nullptr);
     AsyncWorkerGuard lock(locks);
     raw = doit(executionProgress);
   } catch (const char *err) {
@@ -365,6 +440,20 @@ template <class GDALType> GDALAsyncWorker<GDALType>::~GDALAsyncWorker() {
     progressCallback->Reset();
     delete progressCallback;
   }
+  // Removes the 'abort' listener from the AbortSignal, the worker is destroyed
+  // on the JS thread after the operation has finished
+  if (abort != nullptr) {
+    abort->disarm();
+    abort.reset();
+  }
+}
+
+template <class GDALType> Napi::Error GDALAsyncWorker<GDALType>::reportError(const Napi::Error &e) {
+  // Only an error which was actually caused by the interruption becomes an
+  // AbortError: when the operation fails on its own while the signal is raised
+  // at about the same time, the original error is what the user needs to see
+  if (abort == nullptr || !abort->interrupted()) return e;
+  return abortError(Env());
 }
 
 template <class GDALType>
@@ -401,6 +490,12 @@ template <class GDALType> class GDALCallbackWorker : public GDALAsyncWorker<GDAL
     }
     Napi::AsyncWorker::OnOK();
   }
+  void OnError(const Napi::Error &e) override {
+    if (gdalShuttingDown) {
+      return;
+    }
+    Napi::AsyncWorker::OnError(this->reportError(e));
+  }
   std::vector<napi_value> GetResult(Napi::Env env) override {
     std::vector<napi_value> r = {env.Null(), this->ProduceRVal()};
     return r;
@@ -419,6 +514,7 @@ template <class GDALType> class GDALPromiseWorker : public GDALAsyncWorker<GDALT
     public:
   GDALPromiseWorker(
     Napi::Env env,
+    const std::shared_ptr<GDALAbortSignal> &abort,
     const GDALMainFunc &doit,
     const GDALRValFunc &rval,
     const std::map<std::string, Napi::Object> &objects,
@@ -436,11 +532,12 @@ template <class GDALType> class GDALPromiseWorker : public GDALAsyncWorker<GDALT
 template <class GDALType>
 GDALPromiseWorker<GDALType>::GDALPromiseWorker(
   Napi::Env env,
+  const std::shared_ptr<GDALAbortSignal> &abort,
   const GDALMainFunc &doit,
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
-  : GDALAsyncWorker<GDALType>(env, nullptr, doit, rval, objects, ds_uids), deferred(env) {
+  : GDALAsyncWorker<GDALType>(env, nullptr, abort, doit, rval, objects, ds_uids), deferred(env) {
 }
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnOK() {
@@ -452,7 +549,7 @@ template <class GDALType> void GDALPromiseWorker<GDALType>::OnOK() {
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnError(const Napi::Error &e) {
   if (gdalShuttingDown) return;
-  deferred.Reject(e.Value());
+  deferred.Reject(this->reportError(e).Value());
 }
 
 // This the basic unit of the GDALAsyncable framework
@@ -486,10 +583,45 @@ template <class GDALType> class GDALAsyncableJob {
   // This is the lambda that produces the JS return object from the <GDALType> object
   GDALRValFunc rval;
   Napi::FunctionReference *progress;
+  // The AbortSignal of the operation, if any
+  std::shared_ptr<GDALAbortSignal> abort;
 
-  GDALAsyncableJob(long ds_uid) : main(), rval(), progress(nullptr), persistent(), ds_uids({ds_uid}), autoIndex(0) {};
+  GDALAsyncableJob(long ds_uid)
+    : main(), rval(), progress(nullptr), abort(nullptr), persistent(), ds_uids({ds_uid}), autoIndex(0) {};
   GDALAsyncableJob(std::vector<long> ds_uids)
-    : main(), rval(), progress(nullptr), persistent(), ds_uids(ds_uids), autoIndex(0) {};
+    : main(), rval(), progress(nullptr), abort(nullptr), persistent(), ds_uids(ds_uids), autoIndex(0) {};
+
+  // Registers the 'abort' listener on the AbortSignal given as a JS value.
+  // Returns false, with a pending JS exception, if it is not an AbortSignal.
+  inline bool setAbortSignal(const Napi::Value &value) {
+    if (value.IsEmpty() || value.IsUndefined() || value.IsNull()) return true;
+    auto signal = std::make_shared<GDALAbortSignal>();
+    if (!signal->arm(value)) {
+      // The caller returns at once with the pending TypeError and the operation
+      // never starts, so it is the one that has to give the progress callback
+      // up - the worker and the sync execution context are its only other owners
+      releaseProgress();
+      return false;
+    }
+    abort = signal;
+    return true;
+  }
+
+  // Releases the progress callback of an operation which will never run
+  inline void releaseProgress() {
+    if (progress == nullptr) return;
+    progress->Reset();
+    delete progress;
+    progress = nullptr;
+  }
+
+  // True if GDAL is able to interrupt this operation: either because a progress
+  // callback has been installed or because an AbortSignal is armed. GDAL can be
+  // interrupted only through the progress callback, so the trampoline has to be
+  // installed even when the user did not ask for progress notifications.
+  inline bool interruptible() const {
+    return progress != nullptr || abort != nullptr;
+  }
 
   inline void persist(const std::string &key, const Napi::Object &obj) {
     persistent[key] = obj;
@@ -522,23 +654,31 @@ template <class GDALType> class GDALAsyncableJob {
       NODE_ARG_CB(cb_arg, "callback", callback);
       // The worker makes its own reference to the callback, ours is not needed anymore
       auto *worker =
-        new GDALCallbackWorker<GDALType>(callback->Value(), progress, main, rval, persistent, ds_uids);
+        new GDALCallbackWorker<GDALType>(callback->Value(), progress, abort, main, rval, persistent, ds_uids);
       callback->Reset();
       delete callback;
       worker->Queue();
       return info.Env().Undefined();
     }
+    // See the note in the promise overload below
+    if (abort != nullptr && abort->aborted()) {
+      abort->disarm();
+      abort.reset();
+      abortError(info.Env()).ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
     try {
-      GDALExecutionProgress executionProgress(new GDALSyncExecutionProgress(progress));
+      GDALExecutionProgress executionProgress(
+        new GDALSyncExecutionProgress(progress), abort != nullptr ? abort->state : nullptr);
       AsyncGuard lock(ds_uids, eventLoopWarn);
       GDALType obj = main(executionProgress);
       // rval is the user function that will create the returned value
       // we give it a lambda that can access the persistent storage created for this operation
       return rval(obj, [this](const char *key) { return this->persistent[key]; });
     } catch (const char *err) {
-      Napi::Error::New(info.Env(), err).ThrowAsJavaScriptException();
+      throwError(info.Env(), err);
     } catch (const std::exception &err) {
-      Napi::Error::New(info.Env(), err.what()).ThrowAsJavaScriptException();
+      throwError(info.Env(), err.what());
     }
     return info.Env().Undefined();
   }
@@ -547,27 +687,56 @@ template <class GDALType> class GDALAsyncableJob {
     // See the note in the callback overload above
     if (!info.This().IsEmpty() && info.This().IsObject()) persist("this", info.This());
     if (async) {
-      auto *worker = new GDALPromiseWorker<GDALType>(info.Env(), main, rval, persistent, ds_uids);
+      auto *worker =
+        new GDALPromiseWorker<GDALType>(info.Env(), abort, main, rval, persistent, ds_uids);
       Napi::Value promise = worker->Promise();
       worker->Queue();
       return promise;
     }
+    // In sync mode the event loop is blocked, so the listener can never run
+    // while the operation is in progress - the signal is only useful for an
+    // abort which has already happened. It is also the only sync case which is
+    // not reported by the progress trampoline, so the error is built here.
+    if (abort != nullptr && abort->aborted()) {
+      // The listener is detached before the exception is thrown: nothing can
+      // be called into JS anymore while one is pending, not even the
+      // removeEventListener() of the destructors which run on the way out
+      abort->disarm();
+      abort.reset();
+      abortError(info.Env()).ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
     try {
-      GDALExecutionProgress executionProgress(new GDALSyncExecutionProgress(progress));
+      GDALExecutionProgress executionProgress(
+        new GDALSyncExecutionProgress(progress), abort != nullptr ? abort->state : nullptr);
       AsyncGuard lock(ds_uids, eventLoopWarn);
       GDALType obj = main(executionProgress);
       // rval is the user function that will create the returned value
       // we give it a lambda that can access the persistent storage created for this operation
       return rval(obj, [this](const char *key) { return this->persistent[key]; });
     } catch (const char *err) {
-      Napi::Error::New(info.Env(), err).ThrowAsJavaScriptException();
+      throwError(info.Env(), err);
     } catch (const std::exception &err) {
-      Napi::Error::New(info.Env(), err.what()).ThrowAsJavaScriptException();
+      throwError(info.Env(), err.what());
     }
     return info.Env().Undefined();
   }
 
     private:
+  // Reports the failure of a synchronous operation: an interruption which made
+  // GDAL fail is an AbortError, everything else keeps its own message
+  inline void throwError(Napi::Env env, const char *message) {
+    if (abort != nullptr && abort->interrupted()) {
+      // The listener is detached before the exception is thrown, nothing can be
+      // called into JS anymore while one is pending
+      abort->disarm();
+      abort.reset();
+      abortError(env).ThrowAsJavaScriptException();
+      return;
+    }
+    Napi::Error::New(env, message).ThrowAsJavaScriptException();
+  }
+
   std::map<std::string, Napi::Object> persistent;
   const std::vector<long> ds_uids;
   unsigned autoIndex;

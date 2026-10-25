@@ -35,6 +35,7 @@ void Warper::Initialize(Napi::Object target) {
  * @property {boolean} [multi]
  * @property {object} [options]
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /*
@@ -212,6 +213,7 @@ CPLErr GDALReprojectImageMulti(
  * @param {boolean} [options.multi]
  * @param {string[]|object} [options.options] Warp options (see: [reference](https://gdal.org/doxygen/structGDALWarpOptions.html))
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -239,6 +241,7 @@ CPLErr GDALReprojectImageMulti(
  * @param {boolean} [options.multi]
  * @param {string[]|object} [options.options] Warp options (see:[reference](https://gdal.org/doxygen/structGDALWarpOptions.html)
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -254,6 +257,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
   SpatialReference *t_srs;
   double maxError = 0;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
 
   NODE_ARG_OBJECT(0, "Warp options", obj);
 
@@ -271,6 +275,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
   NODE_WRAPPED_FROM_OBJ(obj, "t_srs", SpatialReference, t_srs);
   NODE_DOUBLE_FROM_OBJ_OPT(obj, "maxError", maxError);
   NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
 
   char *s_srs_wkt, *t_srs_wkt;
   if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
@@ -290,11 +295,16 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
   GDALAsyncableJob<CPLErr> job(uids);
 
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
 
   // opts is a pointer inside options memory space
   // the lifetime of the options shared_ptr is limited by the lifetime of the lambda
   if (options->useMultithreading()) {
-    job.main = [options, opts, s_srs_str, t_srs_str, maxError, progress_cb](const GDALExecutionProgress &progress) {
+    job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       CPLErr err = GDALReprojectImageMulti(
         opts->hSrcDS,
@@ -304,14 +314,14 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
         opts->eResampleAlg,
         opts->dfWarpMemoryLimit,
         maxError,
-        progress_cb ? ProgressTrampoline : nullptr,
-        progress_cb ? (void *)&progress : nullptr,
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr,
         opts);
       if (err) { throw CPLGetLastErrorMsg(); }
       return err;
     };
   } else {
-    job.main = [options, opts, s_srs_str, t_srs_str, maxError, progress_cb](const GDALExecutionProgress &progress) {
+    job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       CPLErr err = GDALReprojectImage(
         opts->hSrcDS,
@@ -321,8 +331,8 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
         opts->eResampleAlg,
         opts->dfWarpMemoryLimit,
         maxError,
-        progress_cb ? ProgressTrampoline : nullptr,
-        progress_cb ? (void *)&progress : nullptr,
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr,
         opts);
       if (err) { throw CPLGetLastErrorMsg(); }
       return err;

@@ -104,6 +104,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
  * @property {number} [idField]
  * @property {number} [elevField]
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -127,6 +128,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
  * @param {number} [options.idField] A field index to indicate where a unique id should be written for each feature (contour) written.
  * @param {number} [options.elevField] A field index to indicate where the elevation value of the contour should be written.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
 */
 
 /**
@@ -151,6 +153,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
  * @param {number} [options.idField] A field index to indicate where a unique id should be written for each feature (contour) written.
  * @param {number} [options.elevField] A field index to indicate where the elevation value of the contour should be written.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -167,6 +170,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
   double nodata = 0;
   int id_field = -1, elev_field = -1;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
 
   NODE_ARG_OBJECT(0, "options", obj);
 
@@ -177,6 +181,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
   NODE_DOUBLE_FROM_OBJ_OPT(obj, "interval", interval);
   NODE_DOUBLE_FROM_OBJ_OPT(obj, "offset", base);
   NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "fixedLevels"))) {
     if (fixed_level_array.parse(obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "fixedLevels")))) {
       return node_gdal::napi_env().Undefined(); // error parsing double list
@@ -203,6 +208,11 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
 
   GDALAsyncableJob<CPLErr> job({src_uid, dst_uid});
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
   job.main = [gdal_src,
               interval,
               base,
@@ -213,7 +223,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
               gdal_dst,
               id_field,
               elev_field,
-              progress_cb](const GDALExecutionProgress &progress) {
+              interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     CPLErr err = GDALContourGenerate(
       gdal_src,
@@ -226,8 +236,8 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
       gdal_dst,
       id_field,
       elev_field,
-      progress_cb ? ProgressTrampoline : nullptr,
-      progress_cb ? (void *)&progress : nullptr);
+      interruptible ? ProgressTrampoline : nullptr,
+      interruptible ? (void *)&progress : nullptr);
     if (err) { throw CPLGetLastErrorMsg(); }
     return err;
   };
@@ -243,6 +253,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
  * @property {number} threshold
  * @property {number} [connectedness]
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -258,6 +269,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
  * @param {number} options.threshold Raster polygons with sizes smaller than this will be merged into their largest neighbour.
  * @param {number} [options.connectedness=4] Either 4 indicating that diagonal pixels are not considered directly adjacent for polygon membership purposes or 8 indicating they are.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -274,6 +286,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
  * @param {number} options.threshold Raster polygons with sizes smaller than this will be merged into their largest neighbour.
  * @param {number} [options.connectedness=4] Either 4 indicating that diagonal pixels are not considered directly adjacent for polygon membership purposes or 8 indicating they are.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -285,6 +298,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
   int threshold;
   int connectedness = 4;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
 
   NODE_ARG_OBJECT(0, "options", obj);
 
@@ -294,6 +308,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
   NODE_INT_FROM_OBJ(obj, "threshold", threshold);
   NODE_INT_FROM_OBJ_OPT(obj, "connectedness", connectedness);
   NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
 
   if (connectedness != 4 && connectedness != 8) {
     Napi::Error::New(node_gdal::napi_env(), "connectedness option must be 4 or 8").ThrowAsJavaScriptException();
@@ -309,8 +324,13 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
 
   GDALAsyncableJob<CPLErr> job(ds_uids);
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
   job.main =
-    [gdal_src, gdal_dst, gdal_mask, threshold, connectedness, progress_cb](const GDALExecutionProgress &progress) {
+    [gdal_src, gdal_dst, gdal_mask, threshold, connectedness, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       CPLErr err = GDALSieveFilter(
         gdal_src,
@@ -319,8 +339,8 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
         threshold,
         connectedness,
         NULL,
-        progress_cb ? ProgressTrampoline : nullptr,
-        progress_cb ? (void *)&progress : nullptr);
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr);
       if (err) { throw CPLGetLastErrorMsg(); }
       return err;
     };
@@ -413,6 +433,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
  * @property {number} [connectedness=4] Either 4 indicating that diagonal pixels are not considered directly adjacent for polygon membership purposes or 8 indicating they are.
  * @property {boolean} [useFloats=false] Use floating point buffers instead of int buffers.
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -432,6 +453,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
  * @param {number} [options.connectedness=4] Either 4 indicating that diagonal pixels are not considered directly adjacent for polygon membership purposes or 8 indicating they are.
  * @param {boolean} [options.useFloats=false] Use floating point buffers instead of int buffers.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -452,6 +474,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
  * @param {number} [options.connectedness=4] Either 4 indicating that diagonal pixels are not considered directly adjacent for polygon membership purposes or 8 indicating they are.
  * @param {boolean} [options.useFloats=false] Use floating point buffers instead of int buffers.
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -464,6 +487,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
   int pix_val_field = 0;
   char **papszOptions = NULL;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
 
   NODE_ARG_OBJECT(0, "options", obj);
 
@@ -473,6 +497,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
   NODE_INT_FROM_OBJ_OPT(obj, "connectedness", connectedness)
   NODE_INT_FROM_OBJ(obj, "pixValField", pix_val_field);
   NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
 
   if (connectedness == 8) {
     papszOptions = CSLSetNameValue(papszOptions, "8CONNECTED", "8");
@@ -490,12 +515,21 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
 
   GDALAsyncableJob<CPLErr> job(ds_uids);
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) {
+    // The invalid signal has already thrown, the options would be leaked
+    CSLDestroy(papszOptions);
+    return info.Env().Undefined();
+  }
+  const bool interruptible = job.interruptible();
 
   if (
     obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "useFloats")) &&
     obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "useFloats")).As<Napi::Boolean>().Value()) {
     job.main =
-      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, progress_cb](const GDALExecutionProgress &progress) {
+      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
         CPLErrorReset();
         CPLErr err = GDALFPolygonize(
           gdal_src,
@@ -503,15 +537,15 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
           reinterpret_cast<OGRLayerH>(gdal_dst),
           pix_val_field,
           papszOptions,
-          progress_cb ? ProgressTrampoline : nullptr,
-          progress_cb ? (void *)&progress : nullptr);
+          interruptible ? ProgressTrampoline : nullptr,
+          interruptible ? (void *)&progress : nullptr);
         if (papszOptions) CSLDestroy(papszOptions);
         if (err) throw CPLGetLastErrorMsg();
         return err;
       };
   } else {
     job.main =
-      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, progress_cb](const GDALExecutionProgress &progress) {
+      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
         CPLErrorReset();
         CPLErr err = GDALPolygonize(
           gdal_src,
@@ -519,8 +553,8 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
           reinterpret_cast<OGRLayerH>(gdal_dst),
           pix_val_field,
           papszOptions,
-          progress_cb ? ProgressTrampoline : nullptr,
-          progress_cb ? (void *)&progress : nullptr);
+          interruptible ? ProgressTrampoline : nullptr,
+          interruptible ? (void *)&progress : nullptr);
         if (papszOptions) CSLDestroy(papszOptions);
         if (err) throw CPLGetLastErrorMsg();
         return err;

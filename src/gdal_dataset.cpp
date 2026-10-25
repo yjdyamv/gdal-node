@@ -580,6 +580,7 @@ NAPI_METHOD(Dataset::setGCPs) {
  * @param {number[]} [bands] Note: Generation of overviews in external TIFF currently only supported when operating on all bands.
  * @param {ProgressOptions} [options] options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -596,6 +597,7 @@ NAPI_METHOD(Dataset::setGCPs) {
  * @param {number[]} [bands] Note: Generation of overviews in external TIFF currently only supported when operating on all bands.
  * @param {ProgressOptions} [options] options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
@@ -644,11 +646,14 @@ GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
   Napi::FunctionReference *progress_cb;
   NODE_PROGRESS_CB_OPT(3, progress_cb, job);
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible, the
+  // trampoline has to be installed even without a progress callback
+  const bool interruptible = job.interruptible();
   // Alas one cannot capture-move a unique_ptr and assign the lambda to a variable
   // because the lambda becomes non-copyable
   // But we can use a shared_ptr because the lifetime of the lambda is limited by the lifetime
   // of the async worker
-  job.main = [raw, resampling, n_overviews, o, n_bands, b, progress_cb](const GDALExecutionProgress &progress) {
+  job.main = [raw, resampling, n_overviews, o, n_bands, b, interruptible](const GDALExecutionProgress &progress) {
     if (b != nullptr) {
       for (int i = 0; i < n_bands; i++) {
         if (b.get()[i] > raw->GetRasterCount() || b.get()[i] < 1) { throw "invalid band id"; }
@@ -661,8 +666,8 @@ GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
       o.get(),
       n_bands,
       b.get(),
-      progress_cb ? ProgressTrampoline : nullptr,
-      progress_cb ? (void *)&progress : nullptr);
+      interruptible ? ProgressTrampoline : nullptr,
+      interruptible ? (void *)&progress : nullptr);
     if (err != CE_None) { throw CPLGetLastErrorMsg(); }
     return err;
   };

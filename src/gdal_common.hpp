@@ -923,8 +923,23 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
     }                                                                                                                  \
   }
 
+// ----- special case: AbortSignal in an [options] argument -----
+// The variable (declared by the caller) is left empty when there is no abort_signal
+#define NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, var)                                                                       \
+  if (!(obj).IsEmpty() && (obj).Has("abort_signal")) var = (obj).Get("abort_signal");
+
+// ----- special case: AbortSignal as an internal positional argument -----
+// Used by the methods whose options are flattened into positional arguments by
+// the argument mangling in lib/gdal.js: the AbortSignal is appended after the
+// last documented argument and it is never part of the public API
+#define NODE_ABORT_SIGNAL_FROM_ARG_OPT(num, var)                                                                       \
+  if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) var = info[num];
+
 // ----- special case: progress callback in [options] argument -------
 
+// The progress callback is released by hand when the AbortSignal turns out to
+// be invalid: the operation returns at once with the pending TypeError and
+// neither the worker nor the sync execution context will ever own it
 #define NODE_PROGRESS_CB_OPT(num, progress_cb, job)                                                                    \
   {                                                                                                                    \
     Napi::Object progress_obj;                                                                                         \
@@ -936,6 +951,15 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
       }                                                                                                                \
       progress_obj = info[num].As<Napi::Object>();                                                                     \
       NODE_CB_FROM_OBJ_OPT(progress_obj, "progress_cb", progress_cb);                                                  \
+      Napi::Value _abort_signal;                                                                                       \
+      NODE_ABORT_SIGNAL_FROM_OBJ_OPT(progress_obj, _abort_signal);                                                     \
+      if (!_abort_signal.IsEmpty() && !job.setAbortSignal(_abort_signal)) {                                             \
+        if (progress_cb) {                                                                                              \
+          progress_cb->Reset();                                                                                         \
+          delete progress_cb;                                                                                           \
+        }                                                                                                               \
+        return info.Env().Undefined();                                                                                  \
+      }                                                                                                                 \
     }                                                                                                                  \
     if (progress_cb) { job.progress = progress_cb; }                                                                   \
   }

@@ -1,5 +1,5 @@
-- Find a way to keep the dependency source code out of the repository to reduce noise
-- Switch to cmake.js
-- Switch from nan to N-API
-- Support aborting of GDAL operations (that allow it) through the AbortController (Node.js >= 15)
-- Support `worker_threads` (almost automatic with N-API)
+- [x] Find a way to keep the dependency source code out of the repository to reduce noise - the dependencies are resolved by Conan when the addon is built, only the GDAL and PROJ data files and the curl root certificates are still shipped in `deps/`
+- [x] Switch to cmake.js - the addon is built from `CMakeLists.txt`, `binding.gyp` and node-gyp have been removed
+- [x] Switch from nan to N-API - the addon uses node-addon-api and a single `napi-v8-{platform}-{arch}` binary is published per platform
+- [x] Support aborting of GDAL operations (that allow it) through the AbortController (Node.js >= 15) - the long-running operations accept an `abort_signal` option and fail with an `AbortError`; only the operations which support progress callbacks can be interrupted, and only in their asynchronous form
+- [x] Support `worker_threads` (almost automatic with N-API) - each thread gets its own Node-API environment and its own object store

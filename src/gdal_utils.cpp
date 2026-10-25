@@ -29,6 +29,7 @@ void Utils::Initialize(Napi::Object target) {
 /**
  * @typedef {object} UtilOptions
  * @property {ProgressCb} [progress_cb]
+ * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
  */
 
 /**
@@ -46,6 +47,7 @@ void Utils::Initialize(Napi::Object target) {
  * @param {string[]} [args] array of CLI options for gdal_translate
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -68,6 +70,7 @@ void Utils::Initialize(Napi::Object target) {
  * @param {string[]} [args] array of CLI options for gdal_translate
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -91,17 +94,24 @@ GDAL_ASYNCABLE_DEFINE(Utils::translate) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(3, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   GDALAsyncableJob<GDALDataset *> job(ds->uid);
   job.progress = progress_cb;
-  job.main = [raw, dst, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
+  job.main = [raw, dst, aosOptions, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     auto b = aosOptions;
     auto psOptions = GDALTranslateOptionsNew(aosOptions->List(), nullptr);
     if (psOptions == nullptr) throw CPLGetLastErrorMsg();
-    if (progress_cb) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    if (interruptible) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
     GDALDataset *r = GDALDatasetFromHandle(GDALTranslate(dst.c_str(), GDALDatasetToHandle(raw), psOptions, nullptr));
     GDALTranslateOptionsFree(psOptions);
     if (r == nullptr) throw CPLGetLastErrorMsg();
@@ -127,6 +137,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::translate) {
  * @param {string[]} [args] array of CLI options for ogr2ogr
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -146,6 +157,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::translate) {
  * @param {string[]} [args] array of CLI options for ogr2ogr
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -185,21 +197,28 @@ GDAL_ASYNCABLE_DEFINE(Utils::vectorTranslate) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(3, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   std::vector<long> uids = {ds->uid};
   if (dst_ds != nullptr) uids.push_back(dst_ds->uid);
   GDALAsyncableJob<GDALDataset *> job(uids);
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
 
-  job.main = [src_raw, dst_filename, dst_raw, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+  job.main = [src_raw, dst_filename, dst_raw, aosOptions, progress_cb, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     if (progress_cb) aosOptions->AddString("-progress");
     auto psOptions = GDALVectorTranslateOptionsNew(aosOptions->List(), nullptr);
     if (psOptions == nullptr) throw CPLGetLastErrorMsg();
 
-    if (progress_cb) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    if (interruptible) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
     auto srcH = GDALDatasetToHandle(src_raw);
     GDALDataset *r = GDALDatasetFromHandle(
@@ -293,6 +312,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::info) {
  * @param {string[]} [args] array of CLI options for gdalwarp
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -313,6 +333,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::info) {
  * @param {string[]} [args] array of CLI options for gdalwarp
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -362,18 +383,25 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(4, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   GDALAsyncableJob<GDALDataset *> job(uids);
   int src_count = src_ds.Length();
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
   job.main =
-    [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+    [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALWarpAppOptionsNew(aosOptions->List(), nullptr);
       if (psOptions == nullptr) throw CPLGetLastErrorMsg();
-      if (progress_cb) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+      if (interruptible) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
       GDALDatasetH r = GDALWarp(
         dst_path.length() > 0 ? dst_path.c_str() : nullptr,
         gdal_dst_ds,
@@ -410,6 +438,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
  * @param {string[]} [args] array of CLI options for gdalbuildvrt
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -435,6 +464,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
  * @param {string[]} [args] array of CLI options for gdalbuildvrt
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -485,18 +515,25 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(3, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   GDALAsyncableJob<GDALDataset *> job(uids);
   int src_count = src_ds.Length();
   job.progress = progress_cb;
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
   job.main =
-    [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+    [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALBuildVRTOptionsNew(aosOptions->List(), nullptr);
       if (psOptions == nullptr) throw CPLGetLastErrorMsg();
-      if (progress_cb) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+      if (interruptible) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
       GDALDatasetH r = GDALBuildVRT(
         dst_path.c_str(),
@@ -535,6 +572,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
  * @param {string[]} [args] array of CLI options for gdal_rasterize
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -559,6 +597,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
  * @param {string[]} [args] array of CLI options for gdal_rasterize
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -595,16 +634,23 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(3, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   GDALAsyncableJob<GDALDataset *> job(ds->uid);
   job.progress = progress_cb;
-  job.main = [dst_path, dst_raw, src_raw, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
+  job.main = [dst_path, dst_raw, src_raw, aosOptions, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     auto psOptions = GDALRasterizeOptionsNew(aosOptions->List(), nullptr);
     if (psOptions == nullptr) throw CPLGetLastErrorMsg();
-    if (progress_cb) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    if (interruptible) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
     GDALDatasetH r = GDALRasterize(
       dst_path.length() > 0 ? dst_path.c_str() : nullptr,
@@ -639,6 +685,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
  * @param {string} [colorFile] optional color filename, see https://gdal.org/programs/gdaldem.html for more details
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @return {Dataset}
  */
 
@@ -660,6 +707,7 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
  * @param {string} [colorFile] optional color filename, see https://gdal.org/programs/gdaldem.html for more details
  * @param {UtilOptions} [options] additional options
  * @param {ProgressCb} [options.progress_cb]
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
@@ -690,16 +738,23 @@ GDAL_ASYNCABLE_DEFINE(Utils::dem) {
 
   Napi::Object options;
   Napi::FunctionReference *progress_cb = nullptr;
+  Napi::Value abort_signal;
   NODE_ARG_OBJECT_OPT(5, "options", options);
   if (!options.IsEmpty()) NODE_CB_FROM_OBJ_OPT(options, "progress_cb", progress_cb);
+  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
 
   GDALAsyncableJob<GDALDataset *> job(ds->uid);
   job.progress = progress_cb;
-  job.main = [dst_path, mode, raw, colorFilename, aosOptions, progress_cb](const GDALExecutionProgress &progress) {
+  // An AbortSignal alone is enough to make the operation interruptible: GDAL
+  // can be interrupted only through the progress trampoline, which therefore
+  // has to be installed even when there is no progress callback
+  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+  const bool interruptible = job.interruptible();
+  job.main = [dst_path, mode, raw, colorFilename, aosOptions, interruptible](const GDALExecutionProgress &progress) {
     CPLErrorReset();
     auto psOptions = GDALDEMProcessingOptionsNew(aosOptions->List(), nullptr);
     if (psOptions == nullptr) throw CPLGetLastErrorMsg();
-    if (progress_cb) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    if (interruptible) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
     GDALDataset *r = GDALDatasetFromHandle(GDALDEMProcessing(
       dst_path.c_str(),
       GDALDatasetToHandle(raw),
