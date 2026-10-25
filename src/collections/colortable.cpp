@@ -1,5 +1,6 @@
 #include <memory>
 #include "colortable.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_dataset.hpp"
 #include "../gdal_rasterband.hpp"
@@ -171,12 +172,13 @@ NAPI_METHOD(ColorTable::clone) {
  * @return {boolean}
  */
 NAPI_METHOD(ColorTable::isSame) {
+  Args args(info);
 
   NODE_UNWRAP_CHECK(ColorTable, info.This(), self);
   GDAL_RAW_CHECK(GDALColorTable *, self, raw);
 
   ColorTable *other;
-  NODE_ARG_WRAPPED(0, "other", ColorTable, other);
+  if (!args.getWrapped(0, "other", "ColorTable", other)) return args.failed();
   GDAL_RAW_CHECK(GDALColorTable *, other, raw_other);
 
   CPLErrorReset();
@@ -194,9 +196,10 @@ NAPI_METHOD(ColorTable::isSame) {
  * @return {Color}
  */
 NAPI_METHOD(ColorTable::get) {
+  Args args(info);
 
   int index;
-  NODE_ARG_INT(0, "index", index);
+  if (!args.get(0, "index", index)) return args.failed();
 
   NODE_UNWRAP_CHECK(ColorTable, info.This(), self);
   GDAL_RAW_CHECK(GDALColorTable *, self, raw);
@@ -222,11 +225,11 @@ NAPI_METHOD(ColorTable::get) {
   return result;
 }
 
-#define NODE_COLOR_FROM_OBJ(obj, color)                                                                                \
-  NODE_INT_FROM_OBJ(obj, "c1", color.c1);                                                                              \
-  NODE_INT_FROM_OBJ(obj, "c2", color.c2);                                                                              \
-  NODE_INT_FROM_OBJ(obj, "c3", color.c3);                                                                              \
-  NODE_INT_FROM_OBJ(obj, "c4", color.c4);
+#define COLOR_FROM_OBJ(args, obj, color)                                                                          \
+  if (!args.from(obj, "c1", color.c1)) return args.failed();                                                           \
+  if (!args.from(obj, "c2", color.c2)) return args.failed();                                                           \
+  if (!args.from(obj, "c3", color.c3)) return args.failed();                                                           \
+  if (!args.from(obj, "c4", color.c4)) return args.failed();
 
 /**
  * Sets the color entry with the given ID.
@@ -241,12 +244,13 @@ NAPI_METHOD(ColorTable::get) {
  */
 
 NAPI_METHOD(ColorTable::set) {
+  Args args(info);
 
   int index;
-  NODE_ARG_INT(0, "index", index);
+  if (!args.get(0, "index", index)) return args.failed();
 
   Napi::Object color_obj;
-  NODE_ARG_OBJECT(1, "color", color_obj);
+  if (!args.get(1, "color", color_obj)) return args.failed();
 
   NODE_UNWRAP_CHECK(ColorTable, info.This(), self);
   GDAL_RAW_CHECK(GDALColorTable *, self, raw);
@@ -258,7 +262,7 @@ NAPI_METHOD(ColorTable::set) {
   }
 
   GDALColorEntry color;
-  NODE_COLOR_FROM_OBJ(color_obj, color);
+  COLOR_FROM_OBJ(args, color_obj, color);
 
   CPLErrorReset();
   raw->SetColorEntry(index, &color);
@@ -280,25 +284,26 @@ NAPI_METHOD(ColorTable::set) {
  */
 
 NAPI_METHOD(ColorTable::ramp) {
+  Args args(info);
 
   int start_index, end_index;
-  NODE_ARG_INT(0, "start_index", start_index);
-  NODE_ARG_INT(2, "end_index", end_index);
+  if (!args.get(0, "start_index", start_index)) return args.failed();
+  if (!args.get(2, "end_index", end_index)) return args.failed();
   if (start_index < 0 || end_index < 0 || end_index < start_index) {
     Napi::RangeError::New(node_gdal::napi_env(), "Invalid color interval").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
   }
 
   Napi::Object start_color_obj, end_color_obj;
-  NODE_ARG_OBJECT(1, "start_color", start_color_obj);
-  NODE_ARG_OBJECT(3, "start_color", end_color_obj);
+  if (!args.get(1, "start_color", start_color_obj)) return args.failed();
+  if (!args.get(3, "start_color", end_color_obj)) return args.failed();
 
   NODE_UNWRAP_CHECK(ColorTable, info.This(), self);
   GDAL_RAW_CHECK(GDALColorTable *, self, raw);
 
   GDALColorEntry start_color, end_color;
-  NODE_COLOR_FROM_OBJ(start_color_obj, start_color);
-  NODE_COLOR_FROM_OBJ(end_color_obj, end_color);
+  COLOR_FROM_OBJ(args, start_color_obj, start_color);
+  COLOR_FROM_OBJ(args, end_color_obj, end_color);
 
   Napi::Value parentMaybe = GDAL_GET_PRIVATE(info.This(), "parent_");
   if (!parentMaybe.IsEmpty() && !parentMaybe.IsUndefined() && !parentMaybe.IsNull()) {

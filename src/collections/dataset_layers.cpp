@@ -1,5 +1,6 @@
 #include <memory>
 #include "dataset_layers.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_dataset.hpp"
 #include "../gdal_layer.hpp"
@@ -181,6 +182,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::get) {
  */
 
 GDAL_ASYNCABLE_DEFINE(DatasetLayers::create) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -198,9 +200,9 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::create) {
   OGRwkbGeometryType geom_type = wkbUnknown;
   StringList *options = new StringList;
 
-  NODE_ARG_STR(0, "layer name", *layer_name);
-  NODE_ARG_WRAPPED_OPT(1, "spatial reference", SpatialReference, spatial_ref);
-  NODE_ARG_ENUM_OPT(2, "geometry type", OGRwkbGeometryType, geom_type);
+  if (!args.get(0, "layer name", *layer_name)) return args.failed();
+  if (!args.optionalWrapped(1, "spatial reference", "SpatialReference", spatial_ref)) return args.failed();
+  if (!args.optionalEnum(2, "geometry type", "OGRwkbGeometryType", geom_type)) return args.failed();
   if (info.Length() > 3 && options->parse(info[3])) {
     return node_gdal::napi_env().Undefined(); // error parsing string list
   }
@@ -295,6 +297,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::count) {
  */
 
 GDAL_ASYNCABLE_DEFINE(DatasetLayers::copy) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -311,8 +314,8 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::copy) {
   std::string *new_name = new std::string("");
   StringList *options = new StringList;
 
-  NODE_ARG_WRAPPED(0, "layer to copy", Layer, layer_to_copy);
-  NODE_ARG_STR(1, "new layer name", *new_name);
+  if (!args.getWrapped(0, "layer to copy", "Layer", layer_to_copy)) return args.failed();
+  if (!args.get(1, "new layer name", *new_name)) return args.failed();
   if (info.Length() > 2 && options->parse(info[2])) { node_gdal::ThrowOverPending(node_gdal::napi_env(), "Error parsing string list"); }
 
   OGRLayer *src = layer_to_copy->get();
@@ -356,6 +359,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::copy) {
  */
 
 GDAL_ASYNCABLE_DEFINE(DatasetLayers::remove) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -369,7 +373,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::remove) {
   GDALDataset *raw = ds->get();
 
   int i;
-  NODE_ARG_INT(0, "layer index", i);
+  if (!args.get(0, "layer index", i)) return args.failed();
   GDALAsyncableJob<OGRErr> job(ds->uid);
   job.persist(parent);
   job.main = [raw, i](const GDALExecutionProgress &) {

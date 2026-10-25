@@ -1,5 +1,6 @@
 
 #include "gdal_linearring.hpp"
+#include "../utils/args.hpp"
 #include "../collections/linestring_points.hpp"
 #include "../gdal_common.hpp"
 #include "gdal_geometry.hpp"
@@ -76,15 +77,16 @@ NAPI_METHOD(LinearRing::toString) {
 NODE_WRAPPED_METHOD_WITH_RESULT(LinearRing, getArea, Number, get_Area);
 
 NAPI_METHOD(LinearRing::addSubLineString) {
+  Args args(info);
 
   LinearRing *geom = node_gdal::UnwrapWrapped<LinearRing>(info.This().As<Napi::Object>());
   LineString *other;
   int start = 0;
   int end = -1;
 
-  NODE_ARG_WRAPPED(0, "line", LineString, other);
-  NODE_ARG_INT_OPT(1, "start", start);
-  NODE_ARG_INT_OPT(2, "end", end);
+  if (!args.getWrapped(0, "line", "LineString", other)) return args.failed();
+  if (!args.optional(1, "start", start)) return args.failed();
+  if (!args.optional(2, "end", end)) return args.failed();
 
   int n = other->get()->getNumPoints();
 

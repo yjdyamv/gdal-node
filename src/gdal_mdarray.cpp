@@ -1,4 +1,5 @@
 #include "gdal_mdarray.hpp"
+#include "utils/args.hpp"
 #include "gdal_group.hpp"
 #include "gdal_common.hpp"
 #include "gdal_driver.hpp"
@@ -236,6 +237,7 @@ findHighest(int dimensions, std::shared_ptr<size_t[]> span, std::shared_ptr<GPtr
  * @return {Promise<T>} A `TypedArray` of values.
  */
 GDAL_ASYNCABLE_DEFINE(MDArray::read) {
+  Args args(info);
 
   NODE_UNWRAP_CHECK(MDArray, info.This(), self);
 
@@ -245,11 +247,11 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
   GDALDataType type = GDT_Byte;
   GPtrDiff_t offset = 0;
 
-  NODE_ARG_OBJECT(0, "options", options);
-  NODE_ARRAY_FROM_OBJ(options, "origin", origin);
-  NODE_ARRAY_FROM_OBJ(options, "span", span);
-  NODE_ARRAY_FROM_OBJ_OPT(options, "stride", stride);
-  NODE_STR_FROM_OBJ_OPT(options, "data_type", type_name);
+  if (!args.get(0, "options", options)) return args.failed();
+  if (!args.from(options, "origin", origin)) return args.failed();
+  if (!args.from(options, "span", span)) return args.failed();
+  if (!args.from(options, "stride", stride)) return args.failed();
+  if (!args.from(options, "data_type", type_name)) return args.failed();
   NODE_INT64_FROM_OBJ_OPT(options, "_offset", offset);
   if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
 
@@ -319,7 +321,7 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
   // GDALMDArray::Read() takes no progress callback, so an operation which is
   // already aborted can only be refused before it is started
   Napi::Value abort_signal;
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(options, abort_signal);
+  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
   if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
 
   job.main =
@@ -357,11 +359,12 @@ GDAL_ASYNCABLE_DEFINE(MDArray::read) {
  * @return {MDArray}
  */
 NAPI_METHOD(MDArray::getView) {
+  Args args(info);
   NODE_UNWRAP_CHECK(MDArray, info.This(), array);
   GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
 
   std::string viewExpr;
-  NODE_ARG_STR(0, "view", viewExpr);
+  if (!args.get(0, "view", viewExpr)) return args.failed();
   GDAL_LOCK_PARENT(array);
   CPLErrorReset();
   std::shared_ptr<GDALMDArray> view = raw->GetView(viewExpr);
@@ -415,14 +418,17 @@ NAPI_METHOD(MDArray::getMask) {
  * @return {Dataset}
  */
 NAPI_METHOD(MDArray::asDataset) {
+  Args args(info);
   NODE_UNWRAP_CHECK(MDArray, info.This(), array);
   GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
 
   int x = -1, y = -1;
   std::string dim;
-  NODE_ARG_STR_INT(0, "x", dim, x, isXString);
+  bool isXString = false;
+  if (!args.getStringOrInt(0, "x", dim, x, isXString)) return args.failed();
   if (isXString) x = ArrayDimensions::__getIdx(raw, dim);
-  NODE_ARG_STR_INT(1, "y", dim, y, isYString);
+  bool isYString = false;
+  if (!args.getStringOrInt(1, "y", dim, y, isYString)) return args.failed();
   if (isYString) y = ArrayDimensions::__getIdx(raw, dim);
 
   GDAL_LOCK_PARENT(array);

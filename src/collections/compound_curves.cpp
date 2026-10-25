@@ -1,4 +1,5 @@
 #include "compound_curves.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../geometry/gdal_geometry.hpp"
 #include "../geometry/gdal_linearring.hpp"
@@ -91,13 +92,14 @@ NAPI_METHOD(CompoundCurveCurves::count) {
  * @return {CompoundCurve|SimpleCurve}
  */
 NAPI_METHOD(CompoundCurveCurves::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
 
   int i;
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
 
   if (i >= 0 && i < geom->get()->getNumCurves())
     return Geometry::New(geom->get()->getCurve(i), false);

@@ -1,5 +1,6 @@
 
 #include "gdal_common.hpp"
+#include "utils/args.hpp"
 
 #include "collections/rasterband_overviews.hpp"
 #include "collections/rasterband_pixels.hpp"
@@ -256,9 +257,10 @@ NAPI_METHOD(RasterBand::getMaskBand) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBand::fill) {
+  Args args(info);
   double real, imaginary = 0;
-  NODE_ARG_DOUBLE(0, "real value", real);
-  NODE_ARG_DOUBLE_OPT(1, "imaginary value", real);
+  if (!args.get(0, "real value", real)) return args.failed();
+  if (!args.optional(1, "imaginary value", real)) return args.failed();
 
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
 
@@ -345,10 +347,11 @@ NAPI_METHOD(RasterBand::asMDArray) {
  * `"std_dev"` properties.
  */
 NAPI_METHOD(RasterBand::getStatistics) {
+  Args args(info);
   double min, max, mean, std_dev;
   int approx, force;
-  NODE_ARG_BOOL(0, "allow approximation", approx);
-  NODE_ARG_BOOL(1, "force", force);
+  if (!args.get(0, "allow approximation", approx)) return args.failed();
+  if (!args.get(1, "force", force)) return args.failed();
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_LOCK_PARENT(band);
   pushStatsErrorHandler();
@@ -421,12 +424,13 @@ NAPI_METHOD(RasterBand::getStatistics) {
  * `"std_dev"` properties.
  */
 GDAL_ASYNCABLE_DEFINE(RasterBand::computeStatistics) {
+  Args args(info);
   struct stats_t {
     double min, max, mean, std_dev;
   };
   int approx;
 
-  NODE_ARG_BOOL(0, "allow approximation", approx);
+  if (!args.get(0, "allow approximation", approx)) return args.failed();
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
 
   GDALAsyncableJob<stats_t> job(band->parent_uid);
@@ -475,12 +479,13 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::computeStatistics) {
  * @param {number} std_dev
  */
 NAPI_METHOD(RasterBand::setStatistics) {
+  Args args(info);
   double min, max, mean, std_dev;
 
-  NODE_ARG_DOUBLE(0, "min", min);
-  NODE_ARG_DOUBLE(1, "max", max);
-  NODE_ARG_DOUBLE(2, "mean", mean);
-  NODE_ARG_DOUBLE(3, "standard deviation", std_dev);
+  if (!args.get(0, "min", min)) return args.failed();
+  if (!args.get(1, "max", max)) return args.failed();
+  if (!args.get(2, "mean", mean)) return args.failed();
+  if (!args.get(3, "standard deviation", std_dev)) return args.failed();
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_LOCK_PARENT(band);
   CPLErr err = band->this_->SetStatistics(min, max, mean, std_dev);
@@ -514,9 +519,10 @@ NAPI_METHOD(RasterBand::setStatistics) {
  * @return {Promise<any>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBand::getMetadata) {
+  Args args(info);
 
   std::string domain("");
-  NODE_ARG_OPT_STR(0, "domain", domain);
+  if (!args.optional(0, "domain", domain)) return args.failed();
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
 
@@ -552,6 +558,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::getMetadata) {
  * @return {Promise<boolean>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBand::setMetadata) {
+  Args args(info);
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
 
@@ -562,7 +569,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::setMetadata) {
   }
 
   std::string domain("");
-  NODE_ARG_OPT_STR(1, "domain", domain);
+  if (!args.optional(1, "domain", domain)) return args.failed();
 
   GDALAsyncableJob<CPLErr> job(band->parent_uid);
   job.main = [raw, options, domain](const GDALExecutionProgress &) {

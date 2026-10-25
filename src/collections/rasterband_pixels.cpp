@@ -1,4 +1,5 @@
 #include "rasterband_pixels.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_rasterband.hpp"
 #include "../async.hpp"
@@ -110,14 +111,15 @@ NAPI_METHOD(RasterBandPixels::toString) {
  * @return {Promise<number>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::get) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
   int x, y;
 
-  NODE_ARG_INT(0, "x", x);
-  NODE_ARG_INT(1, "y", y);
+  if (!args.get(0, "x", x)) return args.failed();
+  if (!args.get(1, "y", y)) return args.failed();
   GDALRasterBand *raw = band->get();
 
   GDALAsyncableJob<double> job(band->parent_uid);
@@ -160,6 +162,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::get) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::set) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
@@ -167,9 +170,9 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::set) {
   int x, y;
   double val;
 
-  NODE_ARG_INT(0, "x", x);
-  NODE_ARG_INT(1, "y", y);
-  NODE_ARG_DOUBLE(2, "val", val);
+  if (!args.get(0, "x", x)) return args.failed();
+  if (!args.get(1, "y", y)) return args.failed();
+  if (!args.get(2, "val", val)) return args.failed();
   GDALRasterBand *raw = band->get();
 
   GDALAsyncableJob<CPLErr> job(band->parent_uid);
@@ -307,6 +310,7 @@ static inline int64_t findHighest(int64_t w, int64_t h, int64_t px, int64_t ln, 
  * @return {Promise<T>} A `TypedArray` of values.
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
+  Args args(info);
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
@@ -323,23 +327,23 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
   Napi::Value abort_signal;
   GDALDataType type;
 
-  NODE_ARG_INT(0, "x_offset", x);
-  NODE_ARG_INT(1, "y_offset", y);
-  NODE_ARG_INT(2, "x_size", w);
-  NODE_ARG_INT(3, "y_size", h);
+  if (!args.get(0, "x_offset", x)) return args.failed();
+  if (!args.get(1, "y_offset", y)) return args.failed();
+  if (!args.get(2, "x_size", w)) return args.failed();
+  if (!args.get(3, "y_size", h)) return args.failed();
 
   std::string type_name = "";
 
   buffer_w = w;
   buffer_h = h;
   type = band->get()->GetRasterDataType();
-  NODE_ARG_INT_OPT(5, "buffer_width", buffer_w);
-  NODE_ARG_INT_OPT(6, "buffer_height", buffer_h);
-  NODE_ARG_OPT_STR(7, "data_type", type_name);
+  if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
+  if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
+  if (!args.optional(7, "data_type", type_name)) return args.failed();
   if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
 
   if (!info[4].IsUndefined() && !info[4].IsNull()) {
-    NODE_ARG_OBJECT(4, "data", obj);
+    if (!args.get(4, "data", obj)) return args.failed();
     type = TypedArray::Identify(obj);
     if (type == GDT_Unknown) {
       Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
@@ -353,10 +357,10 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
     return node_gdal::napi_env().Undefined();
   }
   pixel_space = bytes_per_pixel;
-  NODE_ARG_INT_OPT(8, "pixel_space", pixel_space);
+  if (!args.optional(8, "pixel_space", pixel_space)) return args.failed();
   line_space = pixel_space * buffer_w;
-  NODE_ARG_INT_OPT(9, "line_space", line_space);
-  NODE_ARG_CB_OPT(11, "progress_cb", cb);
+  if (!args.optional(9, "line_space", line_space)) return args.failed();
+  if (!args.optionalCallback(11, "progress_cb", cb)) return args.failed();
   GDALRIOResampleAlg resampling;
   try {
     resampling = parseResamplingAlg(info[10]);
@@ -365,7 +369,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
     return node_gdal::napi_env().Undefined();
   }
   offset = 0;
-  NODE_ARG_INT_OPT(12, "offset", offset);
+  if (!args.optional(12, "offset", offset)) return args.failed();
   NODE_ABORT_SIGNAL_FROM_ARG_OPT(13, abort_signal);
 
   if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
@@ -482,6 +486,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
@@ -498,16 +503,16 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
   // An internal argument, appended by the argument mangling in lib/gdal.js
   Napi::Value abort_signal;
 
-  NODE_ARG_INT(0, "x_offset", x);
-  NODE_ARG_INT(1, "y_offset", y);
-  NODE_ARG_INT(2, "x_size", w);
-  NODE_ARG_INT(3, "y_size", h);
-  NODE_ARG_OBJECT(4, "data", passed_array);
+  if (!args.get(0, "x_offset", x)) return args.failed();
+  if (!args.get(1, "y_offset", y)) return args.failed();
+  if (!args.get(2, "x_size", w)) return args.failed();
+  if (!args.get(3, "y_size", h)) return args.failed();
+  if (!args.get(4, "data", passed_array)) return args.failed();
 
   buffer_w = w;
   buffer_h = h;
-  NODE_ARG_INT_OPT(5, "buffer_width", buffer_w);
-  NODE_ARG_INT_OPT(6, "buffer_height", buffer_h);
+  if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
+  if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
 
   type = TypedArray::Identify(passed_array);
   if (type == GDT_Unknown) {
@@ -521,12 +526,12 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
     return node_gdal::napi_env().Undefined();
   }
   pixel_space = bytes_per_pixel;
-  NODE_ARG_INT_OPT(7, "pixel_space", pixel_space);
+  if (!args.optional(7, "pixel_space", pixel_space)) return args.failed();
   line_space = pixel_space * buffer_w;
-  NODE_ARG_INT_OPT(8, "line_space", line_space);
-  NODE_ARG_CB_OPT(9, "progress_cb", cb);
+  if (!args.optional(8, "line_space", line_space)) return args.failed();
+  if (!args.optionalCallback(9, "progress_cb", cb)) return args.failed();
   offset = 0;
-  NODE_ARG_INT_OPT(10, "offset", offset);
+  if (!args.optional(10, "offset", offset)) return args.failed();
   NODE_ABORT_SIGNAL_FROM_ARG_OPT(11, abort_signal);
 
   if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
@@ -606,13 +611,14 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
  */
 
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
   int x, y, w = 0, h = 0;
-  NODE_ARG_INT(0, "block_x_offset", x);
-  NODE_ARG_INT(1, "block_y_offset", y);
+  if (!args.get(0, "block_x_offset", x)) return args.failed();
+  if (!args.get(1, "block_y_offset", y)) return args.failed();
 
   band->get()->GetBlockSize(&w, &h);
   int64_t size = w * h;
@@ -623,7 +629,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
   Napi::Object obj;
 
   if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
-    NODE_ARG_OBJECT(2, "data", obj);
+    if (!args.get(2, "data", obj)) return args.failed();
     array = obj;
   } else {
     array = TypedArray::New(type, size);
@@ -680,6 +686,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
@@ -689,11 +696,11 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
   band->get()->GetBlockSize(&w, &h);
   int64_t size = w * h;
 
-  NODE_ARG_INT(0, "block_x_offset", x);
-  NODE_ARG_INT(1, "block_y_offset", y);
+  if (!args.get(0, "block_x_offset", x)) return args.failed();
+  if (!args.get(1, "block_y_offset", y)) return args.failed();
 
   Napi::Object obj;
-  NODE_ARG_OBJECT(2, "data", obj);
+  if (!args.get(2, "data", obj)) return args.failed();
 
   // validate array
   void *data = TypedArray::Validate(obj, band->get()->GetRasterDataType(), size);
@@ -744,13 +751,14 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
  */
 
 GDAL_ASYNCABLE_DEFINE(RasterBandPixels::clampBlock) {
+  Args args(info);
 
   RasterBand *band;
   if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
   int x, y;
-  NODE_ARG_INT(0, "block_x_offset", x);
-  NODE_ARG_INT(1, "block_y_offset", y);
+  if (!args.get(0, "block_x_offset", x)) return args.failed();
+  if (!args.get(1, "block_y_offset", y)) return args.failed();
 
   struct xy {
     int x, y;

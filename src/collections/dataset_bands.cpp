@@ -1,5 +1,6 @@
 #include <memory>
 #include "dataset_bands.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_dataset.hpp"
 #include "../gdal_rasterband.hpp"
@@ -88,6 +89,7 @@ NAPI_METHOD(DatasetBands::toString) {
  * @return {Promise<RasterBand>}
  */
 GDAL_ASYNCABLE_DEFINE(DatasetBands::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -100,7 +102,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetBands::get) {
 
   GDALDataset *raw = ds->get();
   int band_id;
-  NODE_ARG_INT(0, "band id", band_id);
+  if (!args.get(0, "band id", band_id)) return args.failed();
 
   GDALAsyncableJob<GDALRasterBand *> job(ds->uid);
   job.persist(parent);
@@ -141,6 +143,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetBands::get) {
  */
 
 GDAL_ASYNCABLE_DEFINE(DatasetBands::create) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -155,7 +158,7 @@ GDAL_ASYNCABLE_DEFINE(DatasetBands::create) {
   GDALDataType type;
   std::shared_ptr<StringList> options(new StringList);
 
-  // NODE_ARG_ENUM(0, "data type", GDALDataType, type);
+  // if (!args.getEnum(0, "data type", "GDALDataType", type)) return args.failed();
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "data type argument needed").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();

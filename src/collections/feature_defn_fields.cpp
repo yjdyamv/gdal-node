@@ -1,4 +1,5 @@
 #include "feature_defn_fields.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_feature_defn.hpp"
 #include "../gdal_field_defn.hpp"
@@ -94,6 +95,7 @@ NAPI_METHOD(FeatureDefnFields::count) {
  * @return {number} Index or `-1` if not found.
  */
 NAPI_METHOD(FeatureDefnFields::indexOf) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -104,7 +106,7 @@ NAPI_METHOD(FeatureDefnFields::indexOf) {
   }
 
   std::string name("");
-  NODE_ARG_STR(0, "field name", name);
+  if (!args.get(0, "field name", name)) return args.failed();
 
   return Napi::Number::New(node_gdal::napi_env(), feature_def->get()->GetFieldIndex(name.c_str()));
 }
@@ -272,6 +274,7 @@ NAPI_METHOD(FeatureDefnFields::add) {
  * @param {number[]} map An array representing the new field order.
  */
 NAPI_METHOD(FeatureDefnFields::reorder) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -282,7 +285,7 @@ NAPI_METHOD(FeatureDefnFields::reorder) {
   }
 
   Napi::Array field_map = Napi::Array::New(node_gdal::napi_env(), 0);
-  NODE_ARG_ARRAY(0, "field map", field_map);
+  if (!args.get(0, "field map", field_map)) return args.failed();
 
   int n = feature_def->get()->GetFieldCount();
   OGRErr err = 0;

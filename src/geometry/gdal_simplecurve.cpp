@@ -1,5 +1,6 @@
 
 #include "gdal_simplecurve.hpp"
+#include "../utils/args.hpp"
 #include "../collections/linestring_points.hpp"
 #include "../gdal_common.hpp"
 #include "gdal_geometry.hpp"
@@ -64,13 +65,14 @@ NAPI_METHOD(SimpleCurve::toString) {
  * @return {Point}
  */
 NAPI_METHOD(SimpleCurve::value) {
+  Args args(info);
 
   SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
 
   OGRPoint *pt = new OGRPoint();
   double dist;
 
-  NODE_ARG_DOUBLE(0, "distance", dist);
+  if (!args.get(0, "distance", dist)) return args.failed();
 
   geom->this_->Value(dist, pt);
 
@@ -118,15 +120,16 @@ NAPI_GETTER(SimpleCurve::pointsGetter) {
  * @return {void}
  */
 NAPI_METHOD(SimpleCurve::addSubLineString) {
+  Args args(info);
 
   SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
   LineString *other;
   int start = 0;
   int end = -1;
 
-  NODE_ARG_WRAPPED(0, "line", LineString, other);
-  NODE_ARG_INT_OPT(1, "start", start);
-  NODE_ARG_INT_OPT(2, "end", end);
+  if (!args.getWrapped(0, "line", "LineString", other)) return args.failed();
+  if (!args.optional(1, "start", start)) return args.failed();
+  if (!args.optional(2, "end", end)) return args.failed();
 
   int n = other->get()->getNumPoints();
 

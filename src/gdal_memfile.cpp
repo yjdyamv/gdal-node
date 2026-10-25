@@ -1,4 +1,5 @@
 #include "gdal_memfile.hpp"
+#include "utils/args.hpp"
 
 namespace node_gdal {
 
@@ -146,11 +147,12 @@ bool Memfile::copy(Napi::Object buffer, const std::string &filename) {
  * @param {string} filename A file name beginning with `/vsimem/`
  */
 NAPI_METHOD(Memfile::vsimemSet) {
+  Args args(info);
   Napi::Object buffer;
   std::string filename;
 
-  NODE_ARG_OBJECT(0, "buffer", buffer);
-  NODE_ARG_STR(1, "filename", filename);
+  if (!args.get(0, "buffer", buffer)) return args.failed();
+  if (!args.get(1, "filename", filename)) return args.failed();
 
   Memfile *memfile = Memfile::get(buffer, filename);
   if (memfile == nullptr) Napi::Error::New(node_gdal::napi_env(), "Failed creating in-memory file").ThrowAsJavaScriptException();
@@ -173,11 +175,12 @@ NAPI_METHOD(Memfile::vsimemSet) {
  * @param {string} filename A file name beginning with `/vsimem/`
  */
 NAPI_METHOD(Memfile::vsimemCopy) {
+  Args args(info);
   Napi::Object buffer;
   std::string filename;
 
-  NODE_ARG_OBJECT(0, "buffer", buffer);
-  NODE_ARG_STR(1, "filename", filename);
+  if (!args.get(0, "buffer", buffer)) return args.failed();
+  if (!args.get(1, "filename", filename)) return args.failed();
 
   if (!Memfile::copy(buffer, filename)) Napi::Error::New(node_gdal::napi_env(), "Failed creating in-memory file").ThrowAsJavaScriptException();
   return node_gdal::napi_env().Undefined();
@@ -189,9 +192,10 @@ NAPI_METHOD(Memfile::vsimemCopy) {
  * This is not a public method as it is not always safe.
  */
 NAPI_METHOD(Memfile::vsimemAnonymous) {
+  Args args(info);
   Napi::Object buffer;
 
-  NODE_ARG_OBJECT(0, "buffer", buffer);
+  if (!args.get(0, "buffer", buffer)) return args.failed();
 
   Memfile *memfile = Memfile::get(buffer);
   if (memfile == nullptr)
@@ -223,9 +227,10 @@ NAPI_METHOD(Memfile::vsimemAnonymous) {
  * @return {Buffer} A binary buffer containing all the data
  */
 NAPI_METHOD(Memfile::vsimemRelease) {
+  Args args(info);
   vsi_l_offset len;
   std::string filename;
-  NODE_ARG_STR(0, "filename", filename);
+  if (!args.get(0, "filename", filename)) return args.failed();
 
   CPLErrorReset();
   void *data = VSIGetMemFileBuffer(filename.c_str(), &len, false);

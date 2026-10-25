@@ -1,5 +1,6 @@
 
 #include "gdal_feature.hpp"
+#include "utils/args.hpp"
 #include "collections/feature_fields.hpp"
 #include "gdal_common.hpp"
 #include "gdal_feature_defn.hpp"
@@ -167,8 +168,9 @@ NAPI_METHOD(Feature::getGeometry) {
  * _return {FieldDefn}
  */
 NAPI_METHOD(Feature::getFieldDefn) {
+  Args args(info);
   int field_index;
-  NODE_ARG_INT(0, "field index", field_index);
+  if (!args.get(0, "field index", field_index)) return args.failed();
 
   Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
   if (!feature->isAlive()) {
@@ -198,9 +200,10 @@ NAPI_METHOD(Feature::getFieldDefn) {
  * @param {Geometry|null} geometry new geometry or null to clear the field
  */
 NAPI_METHOD(Feature::setGeometry) {
+  Args args(info);
 
   Geometry *geom = NULL;
-  NODE_ARG_WRAPPED_OPT(0, "geometry", Geometry, geom);
+  if (!args.optionalWrapped(0, "geometry", "Geometry", geom)) return args.failed();
 
   Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
   if (!feature->isAlive()) {
@@ -283,12 +286,13 @@ NAPI_METHOD(Feature::destroy) {
  * despite lacking output fields matching some of the source fields.
  */
 NAPI_METHOD(Feature::setFrom) {
+  Args args(info);
   Feature *other_feature;
   int forgiving = 1;
   Napi::Array index_map;
   OGRErr err = 0;
 
-  NODE_ARG_WRAPPED(0, "feature", Feature, other_feature);
+  if (!args.getWrapped(0, "feature", "Feature", other_feature)) return args.failed();
 
   Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
   if (!feature->isAlive()) {
@@ -297,12 +301,12 @@ NAPI_METHOD(Feature::setFrom) {
   }
 
   if (!info[1].IsArray()) {
-    NODE_ARG_BOOL_OPT(1, "forgiving", forgiving);
+    if (!args.optional(1, "forgiving", forgiving)) return args.failed();
 
     err = feature->this_->SetFrom(other_feature->this_, forgiving ? TRUE : FALSE);
   } else {
-    NODE_ARG_ARRAY(1, "index map", index_map);
-    NODE_ARG_BOOL_OPT(2, "forgiving", forgiving);
+    if (!args.get(1, "index map", index_map)) return args.failed();
+    if (!args.optional(2, "forgiving", forgiving)) return args.failed();
 
     if (index_map.Length() < 1) {
       Napi::Error::New(node_gdal::napi_env(), "index map must contain at least 1 index").ThrowAsJavaScriptException();

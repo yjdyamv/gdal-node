@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "gdal_warper.hpp"
+#include "utils/args.hpp"
 #include "gdal_common.hpp"
 #include "gdal_dataset.hpp"
 #include "gdal_spatial_reference.hpp"
@@ -246,6 +247,7 @@ CPLErr GDALReprojectImageMulti(
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
+  Args args(info);
 
   Napi::Object obj;
 
@@ -259,7 +261,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
   Napi::FunctionReference *progress_cb = nullptr;
   Napi::Value abort_signal;
 
-  NODE_ARG_OBJECT(0, "Warp options", obj);
+  if (!args.get(0, "Warp options", obj)) return args.failed();
 
   if (options->parse(obj)) {
     return node_gdal::napi_env().Undefined(); // error parsing options object
@@ -271,11 +273,11 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
     return node_gdal::napi_env().Undefined();
   }
 
-  NODE_WRAPPED_FROM_OBJ(obj, "s_srs", SpatialReference, s_srs);
-  NODE_WRAPPED_FROM_OBJ(obj, "t_srs", SpatialReference, t_srs);
-  NODE_DOUBLE_FROM_OBJ_OPT(obj, "maxError", maxError);
-  NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
+  if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
+  if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
+  if (!args.from(obj, "maxError", maxError)) return args.failed();
+  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
 
   char *s_srs_wkt, *t_srs_wkt;
   if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
@@ -390,6 +392,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
  * @return {Promise<WarpOutput>}
  */
 GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
+  Args args(info);
 
   Napi::Object obj;
   Napi::Value prop;
@@ -399,7 +402,7 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
   SpatialReference *t_srs;
   double maxError = 0;
 
-  NODE_ARG_OBJECT(0, "Warp options", obj);
+  if (!args.get(0, "Warp options", obj)) return args.failed();
 
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "src"))) {
     prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "src"));
@@ -418,9 +421,9 @@ GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
     return node_gdal::napi_env().Undefined();
   }
 
-  NODE_WRAPPED_FROM_OBJ(obj, "s_srs", SpatialReference, s_srs);
-  NODE_WRAPPED_FROM_OBJ(obj, "t_srs", SpatialReference, t_srs);
-  NODE_DOUBLE_FROM_OBJ_OPT(obj, "maxError", maxError);
+  if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
+  if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
+  if (!args.from(obj, "maxError", maxError)) return args.failed();
 
   char *s_srs_wkt, *t_srs_wkt;
   if (s_srs->get()->exportToWkt(&s_srs_wkt)) {

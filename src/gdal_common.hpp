@@ -616,136 +616,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 #define GDAL_HAS_PROP(obj, key) obj.HasOwnProperty(Napi::String::New(info.Env(), key))
 
-#define NODE_DOUBLE_FROM_OBJ(obj, key, var)                                                                            \
-  {                                                                                                                    \
-    if (!obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                      \
-      Napi::Error::New(info.Env(), "Object must contain property \"" key "\"").ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                      \
-    if (!val.IsNumber()) {                                                                                              \
-      Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a number").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = val.As<Napi::Number>().DoubleValue();                                                                         \
-  }
-
-#define NODE_INT_FROM_OBJ(obj, key, var)                                                                               \
-  {                                                                                                                    \
-    if (!obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                      \
-      Napi::Error::New(info.Env(), "Object must contain property \"" key "\"").ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                      \
-    if (!val.IsNumber()) {                                                                                              \
-      Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a number").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = val.As<Napi::Number>().Int32Value();                                                                          \
-  }
-
-#define NODE_STR_FROM_OBJ(obj, key, var)                                                                               \
-  {                                                                                                                    \
-    if (!obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                      \
-      Napi::Error::New(info.Env(), "Object must contain property \"" key "\"").ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                      \
-    if (!val.IsString()) {                                                                                              \
-      Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a string").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = val.As<Napi::String>().Utf8Value();                                                                           \
-  }
-
-#define NODE_ARRAY_FROM_OBJ(obj, key, var)                                                                             \
-  {                                                                                                                    \
-    if (!obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                      \
-      Napi::Error::New(info.Env(), "Object must contain property \"" key "\"").ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                      \
-    if (!val.IsArray()) {                                                                                               \
-      Napi::TypeError::New(info.Env(), "Property \"" key "\" must be an array").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = val.As<Napi::Array>();                                                                                        \
-  }
-
-#define NODE_ARRAY_FROM_OBJ_OPT(obj, key, var)                                                                         \
-  {                                                                                                                    \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (!val.IsUndefined() && !val.IsNull()) {                                                                        \
-        if (!val.IsArray()) {                                                                                           \
-          Napi::TypeError::New(info.Env(), "Property \"" key "\" must be an array").ThrowAsJavaScriptException();      \
-          return info.Env().Undefined();                                                                                 \
-        }                                                                                                              \
-        var = val.As<Napi::Array>();                                                                                    \
-      }                                                                                                                \
-    }                                                                                                                  \
-  }
-
-#define NODE_WRAPPED_FROM_OBJ(obj, key, type, var)                                                                     \
-  {                                                                                                                    \
-    if (!obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                      \
-      Napi::Error::New(info.Env(), "Object must contain property \"" key "\"").ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                      \
-    if (!node_gdal::IsInstanceOf<type>(val)) {                                                                          \
-      Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a " #type " object").ThrowAsJavaScriptException(); \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = node_gdal::UnwrapWrapped<type>(val.As<Napi::Object>());                                                       \
-    if (!var->isAlive()) {                                                                                              \
-      Napi::Error::New(info.Env(), key ": " #type " object has already been destroyed").ThrowAsJavaScriptException();   \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_WRAPPED_FROM_OBJ_OPT(obj, key, type, var)                                                                 \
-  {                                                                                                                    \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (node_gdal::IsInstanceOf<type>(val)) {                                                                         \
-        var = node_gdal::UnwrapWrapped<type>(val.As<Napi::Object>());                                                   \
-        if (!var->isAlive()) {                                                                                          \
-          Napi::Error::New(info.Env(), key ": " #type " object has already been destroyed")                             \
-            .ThrowAsJavaScriptException();                                                                              \
-          return info.Env().Undefined();                                                                                \
-        }                                                                                                              \
-      } else if (!val.IsNull() && !val.IsUndefined()) {                                                                 \
-        Napi::TypeError::New(info.Env(), key "property must be a " #type " object").ThrowAsJavaScriptException();       \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-    }                                                                                                                  \
-  }
-
-#define NODE_DOUBLE_FROM_OBJ_OPT(obj, key, var)                                                                        \
-  {                                                                                                                    \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (!val.IsNumber()) {                                                                                            \
-        Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a number").ThrowAsJavaScriptException();        \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-      var = val.As<Napi::Number>().DoubleValue();                                                                       \
-    }                                                                                                                  \
-  }
-
-#define NODE_INT_FROM_OBJ_OPT(obj, key, var)                                                                           \
-  {                                                                                                                    \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (!val.IsNumber()) {                                                                                            \
-        Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a number").ThrowAsJavaScriptException();        \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-      var = val.As<Napi::Number>().Int32Value();                                                                        \
-    }                                                                                                                  \
-  }
-
 #define NODE_INT64_FROM_OBJ_OPT(obj, key, var)                                                                         \
   {                                                                                                                    \
     if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
@@ -755,18 +625,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
         return info.Env().Undefined();                                                                                  \
       }                                                                                                                \
       var = val.As<Napi::Number>().Int64Value();                                                                        \
-    }                                                                                                                  \
-  }
-
-#define NODE_STR_FROM_OBJ_OPT(obj, key, var)                                                                           \
-  {                                                                                                                    \
-    if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
-      Napi::Value val = obj.Get(Napi::String::New(info.Env(), key));                                                    \
-      if (!val.IsString()) {                                                                                            \
-        Napi::TypeError::New(info.Env(), "Property \"" key "\" must be a string").ThrowAsJavaScriptException();        \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-      var = val.As<Napi::String>().Utf8Value();                                                                         \
     }                                                                                                                  \
   }
 
@@ -852,28 +710,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
   }                                                                                                                    \
   var = info[num].As<Napi::Number>().DoubleValue();
 
-#define NODE_ARG_ARRAY(num, name, var)                                                                                 \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsArray()) {                                                                                          \
-    Napi::TypeError::New(info.Env(), name " must be an array").ThrowAsJavaScriptException();                           \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num].As<Napi::Array>();
-
-#define NODE_ARG_OBJECT(num, name, var)                                                                                \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsObject()) {                                                                                         \
-    Napi::TypeError::New(info.Env(), name " must be an object").ThrowAsJavaScriptException();                          \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num].As<Napi::Object>();
-
 #define NODE_ARG_WRAPPED(num, name, type, var)                                                                         \
   if (info.Length() < num + 1) {                                                                                       \
     Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
@@ -900,34 +736,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
   }                                                                                                                    \
   var = info[num].As<Napi::String>().Utf8Value()
 
-#define NODE_ARG_STR_INT(num, name, varString, varInt, isString)                                                       \
-  bool isString = false;                                                                                               \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (info[num].IsString()) {                                                                                          \
-    varString = info[num].As<Napi::String>().Utf8Value();                                                              \
-    isString = true;                                                                                                   \
-  } else if (info[num].IsNumber()) {                                                                                   \
-    varInt = static_cast<int>(info[num].As<Napi::Number>().Int64Value());                                              \
-    isString = false;                                                                                                  \
-  } else {                                                                                                             \
-    Napi::TypeError::New(info.Env(), name " must be a string or a number").ThrowAsJavaScriptException();               \
-    return info.Env().Undefined();                                                                                      \
-  }
-
-#define NODE_ARG_BUFFER(num, name, var)                                                                                \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsBuffer() && !info[num].IsArrayBuffer()) {                                                           \
-    Napi::TypeError::New(info.Env(), name " must be a buffer").ThrowAsJavaScriptException();                           \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = info[num]
-
 #define NODE_ARG_CB(num, name, var)                                                                                    \
   if (info.Length() < num + 1) {                                                                                       \
     Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
@@ -941,99 +749,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
   var->SuppressDestruct()
 
 // ----- optional argument conversion -------
-
-#define NODE_ARG_INT_OPT(num, name, var)                                                                               \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsNumber()) {                                                                                        \
-      var = static_cast<int>(info[num].As<Napi::Number>().Int64Value());                                               \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be an integer").ThrowAsJavaScriptException();                       \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_ENUM_OPT(num, name, enum_type, var)                                                                   \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsNumber()) {                                                                                        \
-      var = static_cast<enum_type>(info[num].As<Napi::Number>().Uint32Value());                                         \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be an integer").ThrowAsJavaScriptException();                       \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_BOOL_OPT(num, name, var)                                                                              \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsBoolean()) {                                                                                       \
-      var = info[num].As<Napi::Boolean>().Value();                                                                     \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be an boolean").ThrowAsJavaScriptException();                       \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_OPT_STR(num, name, var)                                                                               \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsString()) {                                                                                        \
-      var = info[num].As<Napi::String>().Utf8Value();                                                                  \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be a string").ThrowAsJavaScriptException();                         \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_DOUBLE_OPT(num, name, var)                                                                            \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsNumber()) {                                                                                        \
-      var = info[num].As<Napi::Number>().DoubleValue();                                                                \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be a number").ThrowAsJavaScriptException();                         \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_WRAPPED_OPT(num, name, type, var)                                                                     \
-  if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) {                                        \
-    if (!node_gdal::IsInstanceOf<type>(info[num])) {                                                                   \
-      Napi::TypeError::New(info.Env(), name " must be an instance of " #type).ThrowAsJavaScriptException();            \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = node_gdal::UnwrapWrapped<type>(info[num].As<Napi::Object>());                                                \
-    if (!var->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #type " parameter already destroyed").ThrowAsJavaScriptException();                \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_ARRAY_OPT(num, name, var)                                                                             \
-  if (info.Length() > num) {                                                                                           \
-    if (info[num].IsArray()) {                                                                                         \
-      var = info[num].As<Napi::Array>();                                                                               \
-    } else if (!info[num].IsNull() && !info[num].IsUndefined()) {                                                      \
-      Napi::TypeError::New(info.Env(), name " must be an array").ThrowAsJavaScriptException();                         \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
-
-#define NODE_ARG_OBJECT_OPT(num, name, var)                                                                            \
-  if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) {                                        \
-    if (!info[num].IsObject()) {                                                                                       \
-      Napi::TypeError::New(info.Env(), name " must be an object").ThrowAsJavaScriptException();                        \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    var = info[num].As<Napi::Object>();                                                                                \
-  }
-
-#define NODE_ARG_CB_OPT(num, name, var)                                                                                \
-  if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) {                                        \
-    if (info[num].IsFunction()) {                                                                                      \
-      var = new Napi::FunctionReference(Napi::Persistent(info[num].As<Napi::Function>()));                             \
-      var->SuppressDestruct();                                                                                         \
-    } else {                                                                                                           \
-      Napi::TypeError::New(info.Env(), name " must be a function").ThrowAsJavaScriptException();                       \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-  }
 
 // ----- special case: AbortSignal in an [options] argument -----
 // The variable (declared by the caller) is left empty when there is no abort_signal

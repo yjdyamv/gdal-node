@@ -1,5 +1,6 @@
 // gdal-async
 #include "gdal_common.hpp"
+#include "utils/args.hpp"
 
 // gdal
 #include <gdal.h>
@@ -121,10 +122,11 @@ static NAPI_METHOD(VerboseOutput) {
 }
 
 static NAPI_METHOD(StartLogging) {
+  Args args(info);
 
 #ifdef ENABLE_LOGGING
   std::string filename = "";
-  NODE_ARG_STR(0, "filename", filename);
+  if (!args.get(0, "filename", filename)) return args.failed();
   if (filename.empty()) {
     Napi::Error::New(info.Env(), "Invalid filename").ThrowAsJavaScriptException();
     return info.Env().Undefined();
@@ -155,8 +157,9 @@ static NAPI_METHOD(StopLogging) {
 }
 
 static NAPI_METHOD(Log) {
+  Args args(info);
   std::string msg;
-  NODE_ARG_STR(0, "message", msg);
+  if (!args.get(0, "message", msg)) return args.failed();
   msg = msg + "\n";
 
 #ifdef ENABLE_LOGGING
@@ -174,12 +177,13 @@ static NAPI_METHOD(Log) {
  */
 GDAL_ASYNCABLE_GLOBAL(gdal_open);
 GDAL_ASYNCABLE_DEFINE(gdal_open) {
+  Args args(info);
 
   std::string path;
   std::string mode = "r";
 
-  NODE_ARG_STR(0, "path", path);
-  NODE_ARG_OPT_STR(1, "mode", mode);
+  if (!args.get(0, "path", path)) return args.failed();
+  if (!args.optional(1, "mode", mode)) return args.failed();
 
   unsigned int flags = 0;
   for (unsigned i = 0; i < mode.length(); i++) {
@@ -221,10 +225,11 @@ GDAL_ASYNCABLE_DEFINE(gdal_open) {
 }
 
 static NAPI_METHOD(setConfigOption) {
+  Args args(info);
 
   std::string name;
 
-  NODE_ARG_STR(0, "name", name);
+  if (!args.get(0, "name", name)) return args.failed();
 
   if (info.Length() < 2) {
     Napi::Error::New(info.Env(), "string or null value must be provided").ThrowAsJavaScriptException();
@@ -244,9 +249,10 @@ static NAPI_METHOD(setConfigOption) {
 }
 
 static NAPI_METHOD(getConfigOption) {
+  Args args(info);
 
   std::string name;
-  NODE_ARG_STR(0, "name", name);
+  if (!args.get(0, "name", name)) return args.failed();
 
   return SafeString::New(CPLGetConfigOption(name.c_str(), NULL));
 }
@@ -267,13 +273,14 @@ static NAPI_METHOD(getConfigOption) {
  * N or E
  */
 static NAPI_METHOD(decToDMS) {
+  Args args(info);
 
   double angle;
   std::string axis;
   int precision = 2;
-  NODE_ARG_DOUBLE(0, "angle", angle);
-  NODE_ARG_STR(1, "axis", axis);
-  NODE_ARG_INT_OPT(2, "precision", precision);
+  if (!args.get(0, "angle", angle)) return args.failed();
+  if (!args.get(1, "axis", axis)) return args.failed();
+  if (!args.optional(2, "precision", precision)) return args.failed();
 
   if (axis.length() > 0) { axis[0] = toupper(axis[0]); }
   if (axis != "Lat" && axis != "Long") {
@@ -292,9 +299,10 @@ static NAPI_METHOD(decToDMS) {
  * @param {string} path `c:\ProjData`
  */
 static NAPI_METHOD(setPROJSearchPath) {
+  Args args(info);
   std::string path;
 
-  NODE_ARG_STR(0, "path", path);
+  if (!args.get(0, "path", path)) return args.failed();
 
 #if GDAL_VERSION_MAJOR >= 3
   const char *const paths[] = {path.c_str(), nullptr};
@@ -310,9 +318,10 @@ static NAPI_METHOD(ThrowDummyCPLError) {
 }
 
 static NAPI_METHOD(isAlive) {
+  Args args(info);
 
-  long uid;
-  NODE_ARG_INT(0, "uid", uid);
+  int64_t uid;
+  if (!args.get(0, "uid", uid)) return args.failed();
 
   return Napi::Boolean::New(info.Env(), object_store().isAlive(uid));
 }

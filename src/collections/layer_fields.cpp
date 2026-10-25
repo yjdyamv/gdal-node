@@ -1,4 +1,5 @@
 #include "layer_fields.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_field_defn.hpp"
 #include "../gdal_layer.hpp"
@@ -98,6 +99,7 @@ NAPI_METHOD(LayerFields::count) {
  * @return {number} Field index, or -1 if the field doesn't exist
  */
 NAPI_METHOD(LayerFields::indexOf) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -114,7 +116,7 @@ NAPI_METHOD(LayerFields::indexOf) {
   }
 
   std::string name("");
-  NODE_ARG_STR(0, "field name", name);
+  if (!args.get(0, "field name", name)) return args.failed();
 
   return Napi::Number::New(node_gdal::napi_env(), def->GetFieldIndex(name.c_str()));
 }
@@ -251,6 +253,7 @@ NAPI_METHOD(LayerFields::remove) {
  * @param {boolean} [approx=true]
  */
 NAPI_METHOD(LayerFields::add) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -267,7 +270,7 @@ NAPI_METHOD(LayerFields::add) {
   FieldDefn *field_def;
   int err;
   int approx = 1;
-  NODE_ARG_BOOL_OPT(1, "approx", approx);
+  if (!args.optional(1, "approx", approx)) return args.failed();
 
   if (info[0].IsArray()) {
     Napi::Array array = info[0].As<Napi::Array>();
@@ -316,6 +319,7 @@ NAPI_METHOD(LayerFields::add) {
  * @param {number[]} map An array of new indexes (integers)
  */
 NAPI_METHOD(LayerFields::reorder) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -332,7 +336,7 @@ NAPI_METHOD(LayerFields::reorder) {
   }
 
   Napi::Array field_map = Napi::Array::New(node_gdal::napi_env(), 0);
-  NODE_ARG_ARRAY(0, "field map", field_map);
+  if (!args.get(0, "field map", field_map)) return args.failed();
 
   int n = def->GetFieldCount();
   OGRErr err = 0;

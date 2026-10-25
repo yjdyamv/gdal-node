@@ -1,4 +1,5 @@
 #include "gdal_fs.hpp"
+#include "utils/args.hpp"
 #include "utils/gdal_error.hpp"
 
 namespace node_gdal {
@@ -129,11 +130,12 @@ void VSI::Initialize(Napi::Object target) {
  */
 
 GDAL_ASYNCABLE_DEFINE(VSI::stat) {
+  Args args(info);
   std::string filename;
   bool bigint = false;
 
-  NODE_ARG_STR(0, "filename", filename);
-  NODE_ARG_BOOL_OPT(1, "bigint", bigint);
+  if (!args.get(0, "filename", filename)) return args.failed();
+  if (!args.optional(1, "bigint", bigint)) return args.failed();
 
   GDALAsyncableJob<VSIStatBufL> job(0);
   job.main = [filename](const GDALExecutionProgress &) {
@@ -234,9 +236,10 @@ GDAL_ASYNCABLE_DEFINE(VSI::stat) {
  * @returns {Promise<string[]>}
  */
 GDAL_ASYNCABLE_DEFINE(VSI::readDir) {
+  Args args(info);
   std::string directory;
 
-  NODE_ARG_STR(0, "directory", directory);
+  if (!args.get(0, "directory", directory)) return args.failed();
 
   GDALAsyncableJob<char **> job(0);
   job.main = [directory](const GDALExecutionProgress &) {

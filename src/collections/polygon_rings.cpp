@@ -1,4 +1,5 @@
 #include "polygon_rings.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../geometry/gdal_geometry.hpp"
 #include "../geometry/gdal_linearring.hpp"
@@ -94,13 +95,14 @@ NAPI_METHOD(PolygonRings::count) {
  * @return {LinearRing}
  */
 NAPI_METHOD(PolygonRings::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
 
   int i;
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
 
   OGRLinearRing *r;
   if (i == 0) {

@@ -8,6 +8,7 @@
 #include "../gdal_common.hpp"
 #include "../gdal_dataset.hpp"
 #include "../gdal_group.hpp"
+#include "../utils/args.hpp"
 
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 
@@ -63,6 +64,7 @@ class GroupCollection : public GDALObject<SELF> {
   };
 
   GDAL_ASYNCABLE_TEMPLATE(get) {
+    Args args(info);
 
     Napi::Object this_obj = info.This().As<Napi::Object>();
     Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
@@ -73,8 +75,9 @@ class GroupCollection : public GDALObject<SELF> {
     std::shared_ptr<GDALPARENT> raw = parent->get();
     GDALDataset *gdal_ds = ds->get();
     std::string name = "";
-    size_t idx = 0;
-    NODE_ARG_STR_INT(0, "id", name, idx, isString);
+    int idx = 0;
+    bool isString = false;
+    if (!args.getStringOrInt(0, "id", name, idx, isString)) return args.failed();
 
     GDALAsyncableJob<std::shared_ptr<GDALOBJ>> job(ds->uid);
     job.persist(parent_obj);

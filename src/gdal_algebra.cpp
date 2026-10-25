@@ -1,4 +1,5 @@
 #include "node_gdal.h"
+#include "utils/args.hpp"
 #include "gdal_dataset.hpp"
 #include "gdal_rasterband.hpp"
 #include "gdal_algebra.hpp"
@@ -92,9 +93,10 @@ void Initialize(Napi::Object target) {
 
 #define GDAL_ALGEBRA_UNARY_OP(NAME, OPERATOR)                                                                          \
   GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
+    Args args(info);                                                                                                   \
     RasterBand *arg;                                                                                                   \
                                                                                                                        \
-    NODE_ARG_WRAPPED(0, "Argument", RasterBand, arg);                                                                  \
+    if (!args.getWrapped(0, "Argument", "RasterBand", arg)) { return args.failed(); }                                  \
                                                                                                                        \
     GDALAsyncableJob<GDALRasterBand *> job(arg->parent_uid);                                                           \
     job.persist(arg->Value());                                                                                        \
@@ -110,6 +112,7 @@ void Initialize(Napi::Object target) {
 
 #define GDAL_ALGEBRA_BINARY_OP(NAME, OPERATOR)                                                                         \
   GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
+    Args args(info);                                                                                                   \
     RasterBand *arg1_band, *arg2_band;                                                                                 \
     double arg1_number, arg2_number;                                                                                   \
                                                                                                                        \
@@ -156,13 +159,14 @@ void Initialize(Napi::Object target) {
 
 #define GDAL_ALGEBRA_VARIADIC_BANDONLY_OP(NAME, OPERATOR)                                                              \
   GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
+    Args args(info);                                                                                                   \
     std::vector<RasterBand *> args_band;                                                                               \
     std::vector<long> uids;                                                                                            \
                                                                                                                        \
     for (int i = 0; i < info.Length(); i++) {                                                                          \
       if (info[i].IsFunction()) break;                                                                                \
       RasterBand *arg_band;                                                                                            \
-      NODE_ARG_WRAPPED(i, "Argument", RasterBand, arg_band);                                                           \
+      if (!args.getWrapped(i, "Argument", "RasterBand", arg_band)) { return args.failed(); }                           \
       args_band.push_back(arg_band);                                                                                   \
       uids.push_back(arg_band->parent_uid);                                                                            \
     }                                                                                                                  \
@@ -178,10 +182,10 @@ void Initialize(Napi::Object target) {
       job.persist(arg->Value());                                                                                      \
       handles[i++] = GDALRasterBand::ToHandle(arg->get());                                                             \
     }                                                                                                                  \
-    auto args = std::shared_ptr<GDALRasterBandH[]>{handles};                                                           \
+    auto band_handles = std::shared_ptr<GDALRasterBandH[]>{handles};                                                   \
                                                                                                                        \
-    job.main = [args, i](const GDALExecutionProgress &) {                                                              \
-      return GDALRasterBand::FromHandle(OPERATOR(i, args.get()));                                                      \
+    job.main = [band_handles, i](const GDALExecutionProgress &) {                                                      \
+      return GDALRasterBand::FromHandle(OPERATOR(i, band_handles.get()));                                              \
     };                                                                                                                 \
                                                                                                                        \
     job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
@@ -773,10 +777,11 @@ GDAL_ALGEBRA_VARIADIC_BANDONLY_OP(gdal_mean, GDALMeanOfNBands)
  * @return {Promise<RasterBand>}
  */
 GDAL_ASYNCABLE_DEFINE(ifThenElse) {
+  Args args(info);
   RasterBand *arg1_band, *arg2_band, *arg3_band;
   double arg2_number, arg3_number;
 
-  NODE_ARG_WRAPPED(0, "First argument", RasterBand, arg1_band);
+  if (!args.getWrapped(0, "First argument", "RasterBand", arg1_band)) return args.failed();
   NODE_ALGEBRA_ARG(1, arg2);
   NODE_ALGEBRA_ARG(2, arg3);
 
@@ -846,13 +851,14 @@ GDAL_ASYNCABLE_DEFINE(ifThenElse) {
  * @return {Promise<RasterBand>}
  */
 GDAL_ASYNCABLE_DEFINE(asType) {
+  Args args(info);
   RasterBand *arg_band;
   std::string type_name;
   GDALDataType type;
 
-  NODE_ARG_WRAPPED(0, "Argument", RasterBand, arg_band);
+  if (!args.getWrapped(0, "Argument", "RasterBand", arg_band)) return args.failed();
 
-  NODE_ARG_STR(1, "Data Type", type_name);
+  if (!args.get(1, "Data Type", type_name)) return args.failed();
   type = GDALGetDataTypeByName(type_name.c_str());
   if (type == GDT_Unknown) {
     Napi::Error::New(node_gdal::napi_env(), "Invalid data type").ThrowAsJavaScriptException();

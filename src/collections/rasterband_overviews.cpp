@@ -1,4 +1,5 @@
 #include "rasterband_overviews.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_rasterband.hpp"
 
@@ -79,6 +80,7 @@ NAPI_METHOD(RasterBandOverviews::toString) {
  * @return {Promise<RasterBand>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -86,7 +88,7 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
   NODE_UNWRAP_CHECK(RasterBand, parent, band);
 
   int id;
-  NODE_ARG_INT(0, "id", id);
+  if (!args.get(0, "id", id)) return args.failed();
 
   GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
   job.persist(parent);
@@ -136,13 +138,14 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
  * @return {Promise<RasterBand>}
  */
 GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::getBySampleCount) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   NODE_UNWRAP_CHECK(RasterBand, parent, band);
 
   int n_samples;
-  NODE_ARG_INT(0, "minimum number of samples", n_samples);
+  if (!args.get(0, "minimum number of samples", n_samples)) return args.failed();
 
   GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
   job.persist(parent);

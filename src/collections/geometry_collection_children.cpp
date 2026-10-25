@@ -1,4 +1,5 @@
 #include "geometry_collection_children.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../geometry/gdal_geometry.hpp"
 #include "../geometry/gdal_geometrycollection.hpp"
@@ -85,13 +86,14 @@ NAPI_METHOD(GeometryCollectionChildren::count) {
  * @return {Geometry}
  */
 NAPI_METHOD(GeometryCollectionChildren::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
 
   int i;
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
 
   auto r = geom->get()->getGeometryRef(i);
   if (r == nullptr) {
@@ -110,13 +112,14 @@ NAPI_METHOD(GeometryCollectionChildren::get) {
  * @param {number} index 0-based index, -1 for all geometries
  */
 NAPI_METHOD(GeometryCollectionChildren::remove) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
 
   int i;
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
 
   OGRErr err = geom->get()->removeGeometry(i);
   if (err) {

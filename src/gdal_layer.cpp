@@ -1,5 +1,6 @@
 
 #include "gdal_layer.hpp"
+#include "utils/args.hpp"
 #include "collections/layer_features.hpp"
 #include "collections/layer_fields.hpp"
 #include "gdal_common.hpp"
@@ -185,6 +186,7 @@ NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM_LOCKED(Layer, testCapability, Boo
  * @return {Envelope} Bounding envelope
  */
 NAPI_METHOD(Layer::getExtent) {
+  Args args(info);
 
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
   if (!layer->isAlive()) {
@@ -193,7 +195,7 @@ NAPI_METHOD(Layer::getExtent) {
   }
 
   int force = 1;
-  NODE_ARG_BOOL_OPT(0, "force", force);
+  if (!args.optional(0, "force", force)) return args.failed();
 
   std::unique_ptr<OGREnvelope> envelope(new OGREnvelope());
   GDAL_LOCK_PARENT(layer);
@@ -275,6 +277,7 @@ NAPI_METHOD(Layer::getSpatialFilter) {
  * @param {number} maxY
  */
 NAPI_METHOD(Layer::setSpatialFilter) {
+  Args args(info);
 
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
   if (!layer->isAlive()) {
@@ -284,7 +287,7 @@ NAPI_METHOD(Layer::setSpatialFilter) {
 
   if (info.Length() == 1) {
     Geometry *filter = NULL;
-    NODE_ARG_WRAPPED_OPT(0, "filter", Geometry, filter);
+    if (!args.optionalWrapped(0, "filter", "Geometry", filter)) return args.failed();
 
     GDAL_LOCK_PARENT(layer);
     if (filter) {
@@ -294,10 +297,10 @@ NAPI_METHOD(Layer::setSpatialFilter) {
     }
   } else if (info.Length() == 4) {
     double minX, minY, maxX, maxY;
-    NODE_ARG_DOUBLE(0, "minX", minX);
-    NODE_ARG_DOUBLE(1, "minY", minY);
-    NODE_ARG_DOUBLE(2, "maxX", maxX);
-    NODE_ARG_DOUBLE(3, "maxY", maxY);
+    if (!args.get(0, "minX", minX)) return args.failed();
+    if (!args.get(1, "minY", minY)) return args.failed();
+    if (!args.get(2, "maxX", maxX)) return args.failed();
+    if (!args.get(3, "maxY", maxY)) return args.failed();
 
     GDAL_LOCK_PARENT(layer);
     layer->this_->SetSpatialFilterRect(minX, minY, maxX, maxY);
@@ -334,6 +337,7 @@ NAPI_METHOD(Layer::setSpatialFilter) {
  * @param {string|null} [filter=null]
  */
 NAPI_METHOD(Layer::setAttributeFilter) {
+  Args args(info);
 
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
   if (!layer->isAlive()) {
@@ -342,7 +346,7 @@ NAPI_METHOD(Layer::setAttributeFilter) {
   }
 
   std::string filter = "";
-  NODE_ARG_OPT_STR(0, "filter", filter);
+  if (!args.optional(0, "filter", filter)) return args.failed();
 
   OGRErr err;
   GDAL_LOCK_PARENT(layer);

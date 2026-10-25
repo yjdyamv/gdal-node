@@ -1,4 +1,5 @@
 #include "../gdal_common.hpp"
+#include "../utils/args.hpp"
 
 #include "../gdal_coordinate_transformation.hpp"
 #include "gdal_geometry.hpp"
@@ -717,11 +718,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::boundary) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::intersection) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   Geometry *x = NULL;
 
-  NODE_ARG_WRAPPED(0, "geometry to use for intersection", Geometry, x);
+  if (!args.getWrapped(0, "geometry to use for intersection", "Geometry", x)) return args.failed();
 
   OGRGeometry *gdal_geom = geom->this_;
   OGRGeometry *gdal_x = x->this_;
@@ -761,11 +763,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::intersection) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::unionGeometry) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   Geometry *x = NULL;
 
-  NODE_ARG_WRAPPED(0, "geometry to use for union", Geometry, x);
+  if (!args.getWrapped(0, "geometry to use for union", "Geometry", x)) return args.failed();
 
   OGRGeometry *gdal_geom = geom->this_;
   OGRGeometry *gdal_x = x->this_;
@@ -805,11 +808,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::unionGeometry) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::difference) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   Geometry *x = NULL;
 
-  NODE_ARG_WRAPPED(0, "geometry to use for difference", Geometry, x);
+  if (!args.getWrapped(0, "geometry to use for difference", "Geometry", x)) return args.failed();
 
   OGRGeometry *gdal_geom = geom->this_;
   OGRGeometry *gdal_x = x->this_;
@@ -849,11 +853,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::difference) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::symDifference) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   Geometry *x = NULL;
 
-  NODE_ARG_WRAPPED(0, "geometry to use for symDifference", Geometry, x);
+  if (!args.getWrapped(0, "geometry to use for symDifference", "Geometry", x)) return args.failed();
 
   OGRGeometry *gdal_geom = geom->this_;
   OGRGeometry *gdal_x = x->this_;
@@ -893,11 +898,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::symDifference) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::simplify) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   double tolerance;
 
-  NODE_ARG_DOUBLE(0, "tolerance", tolerance);
+  if (!args.get(0, "tolerance", tolerance)) return args.failed();
   OGRGeometry *gdal_geom = geom->this_;
 
   GDALAsyncableJob<OGRGeometry *> job(0);
@@ -936,11 +942,12 @@ GDAL_ASYNCABLE_DEFINE(Geometry::simplify) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::simplifyPreserveTopology) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   double tolerance;
 
-  NODE_ARG_DOUBLE(0, "tolerance", tolerance);
+  if (!args.get(0, "tolerance", tolerance)) return args.failed();
   OGRGeometry *gdal_geom = geom->this_;
 
   GDALAsyncableJob<OGRGeometry *> job(0);
@@ -981,12 +988,13 @@ GDAL_ASYNCABLE_DEFINE(Geometry::simplifyPreserveTopology) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::buffer) {
+  Args args(info);
 
   double distance;
   int number_of_segments = 30;
 
-  NODE_ARG_DOUBLE(0, "distance", distance);
-  NODE_ARG_INT_OPT(1, "number of segments", number_of_segments);
+  if (!args.get(0, "distance", distance)) return args.failed();
+  if (!args.optional(1, "number of segments", number_of_segments)) return args.failed();
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
@@ -1120,6 +1128,7 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKT) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKB) {
+  Args args(info);
 
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
@@ -1128,7 +1137,7 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKB) {
   // byte order
   OGRwkbByteOrder byte_order;
   std::string order = "MSB";
-  NODE_ARG_OPT_STR(0, "byte order", order);
+  if (!args.optional(0, "byte order", order)) return args.failed();
   if (order == "MSB") {
     byte_order = wkbXDR;
   } else if (order == "LSB") {
@@ -1141,7 +1150,7 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKB) {
   // wkb variant
   OGRwkbVariant wkb_variant;
   std::string variant = "OGC";
-  NODE_ARG_OPT_STR(1, "wkb variant", variant);
+  if (!args.optional(1, "wkb variant", variant)) return args.failed();
   if (variant == "OGC") {
     wkb_variant = wkbVariantOldOgc;
   } else if (variant == "ISO") {
@@ -1536,12 +1545,13 @@ NODE_WRAPPED_ASYNC_METHOD(Geometry, flattenTo2D, flattenTo2D);
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkt) {
+  Args args(info);
 
   std::string *wkt_string = new std::string;
   SpatialReference *srs = NULL;
 
-  NODE_ARG_STR(0, "wkt", *wkt_string);
-  NODE_ARG_WRAPPED_OPT(1, "srs", SpatialReference, srs);
+  if (!args.get(0, "wkt", *wkt_string)) return args.failed();
+  if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
 
   OGRSpatialReference *ogr_srs = NULL;
   if (srs) { ogr_srs = srs->get(); }
@@ -1588,13 +1598,14 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkt) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkb) {
+  Args args(info);
 
   std::string wkb_string;
   SpatialReference *srs = NULL;
 
   Napi::Object wkb_obj;
-  NODE_ARG_OBJECT(0, "wkb", wkb_obj);
-  NODE_ARG_WRAPPED_OPT(1, "srs", SpatialReference, srs);
+  if (!args.get(0, "wkb", wkb_obj)) return args.failed();
+  if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
 
   // N-API has no GetConstructorName: check the type directly
   if (!wkb_obj.IsBuffer() && !wkb_obj.IsTypedArray()) {
@@ -1655,13 +1666,14 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkb) {
  * @return {Promise<Geometry>}
  */
 GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJson) {
+  Args args(info);
 #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
   Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
   return node_gdal::napi_env().Undefined();
 #else
 
   Napi::Object geo_obj;
-  NODE_ARG_OBJECT(0, "geojson", geo_obj);
+  if (!args.get(0, "geojson", geo_obj)) return args.failed();
 
   // goes to text to pass it in, there isn't a performant way to
   // go from v8 JSON -> CPLJSON anyways
@@ -1719,6 +1731,7 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJson) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJsonBuffer) {
+  Args args(info);
 #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
   Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
   return node_gdal::napi_env().Undefined();
@@ -1726,7 +1739,7 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJsonBuffer) {
   std::string geojson_string;
 
   Napi::Object geojson_obj;
-  NODE_ARG_OBJECT(0, "geojson", geojson_obj);
+  if (!args.get(0, "geojson", geojson_obj)) return args.failed();
 
   // N-API has no GetConstructorName
   if (!geojson_obj.IsBuffer() && !geojson_obj.IsTypedArray()) {
@@ -1765,9 +1778,10 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJsonBuffer) {
  * @return {Geometry}
  */
 NAPI_METHOD(Geometry::create) {
+  Args args(info);
 
   OGRwkbGeometryType type = wkbUnknown;
-  NODE_ARG_ENUM(0, "type", OGRwkbGeometryType, type);
+  if (!args.getEnum(0, "type", "OGRwkbGeometryType", type)) return args.failed();
 
   return Geometry::New(OGRGeometryFactory::createGeometry(type), true);
 }
@@ -1930,8 +1944,9 @@ Napi::Value Geometry::getConstructor(OGRwkbGeometryType type) {
  * @return {Function}
  */
 NAPI_METHOD(Geometry::getConstructor) {
+  Args args(info);
   OGRwkbGeometryType type;
-  NODE_ARG_ENUM(0, "wkbType", OGRwkbGeometryType, type);
+  if (!args.getEnum(0, "wkbType", "OGRwkbGeometryType", type)) return args.failed();
   return getConstructor(type);
 }
 
@@ -1947,8 +1962,9 @@ NAPI_METHOD(Geometry::getConstructor) {
  * @return {string}
  */
 NAPI_METHOD(Geometry::getName) {
+  Args args(info);
   OGRwkbGeometryType type;
-  NODE_ARG_ENUM(0, "wkbType", OGRwkbGeometryType, type);
+  if (!args.getEnum(0, "wkbType", "OGRwkbGeometryType", type)) return args.failed();
   return SafeString::New(OGRGeometryTypeToName(type));
 }
 

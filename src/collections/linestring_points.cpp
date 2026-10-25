@@ -1,4 +1,5 @@
 #include "linestring_points.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../geometry/gdal_geometry.hpp"
 #include "../geometry/gdal_linestring.hpp"
@@ -104,13 +105,14 @@ NAPI_METHOD(LineStringPoints::reverse) {
  * @param {number} count
  */
 NAPI_METHOD(LineStringPoints::resize) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   int count;
-  NODE_ARG_INT(0, "point count", count)
+  if (!args.get(0, "point count", count)) return args.failed();
   geom->get()->setNumPoints(count);
 
   return node_gdal::napi_env().Undefined();
@@ -127,6 +129,7 @@ NAPI_METHOD(LineStringPoints::resize) {
  * @return {Point}
  */
 NAPI_METHOD(LineStringPoints::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -135,7 +138,7 @@ NAPI_METHOD(LineStringPoints::get) {
   OGRPoint pt;
   int i;
 
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
   if (i < 0 || i >= geom->get()->getNumPoints()) {
     Napi::Error::New(node_gdal::napi_env(), "Invalid point requested").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
@@ -173,13 +176,14 @@ NAPI_METHOD(LineStringPoints::get) {
  * @param {number} [z]
  */
 NAPI_METHOD(LineStringPoints::set) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   int i;
-  NODE_ARG_INT(0, "index", i);
+  if (!args.get(0, "index", i)) return args.failed();
   if (i < 0 || i >= geom->get()->getNumPoints()) {
     Napi::Error::New(node_gdal::napi_env(), "Point index out of range").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
@@ -203,8 +207,8 @@ NAPI_METHOD(LineStringPoints::set) {
       Napi::Object obj = info[1].As<Napi::Object>();
       // set from object {x: 0, y: 5}
       double x, y;
-      NODE_DOUBLE_FROM_OBJ(obj, "x", x);
-      NODE_DOUBLE_FROM_OBJ(obj, "y", y);
+      if (!args.from(obj, "x", x)) return args.failed();
+      if (!args.from(obj, "y", y)) return args.failed();
 
       Napi::String z_prop_name = Napi::String::New(node_gdal::napi_env(), "z");
       if (obj.As<Napi::Object>().HasOwnProperty(z_prop_name)) {
@@ -277,6 +281,7 @@ NAPI_METHOD(LineStringPoints::set) {
  * @param {number} [z]
  */
 NAPI_METHOD(LineStringPoints::add) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -314,8 +319,8 @@ NAPI_METHOD(LineStringPoints::add) {
         } else {
           // set from object {x: 0, y: 5}
           double x, y;
-          NODE_DOUBLE_FROM_OBJ(element_obj, "x", x);
-          NODE_DOUBLE_FROM_OBJ(element_obj, "y", y);
+          if (!args.from(element_obj, "x", x)) return args.failed();
+          if (!args.from(element_obj, "y", y)) return args.failed();
 
           Napi::String z_prop_name = Napi::String::New(node_gdal::napi_env(), "z");
           if (element_obj.As<Napi::Object>().HasOwnProperty(z_prop_name)) {
@@ -334,8 +339,8 @@ NAPI_METHOD(LineStringPoints::add) {
       // set from object {x: 0, y: 5}
       Napi::Object obj = info[0].As<Napi::Object>();
       double x, y;
-      NODE_DOUBLE_FROM_OBJ(obj, "x", x);
-      NODE_DOUBLE_FROM_OBJ(obj, "y", y);
+      if (!args.from(obj, "x", x)) return args.failed();
+      if (!args.from(obj, "y", y)) return args.failed();
 
       Napi::String z_prop_name = Napi::String::New(node_gdal::napi_env(), "z");
       if (obj.As<Napi::Object>().HasOwnProperty(z_prop_name)) {

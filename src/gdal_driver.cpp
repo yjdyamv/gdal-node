@@ -1,5 +1,6 @@
 #include <memory>
 #include "gdal_driver.hpp"
+#include "utils/args.hpp"
 #include "gdal_common.hpp"
 #include "gdal_dataset.hpp"
 #include "gdal_majorobject.hpp"
@@ -121,9 +122,10 @@ NAPI_GETTER(Driver::descriptionGetter) {
  * @param {string} filename
  */
 NAPI_METHOD(Driver::deleteDataset) {
+  Args args(info);
 
   std::string name("");
-  NODE_ARG_STR(0, "dataset name", name);
+  if (!args.get(0, "dataset name", name)) return args.failed();
 
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
@@ -181,6 +183,7 @@ auto DatasetRval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return D
  * @return {Promise<Dataset>}
  */
 GDAL_ASYNCABLE_DEFINE(Driver::create) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
   std::string filename;
@@ -189,7 +192,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
   std::string type_name = "";
   StringList *options = new StringList;
 
-  NODE_ARG_STR(0, "filename", filename);
+  if (!args.get(0, "filename", filename)) return args.failed();
 
   if (info.Length() < 3) {
     if (info.Length() > 1 && options->parse(info[1])) {
@@ -197,10 +200,10 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
       return info.Env().Undefined(); // error parsing string list
     }
   } else {
-    NODE_ARG_INT(1, "x size", x_size);
-    NODE_ARG_INT(2, "y size", y_size);
-    NODE_ARG_INT_OPT(3, "number of bands", n_bands);
-    NODE_ARG_OPT_STR(4, "data type", type_name);
+    if (!args.get(1, "x size", x_size)) return args.failed();
+    if (!args.get(2, "y size", y_size)) return args.failed();
+    if (!args.optional(3, "number of bands", n_bands)) return args.failed();
+    if (!args.optional(4, "data type", type_name)) return args.failed();
     if (info.Length() > 5 && options->parse(info[5])) {
       node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
       return info.Env().Undefined(); // error parsing string list
@@ -269,6 +272,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
  * @return {Promise<Dataset>}
  */
 GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
   if (!driver->isAlive()) {
@@ -280,7 +284,7 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
   Dataset *src_dataset;
   StringList *options;
 
-  NODE_ARG_STR(0, "filename", filename);
+  if (!args.get(0, "filename", filename)) return args.failed();
 
   // NODE_ARG_STR(1, "source dataset", src_dataset)
   if (info.Length() < 2) {
@@ -301,14 +305,14 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
   }
 
   bool strict = false;
-  NODE_ARG_BOOL_OPT(3, "strict", strict);
+  if (!args.optional(3, "strict", strict)) return args.failed();
 
   Napi::Object jsoptions;
   Napi::FunctionReference *progress_cb = nullptr;
   Napi::Value abort_signal;
-  NODE_ARG_OBJECT_OPT(4, "jsoptions", jsoptions);
-  if (!jsoptions.IsEmpty()) NODE_CB_FROM_OBJ_OPT(jsoptions, "progress_cb", progress_cb);
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(jsoptions, abort_signal);
+  if (!args.optional(4, "jsoptions", jsoptions)) return args.failed();
+  if (!jsoptions.IsEmpty()) if (!args.fromCallback(jsoptions, "progress_cb", progress_cb)) return args.failed();
+  if (!args.from(jsoptions, "abort_signal", abort_signal)) return args.failed();
 
   GDALDriver *raw = driver->getGDALDriver();
   GDALDataset *raw_ds = src_dataset->get();
@@ -344,12 +348,13 @@ GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
  * @param {string} name_new Old name of the dataset.
  */
 NAPI_METHOD(Driver::copyFiles) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
   std::string old_name;
   std::string new_name;
 
-  NODE_ARG_STR(0, "new name", new_name);
-  NODE_ARG_STR(1, "old name", old_name);
+  if (!args.get(0, "new name", new_name)) return args.failed();
+  if (!args.get(1, "old name", old_name)) return args.failed();
 
   CPLErr err = driver->getGDALDriver()->CopyFiles(new_name.c_str(), old_name.c_str());
   if (err) {
@@ -371,12 +376,13 @@ NAPI_METHOD(Driver::copyFiles) {
  * @param {string} old_name Old name of the dataset.
  */
 NAPI_METHOD(Driver::rename) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
   std::string old_name;
   std::string new_name;
 
-  NODE_ARG_STR(0, "new name", new_name);
-  NODE_ARG_STR(1, "old name", old_name);
+  if (!args.get(0, "new name", new_name)) return args.failed();
+  if (!args.get(1, "old name", old_name)) return args.failed();
 
   CPLErr err = driver->getGDALDriver()->Rename(new_name.c_str(), old_name.c_str());
   if (err) {
@@ -398,12 +404,13 @@ NAPI_METHOD(Driver::rename) {
  * @return {any}
  */
 NAPI_METHOD(Driver::getMetadata) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
   Napi::Object result;
 
   std::string domain("");
-  NODE_ARG_OPT_STR(0, "domain", domain);
+  if (!args.optional(0, "domain", domain)) return args.failed();
 
   GDALDriver *raw = driver->getGDALDriver();
   CSLConstList md = raw->GetMetadata(domain.empty() ? NULL : domain.c_str());
@@ -440,14 +447,15 @@ NAPI_METHOD(Driver::getMetadata) {
  * @return {Promise<Dataset>}
  */
 GDAL_ASYNCABLE_DEFINE(Driver::open) {
+  Args args(info);
   Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
   std::string path;
   std::string mode = "r";
   GDALAccess access = GA_ReadOnly;
 
-  NODE_ARG_STR(0, "path", path);
-  NODE_ARG_OPT_STR(1, "mode", mode);
+  if (!args.get(0, "path", path)) return args.failed();
+  if (!args.optional(1, "mode", mode)) return args.failed();
 
   if (mode == "r+") {
     access = GA_Update;

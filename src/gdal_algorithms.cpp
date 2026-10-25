@@ -1,4 +1,5 @@
 #include "gdal_algorithms.hpp"
+#include "utils/args.hpp"
 #include "gdal_common.hpp"
 #include "gdal_dataset.hpp"
 #include "gdal_layer.hpp"
@@ -61,18 +62,19 @@ void Algorithms::Initialize(Napi::Object target) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
+  Args args(info);
   Napi::Object obj;
   RasterBand *src;
   RasterBand *mask = NULL;
   double search_dist;
   int smooth_iterations = 0;
 
-  NODE_ARG_OBJECT(0, "options", obj);
+  if (!args.get(0, "options", obj)) return args.failed();
 
-  NODE_WRAPPED_FROM_OBJ(obj, "src", RasterBand, src);
-  NODE_WRAPPED_FROM_OBJ_OPT(obj, "mask", RasterBand, mask);
-  NODE_DOUBLE_FROM_OBJ(obj, "searchDist", search_dist);
-  NODE_INT_FROM_OBJ_OPT(obj, "smoothIterations", smooth_iterations);
+  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+  if (!args.from(obj, "searchDist", search_dist)) return args.failed();
+  if (!args.from(obj, "smoothIterations", smooth_iterations)) return args.failed();
 
   GDALRasterBand *gdal_src = src->get();
   GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
@@ -158,6 +160,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
+  Args args(info);
   Napi::Object obj;
   Napi::Value prop;
   RasterBand *src;
@@ -172,16 +175,16 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
   Napi::FunctionReference *progress_cb = nullptr;
   Napi::Value abort_signal;
 
-  NODE_ARG_OBJECT(0, "options", obj);
+  if (!args.get(0, "options", obj)) return args.failed();
 
-  NODE_WRAPPED_FROM_OBJ(obj, "src", RasterBand, src);
-  NODE_WRAPPED_FROM_OBJ(obj, "dst", Layer, dst);
-  NODE_INT_FROM_OBJ_OPT(obj, "idField", id_field);
-  NODE_INT_FROM_OBJ_OPT(obj, "elevField", elev_field);
-  NODE_DOUBLE_FROM_OBJ_OPT(obj, "interval", interval);
-  NODE_DOUBLE_FROM_OBJ_OPT(obj, "offset", base);
-  NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
+  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+  if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
+  if (!args.from(obj, "idField", id_field)) return args.failed();
+  if (!args.from(obj, "elevField", elev_field)) return args.failed();
+  if (!args.from(obj, "interval", interval)) return args.failed();
+  if (!args.from(obj, "offset", base)) return args.failed();
+  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
   if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "fixedLevels"))) {
     if (fixed_level_array.parse(obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "fixedLevels")))) {
       return node_gdal::napi_env().Undefined(); // error parsing double list
@@ -291,6 +294,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
+  Args args(info);
   Napi::Object obj;
   RasterBand *src;
   RasterBand *dst;
@@ -300,15 +304,15 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
   Napi::FunctionReference *progress_cb = nullptr;
   Napi::Value abort_signal;
 
-  NODE_ARG_OBJECT(0, "options", obj);
+  if (!args.get(0, "options", obj)) return args.failed();
 
-  NODE_WRAPPED_FROM_OBJ(obj, "src", RasterBand, src);
-  NODE_WRAPPED_FROM_OBJ(obj, "dst", RasterBand, dst);
-  NODE_WRAPPED_FROM_OBJ_OPT(obj, "mask", RasterBand, mask);
-  NODE_INT_FROM_OBJ(obj, "threshold", threshold);
-  NODE_INT_FROM_OBJ_OPT(obj, "connectedness", connectedness);
-  NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
+  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+  if (!args.fromWrapped(obj, "dst", "RasterBand", dst)) return args.failed();
+  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+  if (!args.from(obj, "threshold", threshold)) return args.failed();
+  if (!args.from(obj, "connectedness", connectedness)) return args.failed();
+  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
 
   if (connectedness != 4 && connectedness != 8) {
     Napi::Error::New(node_gdal::napi_env(), "connectedness option must be 4 or 8").ThrowAsJavaScriptException();
@@ -379,19 +383,20 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
  */
 
 GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
+  Args args(info);
   RasterBand *src;
   int x = 0, y = 0, w, h, bandw, bandh;
 
-  NODE_ARG_WRAPPED(0, "src", RasterBand, src);
+  if (!args.getWrapped(0, "src", "RasterBand", src)) return args.failed();
   GDAL_RAW_CHECK(GDALRasterBand *, src, gdal_src);
 
   w = bandw = src->get()->GetXSize();
   h = bandh = src->get()->GetYSize();
 
-  NODE_ARG_INT_OPT(1, "x", x);
-  NODE_ARG_INT_OPT(2, "y", y);
-  NODE_ARG_INT_OPT(3, "xSize", w);
-  NODE_ARG_INT_OPT(4, "ySize", h);
+  if (!args.optional(1, "x", x)) return args.failed();
+  if (!args.optional(2, "y", y)) return args.failed();
+  if (!args.optional(3, "xSize", w)) return args.failed();
+  if (!args.optional(4, "ySize", h)) return args.failed();
 
   if (x < 0 || y < 0 || x >= bandw || y >= bandh) {
     Napi::RangeError::New(node_gdal::napi_env(), "offset invalid for given band").ThrowAsJavaScriptException();
@@ -479,6 +484,7 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
+  Args args(info);
   Napi::Object obj;
   RasterBand *src;
   RasterBand *mask = NULL;
@@ -489,15 +495,15 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
   Napi::FunctionReference *progress_cb = nullptr;
   Napi::Value abort_signal;
 
-  NODE_ARG_OBJECT(0, "options", obj);
+  if (!args.get(0, "options", obj)) return args.failed();
 
-  NODE_WRAPPED_FROM_OBJ(obj, "src", RasterBand, src);
-  NODE_WRAPPED_FROM_OBJ(obj, "dst", Layer, dst);
-  NODE_WRAPPED_FROM_OBJ_OPT(obj, "mask", RasterBand, mask);
-  NODE_INT_FROM_OBJ_OPT(obj, "connectedness", connectedness)
-  NODE_INT_FROM_OBJ(obj, "pixValField", pix_val_field);
-  NODE_CB_FROM_OBJ_OPT(obj, "progress_cb", progress_cb);
-  NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, abort_signal);
+  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+  if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
+  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+  if (!args.from(obj, "connectedness", connectedness)) return args.failed();
+  if (!args.from(obj, "pixValField", pix_val_field)) return args.failed();
+  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
 
   if (connectedness == 8) {
     papszOptions = CSLSetNameValue(papszOptions, "8CONNECTED", "8");
@@ -567,11 +573,12 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
 // This is used for stress-testing the locking mechanism
 // it doesn't do anything but sollicit locks
 GDAL_ASYNCABLE_DEFINE(Algorithms::_acquireLocks) {
+  Args args(info);
   Dataset *ds1, *ds2, *ds3;
 
-  NODE_ARG_WRAPPED(0, "ds1", Dataset, ds1);
-  NODE_ARG_WRAPPED(1, "ds2", Dataset, ds2);
-  NODE_ARG_WRAPPED(2, "ds3", Dataset, ds3);
+  if (!args.getWrapped(0, "ds1", "Dataset", ds1)) return args.failed();
+  if (!args.getWrapped(1, "ds2", "Dataset", ds2)) return args.failed();
+  if (!args.getWrapped(2, "ds3", "Dataset", ds3)) return args.failed();
 
   GDALAsyncableJob<int> job({ds1->uid, ds2->uid, ds3->uid});
   job.main = [](const GDALExecutionProgress &) {
@@ -607,12 +614,13 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::_acquireLocks) {
  * @param {PixelFunction} pixelFn
  */
 NAPI_METHOD(Algorithms::addPixelFunc) {
+  Args args(info);
 
   std::string name;
-  NODE_ARG_STR(0, "name", name);
+  if (!args.get(0, "name", name)) return args.failed();
 
   Napi::Object arg;
-  NODE_ARG_OBJECT(1, "pixelFn", arg);
+  if (!args.get(1, "pixelFn", arg)) return args.failed();
 
   Napi::TypedArrayOf<uint64_t> magic = arg.As<Napi::TypedArrayOf<uint64_t>>();
 
@@ -842,9 +850,10 @@ static CPLErr pixelFunc(
  * @returns {PixelFunction}
  */
 NAPI_METHOD(Algorithms::toPixelFunc) {
+  Args args(info);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 5)
   Napi::FunctionReference *pfn;
-  NODE_ARG_CB(0, "pixelFn", pfn);
+  if (!args.getCallback(0, "pixelFn", pfn)) return args.failed();
 
   size_t uid = pixelFuncs.size();
   pixelFuncs.push_back({pfn, {}, {}, {}, nullptr});

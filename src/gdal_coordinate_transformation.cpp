@@ -1,5 +1,6 @@
 #include <string>
 #include "gdal_coordinate_transformation.hpp"
+#include "utils/args.hpp"
 #include "gdal_common.hpp"
 #include "gdal_dataset.hpp"
 #include "gdal_spatial_reference.hpp"
@@ -190,6 +191,7 @@ NAPI_METHOD(CoordinateTransformation::toString) {
  * @return {xyz} A regular object containing `x`, `y`, `z` properties.
  */
 NAPI_METHOD(CoordinateTransformation::transformPoint) {
+  Args args(info);
   CoordinateTransformation *transform = node_gdal::UnwrapWrapped<CoordinateTransformation>(info.This().As<Napi::Object>());
 
   double x, y, z = 0;
@@ -207,9 +209,9 @@ NAPI_METHOD(CoordinateTransformation::transformPoint) {
     y = static_cast<double>(arg_y.As<Napi::Number>().DoubleValue());
     if (arg_z.IsNumber()) { z = static_cast<double>(arg_z.As<Napi::Number>().DoubleValue()); }
   } else {
-    NODE_ARG_DOUBLE(0, "x", x);
-    NODE_ARG_DOUBLE(1, "y", y);
-    NODE_ARG_DOUBLE_OPT(2, "z", z);
+    if (!args.get(0, "x", x)) return args.failed();
+    if (!args.get(1, "y", y)) return args.failed();
+    if (!args.optional(2, "z", z)) return args.failed();
   }
 
 #ifdef BUNDLED_GDAL

@@ -1,4 +1,5 @@
 #include "layer_features.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_common.hpp"
 #include "../gdal_feature.hpp"
 #include "../gdal_layer.hpp"
@@ -94,6 +95,7 @@ NAPI_METHOD(LayerFeatures::toString) {
  * @return {Promise<Feature>}
  */
 GDAL_ASYNCABLE_DEFINE(LayerFeatures::get) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -104,7 +106,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::get) {
   }
 
   int feature_id;
-  NODE_ARG_INT(0, "feature id", feature_id);
+  if (!args.get(0, "feature id", feature_id)) return args.failed();
   OGRLayer *gdal_layer = layer->get();
   GDALAsyncableJob<OGRFeature *> job(layer->parent_uid);
   job.persist(layer->Value());
@@ -249,6 +251,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::next) {
  */
 
 GDAL_ASYNCABLE_DEFINE(LayerFeatures::add) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -259,7 +262,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::add) {
   }
 
   Feature *f;
-  NODE_ARG_WRAPPED(0, "feature", Feature, f)
+  if (!args.getWrapped(0, "feature", "Feature", f)) return args.failed();
 
   OGRLayer *gdal_layer = layer->get();
   OGRFeature *gdal_f = f->get();
@@ -297,6 +300,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::add) {
  */
 
 GDAL_ASYNCABLE_DEFINE(LayerFeatures::count) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -315,7 +319,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::count) {
   }
 
   int force = 1;
-  NODE_ARG_BOOL_OPT(0, "force", force);
+  if (!args.optional(0, "force", force)) return args.failed();
 
   OGRLayer *gdal_layer = layer->get();
   GDALAsyncableJob<GIntBig> job(layer->parent_uid);
@@ -363,6 +367,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::count) {
  * @return {Promise<Feature>}
  */
 GDAL_ASYNCABLE_DEFINE(LayerFeatures::set) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -384,12 +389,12 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::set) {
 
   Napi::Object feature;
   if (info[0].IsObject()) {
-    NODE_ARG_WRAPPED(0, "feature", Feature, f);
+    if (!args.getWrapped(0, "feature", "Feature", f)) return args.failed();
     feature = info[0].As<Napi::Object>();
   } else if (info[0].IsNumber()) {
     int i = 0;
-    NODE_ARG_INT(0, "feature id", i);
-    NODE_ARG_WRAPPED(1, "feature", Feature, f);
+    if (!args.get(0, "feature id", i)) return args.failed();
+    if (!args.getWrapped(1, "feature", "Feature", f)) return args.failed();
     feature = info[1].As<Napi::Object>();
     err = f->get()->SetFID(i);
     if (err) {
@@ -444,6 +449,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::set) {
  */
 
 GDAL_ASYNCABLE_DEFINE(LayerFeatures::remove) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -454,7 +460,7 @@ GDAL_ASYNCABLE_DEFINE(LayerFeatures::remove) {
   }
 
   int i;
-  NODE_ARG_INT(0, "feature id", i);
+  if (!args.get(0, "feature id", i)) return args.failed();
 
   OGRLayer *gdal_layer = layer->get();
   GDALAsyncableJob<int> job(layer->parent_uid);

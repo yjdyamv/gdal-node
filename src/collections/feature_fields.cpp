@@ -1,4 +1,5 @@
 #include "../gdal_common.hpp"
+#include "../utils/args.hpp"
 #include "../gdal_feature.hpp"
 #include "feature_fields.hpp"
 
@@ -300,6 +301,7 @@ NAPI_METHOD(FeatureFields::count) {
  * @return {number} Index or, `-1` if it cannot be found.
  */
 NAPI_METHOD(FeatureFields::indexOf) {
+  Args args(info);
 
   Napi::Object parent =
     GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
@@ -310,7 +312,7 @@ NAPI_METHOD(FeatureFields::indexOf) {
   }
 
   std::string name("");
-  NODE_ARG_STR(0, "field name", name);
+  if (!args.get(0, "field name", name)) return args.failed();
 
   return Napi::Number::New(node_gdal::napi_env(), f->get()->GetFieldIndex(name.c_str()));
 }

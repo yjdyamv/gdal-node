@@ -1,5 +1,6 @@
 
 #include "gdal_spatial_reference.hpp"
+#include "utils/args.hpp"
 #include "gdal_common.hpp"
 #include "utils/string_list.hpp"
 #include "async.hpp"
@@ -374,9 +375,10 @@ NAPI_METHOD(SpatialReference::cloneGeogCS) {
  * @return {string}
  */
 NAPI_METHOD(SpatialReference::getAuthorityName) {
+  Args args(info);
 
   std::string key = "";
-  NODE_ARG_OPT_STR(0, "target key", key);
+  if (!args.optional(0, "target key", key)) return args.failed();
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
 
@@ -393,9 +395,10 @@ NAPI_METHOD(SpatialReference::getAuthorityName) {
  * @return {string}
  */
 NAPI_METHOD(SpatialReference::getAuthorityCode) {
+  Args args(info);
 
   std::string key = "";
-  NODE_ARG_OPT_STR(0, "target key", key);
+  if (!args.optional(0, "target key", key)) return args.failed();
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
 
@@ -440,9 +443,10 @@ NAPI_METHOD(SpatialReference::exportToWKT) {
  * @return {string}
  */
 NAPI_METHOD(SpatialReference::exportToPrettyWKT) {
+  Args args(info);
 
   int simplify = 0;
-  NODE_ARG_BOOL_OPT(0, "simplify", simplify);
+  if (!args.optional(0, "simplify", simplify)) return args.failed();
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
   char *str;
@@ -527,12 +531,13 @@ NAPI_METHOD(SpatialReference::exportToXML) {
  * @return {string}
  */
 NAPI_METHOD(SpatialReference::getAttrValue) {
+  Args args(info);
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
   std::string node_name("");
   int child = 0;
-  NODE_ARG_STR(0, "node name", node_name);
-  NODE_ARG_INT_OPT(1, "child", child);
+  if (!args.get(0, "node name", node_name)) return args.failed();
+  if (!args.optional(1, "child", child)) return args.failed();
   return SafeString::New(srs->this_->GetAttrValue(node_name.c_str(), child));
 }
 
@@ -548,9 +553,10 @@ NAPI_METHOD(SpatialReference::getAttrValue) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromWKT) {
+  Args args(info);
 
   std::string wkt("");
-  NODE_ARG_STR(0, "wkt", wkt);
+  if (!args.get(0, "wkt", wkt)) return args.failed();
   OGRChar *str = (OGRChar *)wkt.c_str();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
@@ -576,9 +582,10 @@ NAPI_METHOD(SpatialReference::fromWKT) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromProj4) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "input", input);
+  if (!args.get(0, "input", input)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromProj4(input.c_str());
@@ -611,9 +618,10 @@ NAPI_METHOD(SpatialReference::fromProj4) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromWMSAUTO) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "input", input);
+  if (!args.get(0, "input", input)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromWMSAUTO(input.c_str());
@@ -638,9 +646,10 @@ NAPI_METHOD(SpatialReference::fromWMSAUTO) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromXML) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "xml", input);
+  if (!args.get(0, "xml", input)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromXML(input.c_str());
@@ -669,9 +678,10 @@ NAPI_METHOD(SpatialReference::fromXML) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromURN) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "input", input);
+  if (!args.get(0, "input", input)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromURN(input.c_str());
@@ -718,9 +728,10 @@ NAPI_METHOD(SpatialReference::fromURN) {
  * @return {Promise<SpatialReference>}
  */
 GDAL_ASYNCABLE_DEFINE(SpatialReference::fromCRSURL) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "url", input);
+  if (!args.get(0, "url", input)) return args.failed();
 
   GDALAsyncableJob<OGRSpatialReference *> job(0);
 
@@ -768,9 +779,10 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromCRSURL) {
  */
 
 GDAL_ASYNCABLE_DEFINE(SpatialReference::fromURL) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "url", input);
+  if (!args.get(0, "url", input)) return args.failed();
 
   GDALAsyncableJob<OGRSpatialReference *> job(0);
 
@@ -799,9 +811,10 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromURL) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromMICoordSys) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "input", input);
+  if (!args.get(0, "input", input)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromMICoordSys(input.c_str());
@@ -846,9 +859,10 @@ NAPI_METHOD(SpatialReference::fromMICoordSys) {
  * @return {Promise<SpatialReference>}
  */
 GDAL_ASYNCABLE_DEFINE(SpatialReference::fromUserInput) {
+  Args args(info);
 
   std::string input("");
-  NODE_ARG_STR(0, "url", input);
+  if (!args.get(0, "url", input)) return args.failed();
 
   GDALAsyncableJob<OGRSpatialReference *> job(0);
 
@@ -881,9 +895,10 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromUserInput) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromEPSG) {
+  Args args(info);
 
   int epsg;
-  NODE_ARG_INT(0, "epsg", epsg);
+  if (!args.get(0, "epsg", epsg)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromEPSG(epsg);
@@ -918,9 +933,10 @@ NAPI_METHOD(SpatialReference::fromEPSG) {
  * @return {SpatialReference}
  */
 NAPI_METHOD(SpatialReference::fromEPSGA) {
+  Args args(info);
 
   int epsg;
-  NODE_ARG_INT(0, "epsg", epsg);
+  if (!args.get(0, "epsg", epsg)) return args.failed();
 
   OGRSpatialReference *srs = new OGRSpatialReference();
   int err = srs->importFromEPSGA(epsg);

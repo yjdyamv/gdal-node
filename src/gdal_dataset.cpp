@@ -1,4 +1,5 @@
 #include "gdal_dataset.hpp"
+#include "utils/args.hpp"
 #include "gdal_group.hpp"
 #include "collections/dataset_bands.hpp"
 #include "collections/dataset_layers.hpp"
@@ -166,11 +167,12 @@ NAPI_METHOD(Dataset::toString) {
  * @return {Promise<any>}
  */
 GDAL_ASYNCABLE_DEFINE(Dataset::getMetadata) {
+  Args args(info);
   NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
   GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
   std::string domain("");
-  NODE_ARG_OPT_STR(0, "domain", domain);
+  if (!args.optional(0, "domain", domain)) return args.failed();
 
   GDALAsyncableJob<CSLConstList> job(ds->uid);
   job.main = [raw, domain](const GDALExecutionProgress &) {
@@ -204,6 +206,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::getMetadata) {
  * @return {Promise<boolean>}
  */
 GDAL_ASYNCABLE_DEFINE(Dataset::setMetadata) {
+  Args args(info);
   NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
   GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
@@ -214,7 +217,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::setMetadata) {
   }
 
   std::string domain("");
-  NODE_ARG_OPT_STR(1, "domain", domain);
+  if (!args.optional(1, "domain", domain)) return args.failed();
 
   GDALAsyncableJob<CPLErr> job(ds->uid);
   job.main = [raw, options, domain](const GDALExecutionProgress &) {
@@ -236,6 +239,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::setMetadata) {
  * @return {boolean}
  */
 NAPI_METHOD(Dataset::testCapability) {
+  Args args(info);
   Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
 
   if (!ds->isAlive()) {
@@ -246,7 +250,7 @@ NAPI_METHOD(Dataset::testCapability) {
   GDALDataset *raw = ds->get();
 
   std::string capability("");
-  NODE_ARG_STR(0, "capability", capability);
+  if (!args.get(0, "capability", capability)) return args.failed();
 
   AsyncGuard lock({ds->uid}, eventLoopWarn);
   return Napi::Boolean::New(node_gdal::napi_env(), raw->TestCapability(capability.c_str()));
@@ -379,6 +383,7 @@ GDAL_ASYNCABLE_DEFINE(Dataset::flush) {
  * @return {Promise<Layer>}
  */
 GDAL_ASYNCABLE_DEFINE(Dataset::executeSQL) {
+  Args args(info);
   Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
 
   if (!ds->isAlive()) {
@@ -392,9 +397,9 @@ GDAL_ASYNCABLE_DEFINE(Dataset::executeSQL) {
   std::string sql_dialect;
   Geometry *spatial_filter = NULL;
 
-  NODE_ARG_STR(0, "sql text", sql);
-  NODE_ARG_WRAPPED_OPT(1, "spatial filter geometry", Geometry, spatial_filter);
-  NODE_ARG_OPT_STR(2, "sql dialect", sql_dialect);
+  if (!args.get(0, "sql text", sql)) return args.failed();
+  if (!args.optionalWrapped(1, "spatial filter geometry", "Geometry", spatial_filter)) return args.failed();
+  if (!args.optional(2, "sql dialect", sql_dialect)) return args.failed();
 
   GDALAsyncableJob<OGRLayer *> job(ds->uid);
   OGRGeometry *geom_filter = spatial_filter ? spatial_filter->get() : NULL;
@@ -517,6 +522,7 @@ NAPI_METHOD(Dataset::getGCPs) {
  * @param {string} [projection]
  */
 NAPI_METHOD(Dataset::setGCPs) {
+  Args args(info);
   Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
 
   if (!ds->isAlive()) {
@@ -532,8 +538,8 @@ NAPI_METHOD(Dataset::setGCPs) {
 
   Napi::Array gcps;
   std::string projection("");
-  NODE_ARG_ARRAY(0, "gcps", gcps);
-  NODE_ARG_OPT_STR(1, "projection", projection);
+  if (!args.get(0, "gcps", gcps)) return args.failed();
+  if (!args.optional(1, "projection", projection)) return args.failed();
 
   std::shared_ptr<GDAL_GCP[]> list(new GDAL_GCP[gcps.Length()]);
   std::shared_ptr<std::string[]> pszId_list(new std::string[gcps.Length()]);
@@ -547,13 +553,13 @@ NAPI_METHOD(Dataset::setGCPs) {
     }
     Napi::Object obj = val.As<Napi::Object>();
 
-    NODE_DOUBLE_FROM_OBJ(obj, "dfGCPPixel", gcp->dfGCPPixel);
-    NODE_DOUBLE_FROM_OBJ(obj, "dfGCPLine", gcp->dfGCPLine);
-    NODE_DOUBLE_FROM_OBJ(obj, "dfGCPX", gcp->dfGCPX);
-    NODE_DOUBLE_FROM_OBJ(obj, "dfGCPY", gcp->dfGCPY);
-    NODE_DOUBLE_FROM_OBJ_OPT(obj, "dfGCPZ", gcp->dfGCPZ);
-    NODE_STR_FROM_OBJ_OPT(obj, "pszId", pszId_list.get()[i]);
-    NODE_STR_FROM_OBJ_OPT(obj, "pszInfo", pszInfo_list.get()[i]);
+    if (!args.from(obj, "dfGCPPixel", gcp->dfGCPPixel)) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "dfGCPLine", gcp->dfGCPLine)) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "dfGCPX", gcp->dfGCPX)) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "dfGCPY", gcp->dfGCPY)) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "dfGCPZ", gcp->dfGCPZ)) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "pszId", pszId_list.get()[i])) return node_gdal::napi_env().Undefined();
+    if (!args.from(obj, "pszInfo", pszInfo_list.get()[i])) return node_gdal::napi_env().Undefined();
 
     gcp->pszId = (char *)pszId_list.get()[i].c_str();
     gcp->pszInfo = (char *)pszInfo_list.get()[i].c_str();
@@ -607,6 +613,7 @@ NAPI_METHOD(Dataset::setGCPs) {
  * @return {Promise<void>}
  */
 GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
+  Args args(info);
 
   NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
   GDAL_RAW_CHECK(GDALDataset *, ds, raw);
@@ -615,9 +622,9 @@ GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
   Napi::Array overviews;
   Napi::Array bands;
 
-  NODE_ARG_STR(0, "resampling", resampling);
-  NODE_ARG_ARRAY(1, "overviews", overviews);
-  NODE_ARG_ARRAY_OPT(2, "bands", bands);
+  if (!args.get(0, "resampling", resampling)) return args.failed();
+  if (!args.get(1, "overviews", overviews)) return args.failed();
+  if (!args.optional(2, "bands", bands)) return args.failed();
 
   int n_overviews = overviews.Length();
   int i, n_bands = 0;
