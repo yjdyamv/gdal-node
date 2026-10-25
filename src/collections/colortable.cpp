@@ -7,6 +7,14 @@
 
 namespace node_gdal {
 
+namespace {
+// A color table retrieved from a band is owned by the band; the ones created by
+// JS or by a factory without a parent belong to the wrapper
+void free_colortable(void *ptr) {
+  delete static_cast<GDALColorTable *>(ptr);
+}
+} // namespace
+
 Napi::FunctionReference &ColorTable::constructor() {
   return node_gdal::env_context().constructor<ColorTable>();
 }
@@ -35,10 +43,10 @@ void ColorTable::Initialize(Napi::Object target) {
 }
 
 
-ColorTable::ColorTable(const Napi::CallbackInfo &info) : GDALObject<ColorTable>(info), parent_uid(0), this_(nullptr) {
-  GDALColorTable *pending = node_gdal::TakePendingObject<GDALColorTable>();
-  if (pending != nullptr) {
-    this_ = pending;
+ColorTable::ColorTable(const Napi::CallbackInfo &info) : GDALObject<ColorTable>(info), parent_uid(0) {
+  Handle<GDALColorTable> pending = node_gdal::TakePendingHandle<GDALColorTable>();
+  if (pending) {
+    this_ = std::move(pending);
     // the factory passes the owning dataset's uid as the first argument
     if (info.Length() > 0 && info[0].IsNumber()) parent_uid = info[0].As<Napi::Number>().Int64Value();
   } else {
@@ -61,10 +69,10 @@ ColorTable::ColorTable(const Napi::CallbackInfo &info) : GDALObject<ColorTable>(
       Napi::RangeError::New(info.Env(), "Invalid palette interpretation").ThrowAsJavaScriptException();
       return;
     }
-    this_ = new GDALColorTable(gpi);
+    this_ = Handle<GDALColorTable>::owned(new GDALColorTable(gpi), &free_colortable);
   }
 
-  uid = object_store().add(this_, *this, parent_uid);
+  uid = object_store().add(this_.get(), *this, parent_uid);
 }
 
 ColorTable::~ColorTable() {
@@ -73,10 +81,10 @@ ColorTable::~ColorTable() {
 
 void ColorTable::dispose() {
   if (this_) {
-    LOG("Disposing ColorTable [%p]", this_);
+    LOG("Disposing ColorTable [%p]", this_.get());
     object_store().dispose(uid, false);
-    if (parent_uid == 0 && this_ != nullptr) delete this_;
-    this_ = nullptr;
+    // The handle deletes the table, unless the band it came from owns it
+    this_.reset();
   }
 }
 /**
@@ -118,7 +126,7 @@ Napi::Value ColorTable::New(GDALColorTable *raw) {
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store().has(raw)) { return object_store().get(raw); }
 
-  node_gdal::detail::PendingObjectGuard pending(raw);
+  node_gdal::detail::PendingObjectGuard pending(raw, &free_colortable);
   std::vector<napi_value> args = {Napi::Number::New(node_gdal::napi_env(), 0)};
   Napi::Object obj = ColorTable::constructor().Value().New(args);
 

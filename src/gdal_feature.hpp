@@ -43,7 +43,7 @@ class Feature : public GDALObject<Feature> {
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself
   ~Feature();
   inline OGRFeature *get() {
-    return this_;
+    return this_.get();
   }
   inline bool isAlive() {
     return this_;
@@ -51,8 +51,7 @@ class Feature : public GDALObject<Feature> {
   void dispose();
 
     private:
-  OGRFeature *this_;
-  bool owned_;
+  Handle<OGRFeature> this_;
   // int size_;
 };
 

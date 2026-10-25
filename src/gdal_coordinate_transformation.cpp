@@ -9,6 +9,13 @@
 
 namespace node_gdal {
 
+namespace {
+// The wrapper always owns the transformation
+void free_transformation(void *ptr) {
+  OGRCoordinateTransformation::DestroyCT(static_cast<OGRCoordinateTransformation *>(ptr));
+}
+} // namespace
+
 Napi::FunctionReference &CoordinateTransformation::constructor() {
   return node_gdal::env_context().constructor<CoordinateTransformation>();
 }
@@ -30,10 +37,10 @@ void CoordinateTransformation::Initialize(Napi::Object target) {
 }
 
 CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &info)
-  : GDALObject<CoordinateTransformation>(info), this_(nullptr) {
-  OGRCoordinateTransformation *pending = node_gdal::TakePendingObject<OGRCoordinateTransformation>();
-  if (pending != nullptr) {
-    this_ = pending;
+  : GDALObject<CoordinateTransformation>(info) {
+  Handle<OGRCoordinateTransformation> pending = node_gdal::TakePendingHandle<OGRCoordinateTransformation>();
+  if (pending) {
+    this_ = std::move(pending);
     LOG("Created CoordinateTransformation [%p]", this_);
     return;
   }
@@ -77,7 +84,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
       NODE_THROW_LAST_CPLERR;
       return;
     }
-    this_ = transform;
+    this_ = Handle<OGRCoordinateTransformation>::owned(transform, &free_transformation);
   } else if (info[1].As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
     // srs -> px/line
     // todo: allow additional options using StringList
@@ -109,7 +116,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
       return;
     }
 
-    this_ = transform;
+    this_ = Handle<OGRCoordinateTransformation>::owned(transform, &free_transformation);
 
     CPLFree(src_wkt);
     CSLDestroy(papszTO);
@@ -122,12 +129,8 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
 }
 
 CoordinateTransformation::~CoordinateTransformation() {
-  if (this_) {
-    LOG("Disposing CoordinateTransformation [%p]", this_);
-    OGRCoordinateTransformation::DestroyCT(this_);
-    LOG("Disposed CoordinateTransformation [%p]", this_);
-    this_ = NULL;
-  }
+  // The handle destroys the transformation
+  LOG("Disposed CoordinateTransformation [%p]", this_.get());
 }
 
 /**

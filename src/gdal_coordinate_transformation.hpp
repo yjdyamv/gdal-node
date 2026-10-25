@@ -36,7 +36,7 @@ class CoordinateTransformation : public GDALObject<CoordinateTransformation> {
   }
 
     private:
-  OGRCoordinateTransformation *this_;
+  Handle<OGRCoordinateTransformation> this_;
 };
 
 // adapted from gdalwarp source

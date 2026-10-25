@@ -81,8 +81,7 @@ class SpatialReference : public GDALObject<SpatialReference> {
   long uid;
 
     private:
-  OGRSpatialReference *this_;
-  bool owned_;
+  Handle<OGRSpatialReference> this_;
 };
 
 } // namespace node_gdal

@@ -6,6 +6,15 @@
 
 namespace node_gdal {
 
+namespace {
+// The wrapper owns the spatial reference it holds, the factory clones the one
+// of a dataset or a layer or is handed a fresh one
+void free_spatial_reference(void *ptr) {
+  // Decrements the reference count by one, and destroys it if zero
+  static_cast<OGRSpatialReference *>(ptr)->Release();
+}
+} // namespace
+
 Napi::FunctionReference &SpatialReference::constructor() {
   return node_gdal::env_context().constructor<SpatialReference>();
 }
@@ -72,14 +81,11 @@ SpatialReference::~SpatialReference() {
 
 void SpatialReference::dispose() {
   if (this_) {
-    LOG("Disposing SpatialReference [%p] (%s)", this_, owned_ ? "owned" : "unowned");
+    LOG("Disposing SpatialReference [%p]", this_.get());
     object_store().dispose(uid);
-    if (owned_) {
-      // Decrements the reference count by one, and destroy if zero.
-      this_->Release();
-    }
-    LOG("Disposed SpatialReference [%p]", this_);
-    this_ = NULL;
+    // The handle releases the spatial reference, if this wrapper owns it
+    this_.reset();
+    LOG("Disposed SpatialReference");
   }
 }
 
@@ -93,11 +99,11 @@ void SpatialReference::dispose() {
  * @param {string} [wkt]
  */
 SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
-  : GDALObject<SpatialReference>(info), this_(nullptr), owned_(false), uid(0) {
+  : GDALObject<SpatialReference>(info), uid(0) {
   // Internal construction: the factory hands the OGR object over directly
-  OGRSpatialReference *pending = node_gdal::TakePendingObject<OGRSpatialReference>();
-  if (pending != nullptr) {
-    this_ = pending;
+  Handle<OGRSpatialReference> pending = node_gdal::TakePendingHandle<OGRSpatialReference>();
+  if (pending) {
+    this_ = std::move(pending);
     LOG("Created SpatialReference [%p]", this_);
     return;
   }
@@ -126,8 +132,7 @@ SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
     }
   }
 
-  this_ = srs;
-  owned_ = true;
+  this_ = Handle<OGRSpatialReference>::owned(srs, &free_spatial_reference);
   uid = object_store().add(srs, *this, 0);
   LOG("Created SpatialReference [%p]", this_);
 }
@@ -154,12 +159,10 @@ Napi::Value SpatialReference::New(OGRSpatialReference *raw, bool owned) {
   OGRSpatialReference *cloned_srs = raw;
   if (!owned) cloned_srs = raw->Clone();
 
-  node_gdal::detail::PendingObjectGuard pending(cloned_srs);
+  node_gdal::detail::PendingObjectGuard pending(cloned_srs, &free_spatial_reference);
   std::vector<napi_value> args;
   Napi::Object obj = constructor().Value().New(args);
   SpatialReference *wrapped = node_gdal::UnwrapWrapped<SpatialReference>(obj);
-  wrapped->owned_ = true;
-
   wrapped->uid = object_store().add(raw, *wrapped, 0);
 
   return obj;

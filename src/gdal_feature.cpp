@@ -9,6 +9,14 @@
 
 namespace node_gdal {
 
+namespace {
+// The wrapper owns the feature it holds: the factory either destroys the one of
+// a layer or is handed a fresh one
+void free_feature(void *ptr) {
+  OGRFeature::DestroyFeature(static_cast<OGRFeature *>(ptr));
+}
+} // namespace
+
 Napi::FunctionReference &Feature::constructor() {
   return node_gdal::env_context().constructor<Feature>();
 }
@@ -54,10 +62,10 @@ void Feature::Initialize(Napi::Object target) {
  * @param {Layer|FeatureDefn} layer_or_defn The layer or the feature definition
  * the feature will be created from
  */
-Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info), this_(nullptr), owned_(true) {
-  OGRFeature *pending = node_gdal::TakePendingObject<OGRFeature>();
-  if (pending != nullptr) {
-    this_ = pending;
+Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info) {
+  Handle<OGRFeature> pending = node_gdal::TakePendingHandle<OGRFeature>();
+  if (pending) {
+    this_ = std::move(pending);
     LOG("Created Feature[%p]", this_);
   } else {
 
@@ -87,7 +95,7 @@ Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info), th
       return;
     }
 
-    this_ = new OGRFeature(def);
+    this_ = Handle<OGRFeature>::owned(new OGRFeature(def), &free_feature);
     LOG("Created Feature[%p]", this_);
   }
 
@@ -100,12 +108,9 @@ Feature::~Feature() {
 }
 
 void Feature::dispose() {
-  if (this_) {
-    LOG("Disposing Feature [%p] (%s)", this_, owned_ ? "owned" : "unowned");
-    if (owned_) OGRFeature::DestroyFeature(this_);
-    LOG("Disposed Feature [%p]", this_);
-    this_ = NULL;
-  }
+  // The handle destroys the feature, if this wrapper owns it
+  LOG("Disposed Feature [%p]", this_.get());
+  this_.reset();
 }
 
 // Currently read-only feature definitions are copied.
@@ -119,11 +124,9 @@ Napi::Value Feature::New(OGRFeature *feature) {
 Napi::Value Feature::New(OGRFeature *feature, bool owned) {
   if (!feature) { return node_gdal::napi_env().Null(); }
 
-  node_gdal::detail::PendingObjectGuard pending(feature);
+  node_gdal::detail::PendingObjectGuard pending(feature, owned ? &free_feature : nullptr);
   std::vector<napi_value> args;
-  Napi::Object obj = Feature::constructor().Value().New(args);
-  node_gdal::UnwrapWrapped<Feature>(obj)->owned_ = owned;
-  return obj;
+  return Feature::constructor().Value().New(args);
 }
 
 NAPI_METHOD(Feature::toString) {

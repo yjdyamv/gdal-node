@@ -38,15 +38,14 @@ class FieldDefn : public GDALObject<FieldDefn> {
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself
   ~FieldDefn();
   inline OGRFieldDefn *get() {
-    return this_;
+    return this_.get();
   }
   inline bool isAlive() {
     return this_;
   }
 
     private:
-  OGRFieldDefn *this_;
-  bool owned_;
+  Handle<OGRFieldDefn> this_;
 };
 
 } // namespace node_gdal

@@ -5,6 +5,14 @@
 
 namespace node_gdal {
 
+namespace {
+// The wrapper owns the field definition it holds, the factory either copies
+// the one of a layer or is handed a fresh one
+void free_field_defn(void *ptr) {
+  delete static_cast<OGRFieldDefn *>(ptr);
+}
+} // namespace
+
 Napi::FunctionReference &FieldDefn::constructor() {
   return node_gdal::env_context().constructor<FieldDefn>();
 }
@@ -38,10 +46,10 @@ void FieldDefn::Initialize(Napi::Object target) {
  * @param {string} name The name of the field
  * @param {string} type The type of the field (see {@link OFT|OFT constants})
  */
-FieldDefn::FieldDefn(const Napi::CallbackInfo &info) : GDALObject<FieldDefn>(info), this_(nullptr), owned_(false) {
-  OGRFieldDefn *pending = node_gdal::TakePendingObject<OGRFieldDefn>();
-  if (pending != nullptr) {
-    this_ = pending;
+FieldDefn::FieldDefn(const Napi::CallbackInfo &info) : GDALObject<FieldDefn>(info) {
+  Handle<OGRFieldDefn> pending = node_gdal::TakePendingHandle<OGRFieldDefn>();
+  if (pending) {
+    this_ = std::move(pending);
     LOG("Created FieldDefn [%p]", this_);
     return;
   }
@@ -61,17 +69,13 @@ FieldDefn::FieldDefn(const Napi::CallbackInfo &info) : GDALObject<FieldDefn>(inf
     return;
   }
 
-  this_ = new OGRFieldDefn(field_name.c_str(), static_cast<OGRFieldType>(field_type));
-  owned_ = true;
+  this_ = Handle<OGRFieldDefn>::owned(
+    new OGRFieldDefn(field_name.c_str(), static_cast<OGRFieldType>(field_type)), &free_field_defn);
 }
 
 FieldDefn::~FieldDefn() {
-  if (this_) {
-    LOG("Disposing FieldDefn [%p] (%s)", this_, owned_ ? "owned" : "unowned");
-    if (owned_) delete this_;
-    LOG("Disposed FieldDefn [%p]", this_);
-    this_ = NULL;
-  }
+  // The handle frees the field definition, if this wrapper owns it
+  LOG("Disposed FieldDefn [%p]", this_.get());
 }
 
 // Currently read-only field definitions are copied.
@@ -90,15 +94,11 @@ Napi::Value FieldDefn::New(OGRFieldDefn *def, bool owned) {
   if (!def) { return node_gdal::napi_env().Null(); }
   if (!owned) { def = new OGRFieldDefn(def); }
 
-  node_gdal::detail::PendingObjectGuard pending(def);
-  std::vector<napi_value> args;
-  Napi::Object obj = FieldDefn::constructor().Value().New(args);
-  FieldDefn *wrapped = node_gdal::UnwrapWrapped<FieldDefn>(obj);
   // The pointer is always ours: it is either the copy made above or the one the
-  // caller handed over. Without this the wrapper is not freed with the object
-  wrapped->owned_ = true;
-
-  return obj;
+  // caller handed over
+  node_gdal::detail::PendingObjectGuard pending(def, &free_field_defn);
+  std::vector<napi_value> args;
+  return FieldDefn::constructor().Value().New(args);
 }
 
 NAPI_METHOD(FieldDefn::toString) {

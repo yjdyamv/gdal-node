@@ -15,6 +15,16 @@
 namespace node_gdal {
 
 /**
+ * What a wrapper factory hands to the constructor of its class: the GDAL object
+ * and, when the wrapper owns it, the function which frees it. A null `free`
+ * means the object belongs to a parent object and the wrapper only borrows it.
+ */
+struct PendingObject {
+  const void *ptr = nullptr;
+  void (*free)(void *) = nullptr;
+};
+
+/**
  * The state which belongs to one Node-API environment.
  *
  * Every V8 isolate - the main thread and each worker_thread - has its own
@@ -72,7 +82,7 @@ class EnvContext {
 
   // The pointer which a wrapper factory of the calling thread handed to the
   // constructor of its class, see node_gdal::detail::PendingObjectGuard
-  const void *&pending_object() {
+  PendingObject &pending_object() {
     return pending_object_;
   }
 
@@ -104,7 +114,7 @@ class EnvContext {
   ObjectStore store_;
   std::map<std::string, Napi::Reference<Napi::Symbol>> symbols_;
   std::map<std::type_index, Napi::FunctionReference> constructors_;
-  const void *pending_object_ = nullptr;
+  PendingObject pending_object_;
   bool shutting_down_ = false;
 
   static thread_local EnvContext *active_env_context;

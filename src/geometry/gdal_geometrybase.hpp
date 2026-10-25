@@ -5,6 +5,12 @@
 
 namespace node_gdal {
 
+// The wrapper owns the geometry it holds: the factory clones the one of a
+// feature, or the geometry was created by JS
+template <typename OGRT> inline void free_geometry(void *ptr) {
+  OGRGeometryFactory::destroyGeometry(static_cast<OGRGeometry *>(ptr));
+}
+
 /*
  * Geometry class inheritance hierarchy.
  * It uses CRTP - https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern
@@ -54,7 +60,7 @@ namespace node_gdal {
 #define UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(geom)                                                                         \
   {                                                                                                                    \
     int new_size = geom->this_->WkbSize();                                                                             \
-    if (geom->owned_) Napi::MemoryManagement::AdjustExternalMemory(geom->Env(), new_size - geom->size_);               \
+    if (geom->this_.owned()) Napi::MemoryManagement::AdjustExternalMemory(geom->Env(), new_size - geom->size_);         \
     geom->size_ = new_size;                                                                                            \
   }
 
@@ -85,8 +91,7 @@ template <class T, class OGRT> class GeometryBase : public GDALObject<T> {
 
     protected:
   ~GeometryBase();
-  OGRT *this_;
-  bool owned_;
+  Handle<OGRT> this_;
   int size_;
   // true when the wrapper was created by a factory rather than from JS: the base
   // constructor then takes the OGR object from the thread-local slot
@@ -113,12 +118,11 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
   // node-addon-api allocates the wrapper itself, so the factory hands the OGR
   // object over directly - unlike the old binding
-  node_gdal::detail::PendingObjectGuard pending(geom);
+  node_gdal::detail::PendingObjectGuard pending(geom, &free_geometry<OGRT>);
   std::vector<napi_value> args;
   Napi::Object obj = T::constructor().Value().New(args);
 
   T *wrapped = node_gdal::UnwrapWrapped<T>(obj);
-  wrapped->owned_ = true;
 
   UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(wrapped);
 
@@ -127,32 +131,29 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
 template <class T, class OGRT>
 GeometryBase<T, OGRT>::GeometryBase(const Napi::CallbackInfo &info)
-  : GDALObject<T>(info), this_(nullptr), owned_(true), size_(0), from_factory_(false) {
+  : GDALObject<T>(info), size_(0), from_factory_(false) {
   // The async locks must live outside the V8 memory management,
   // otherwise they won't be accessible from the async threads
   async_lock = new uv_sem_t;
   uv_sem_init(async_lock, 1);
 
-  OGRT *pending = node_gdal::TakePendingObject<OGRT>();
-  if (pending != nullptr) {
+  Handle<OGRT> pending = node_gdal::TakePendingHandle<OGRT>();
+  if (pending) {
     from_factory_ = true;
-    this_ = pending;
+    this_ = std::move(pending);
   } else {
     // Constructed from JS: the derived class interprets its own arguments
-    this_ = MakeGeometry<OGRT>();
+    this_ = Handle<OGRT>::owned(MakeGeometry<OGRT>(), &free_geometry<OGRT>);
   }
   LOG("Created Geometry %s [%p]", typeid(T).name(), this_);
 }
 
 template <class T, class OGRT> GeometryBase<T, OGRT>::~GeometryBase() {
   if (this_) {
-    LOG("Disposing Geometry %s [%p] (%s)", typeid(T).name(), this_, owned_ ? "owned" : "unowned");
-    if (owned_) {
-      OGRGeometryFactory::destroyGeometry(this_);
-      Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), -size_);
-    }
-    LOG("Disposed Geometry [%p]", this_)
-    this_ = NULL;
+    LOG("Disposing Geometry %s [%p]", typeid(T).name(), this_.get());
+    if (this_.owned()) { Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), -size_); }
+    // The handle destroys the geometry, if this wrapper owns it
+    this_.reset();
   }
   uv_sem_destroy(async_lock);
   delete async_lock;

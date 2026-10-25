@@ -16,6 +16,7 @@
 
 #include "utils/env_context.hpp"
 #include "utils/gdal_error.hpp"
+#include "utils/handle.hpp"
 #include "utils/ptr_manager.hpp"
 
 #if GDAL_VERSION_MAJOR < 2 || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 2)
@@ -533,9 +534,10 @@ namespace detail {
 
 struct PendingObjectGuard {
   EnvContext &ctx;
-  const void *previous;
-  explicit PendingObjectGuard(const void *ptr) : ctx(env_context()), previous(ctx.pending_object()) {
-    ctx.pending_object() = ptr;
+  PendingObject previous;
+  explicit PendingObjectGuard(const void *ptr, void (*free)(void *) = nullptr)
+    : ctx(env_context()), previous(ctx.pending_object()) {
+    ctx.pending_object() = {ptr, free};
   }
   ~PendingObjectGuard() {
     ctx.pending_object() = previous;
@@ -548,10 +550,21 @@ struct PendingObjectGuard {
 // Returns nullptr when the object is created directly from JS, which the
 // constructors report as an error.
 template <typename T> inline T *TakePendingObject() {
-  const void *&slot = env_context().pending_object();
-  const void *ptr = slot;
-  slot = nullptr;
+  PendingObject &slot = env_context().pending_object();
+  const void *ptr = slot.ptr;
+  slot = PendingObject();
   return const_cast<T *>(static_cast<const T *>(ptr));
+}
+
+// Same, as a handle which owns the object the way the factory said. The
+// constructors of the classes which own their object take this one, so the
+// question of who frees the object is answered by the factory and not by a flag
+// which the constructor has to remember to set.
+template <typename T> inline Handle<T> TakePendingHandle() {
+  PendingObject &slot = env_context().pending_object();
+  PendingObject pending = slot;
+  slot = PendingObject();
+  return Handle<T>(const_cast<T *>(static_cast<const T *>(pending.ptr)), pending.free);
 }
 
 // Allocates the owning copy of a shared_ptr that a factory hands over; taken
@@ -562,11 +575,12 @@ template <typename T> inline void *ExportShared(const std::shared_ptr<T> &p) {
 
 // Same, for the classes that hold a std::shared_ptr to their GDAL object
 // (Group, MDArray, Attribute, Dimension): the factory allocates an owning copy
-// of the shared_ptr, which this takes and frees.
+// of the shared_ptr, which this takes and frees. The shared_ptr spells out the
+// ownership by itself, so those classes do not need a Handle.
 template <typename T> inline std::shared_ptr<T> TakePendingShared() {
-  const void *&slot = env_context().pending_object();
-  auto *ptr = static_cast<std::shared_ptr<T> *>(const_cast<void *>(slot));
-  slot = nullptr;
+  PendingObject &slot = env_context().pending_object();
+  auto *ptr = static_cast<std::shared_ptr<T> *>(const_cast<void *>(slot.ptr));
+  slot = PendingObject();
   if (ptr == nullptr) { return std::shared_ptr<T>(); }
   std::shared_ptr<T> r = *ptr;
   delete ptr;
@@ -1572,7 +1586,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto *gdal_obj = obj->this_;                                                                                       \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
     GDALAsyncableJob<int> job(0);                                                                                      \
     job.main = [gdal_obj](const GDALExecutionProgress &) {                                                             \
       gdal_obj->wrapped_method();                                                                                      \
@@ -1589,7 +1603,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto *gdal_obj = obj->this_;                                                                                       \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
     GDALAsyncableJob<async_type> job(0);                                                                               \
     job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->wrapped_method(); };                       \
     job.rval = [](async_type r, const GetFromPersistentFunc &) { return result_type::New(node_gdal::napi_env(), r); };              \
@@ -1606,7 +1620,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto *gdal_obj = obj->this_;                                                                                       \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
     auto *gdal_param = param->get();                                                                                   \
     GDALAsyncableJob<async_type> job(0);                                                                               \
     job.persist(info[0].As<Napi::Object>());                                                                           \
@@ -1627,7 +1641,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto *gdal_obj = obj->this_;                                                                                       \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
     GDALAsyncableJob<async_type> job(0);                                                                               \
     job.main = [gdal_obj, param](const GDALExecutionProgress &) { return gdal_obj->wrapped_method(param); };           \
     job.rval = [](async_type r, const GetFromPersistentFunc &) { return result_type::New(node_gdal::napi_env(), r); };              \
@@ -1641,7 +1655,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto gdal_obj = obj->this_;                                                                                        \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                        \
     GDALAsyncableJob<OGRErr> job(obj->parent_uid);                                                                     \
     job.main = [gdal_obj](const GDALExecutionProgress &) {                                                             \
       int err = gdal_obj->wrapped_method();                                                                            \
@@ -1662,7 +1676,7 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
       Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
       return info.Env().Undefined();                                                                                    \
     }                                                                                                                  \
-    auto gdal_obj = obj->this_;                                                                                        \
+    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                        \
     auto gdal_param = param->get();                                                                                    \
     GDALAsyncableJob<async_type> job(0);                                                                               \
     job.persist(info[0].As<Napi::Object>());                                                                           \

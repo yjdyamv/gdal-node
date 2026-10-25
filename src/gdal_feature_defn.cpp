@@ -6,6 +6,14 @@
 
 namespace node_gdal {
 
+namespace {
+// The wrapper owns the feature definition it holds: the factory clones the one
+// of a layer or is handed a fresh one
+void free_feature_defn(void *ptr) {
+  static_cast<OGRFeatureDefn *>(ptr)->Release();
+}
+} // namespace
+
 Napi::FunctionReference &FeatureDefn::constructor() {
   return node_gdal::env_context().constructor<FeatureDefn>();
 }
@@ -31,13 +39,13 @@ void FeatureDefn::Initialize(Napi::Object target) {
   constructor() = Napi::Persistent(lcons);
 }
 
-FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDefn>(info), this_(nullptr), owned_(true) {
-  OGRFeatureDefn *pending = node_gdal::TakePendingObject<OGRFeatureDefn>();
-  if (pending != nullptr) {
-    this_ = pending;
+FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDefn>(info) {
+  Handle<OGRFeatureDefn> pending = node_gdal::TakePendingHandle<OGRFeatureDefn>();
+  if (pending) {
+    this_ = std::move(pending);
   } else if (info.Length() == 0) {
     // constructed from JS: new gdal.FeatureDefn()
-    this_ = new OGRFeatureDefn();
+    this_ = Handle<OGRFeatureDefn>::owned(new OGRFeatureDefn(), &free_feature_defn);
     this_->Reference();
   } else {
     Napi::Error::New(info.Env(), "FeatureDefn constructor doesn't take any arguments").ThrowAsJavaScriptException();
@@ -51,12 +59,8 @@ FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDef
 }
 
 FeatureDefn::~FeatureDefn() {
-  if (this_) {
-    LOG("Disposing FeatureDefn [%p] (%s)", this_, owned_ ? "owned" : "unowned");
-    if (owned_) this_->Release();
-    this_ = NULL;
-    LOG("Disposed FeatureDefn [%p]", this_);
-  }
+  // The handle releases the feature definition, if this wrapper owns it
+  LOG("Disposed FeatureDefn [%p]", this_.get());
 }
 
 // Currently read-only feature definitions are copied.
@@ -75,12 +79,9 @@ Napi::Value FeatureDefn::New(OGRFeatureDefn *def, bool owned) {
   if (!def) { return node_gdal::napi_env().Null(); }
   if (!owned) { def = def->Clone(); }
 
-  node_gdal::detail::PendingObjectGuard pending(def);
+  node_gdal::detail::PendingObjectGuard pending(def, &free_feature_defn);
   std::vector<napi_value> args;
-  Napi::Object obj = FeatureDefn::constructor().Value().New(args);
-  FeatureDefn *wrapped = node_gdal::UnwrapWrapped<FeatureDefn>(obj);
-
-  return obj;
+  return FeatureDefn::constructor().Value().New(args);
 }
 
 NAPI_METHOD(FeatureDefn::toString) {

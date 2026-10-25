@@ -35,15 +35,14 @@ class FeatureDefn : public GDALObject<FeatureDefn> {
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself
   ~FeatureDefn();
   inline OGRFeatureDefn *get() {
-    return this_;
+    return this_.get();
   }
   inline bool isAlive() {
     return this_;
   }
 
     private:
-  OGRFeatureDefn *this_;
-  bool owned_;
+  Handle<OGRFeatureDefn> this_;
 };
 
 } // namespace node_gdal

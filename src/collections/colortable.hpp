@@ -49,7 +49,7 @@ class ColorTable : public GDALObject<ColorTable> {
   }
 
     private:
-  GDALColorTable *this_;
+  Handle<GDALColorTable> this_;
 };
 
 } // namespace node_gdal
