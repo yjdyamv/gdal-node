@@ -88,6 +88,10 @@ jobs:
       if: matrix.mode == 'rebuild'
       run: npm install --verbose --force gdal-async@${{ github.event.inputs.version }} --build-from-source
     - name: Run the unit tests
+      # Not in parallel: the tests come from the tag of an arbitrary published
+      # version, and the root hooks of those that predate the parallel runner
+      # clean up in an `afterAll` that the parallel runner calls once per file
+      # instead of once per process
       run: |
         cd test
         npx tsc -p tsconfig.test.json --noEmit

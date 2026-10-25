@@ -32,7 +32,7 @@ rebuild:
 	@make
 
 test: clean-test build
-	./node_modules/.bin/mocha $(MOCHA_ARGS)
+	./node_modules/.bin/mocha --parallel --jobs 4 $(MOCHA_ARGS)
 	@make clean-test
 
 test-syntax:

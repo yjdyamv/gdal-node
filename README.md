@@ -341,6 +341,10 @@ Before submitting pull requests, please update the [tests](test) and make sure t
 
 ```sh
 $ npm test # test the addon built from the current sources
+# run a single test file instead of the whole suite
+$ npx mocha test/api_abort.test.ts
+# run the whole suite, up to four test files at a time, each in its own process
+$ npm run test:parallel
 # test a given Linux version and Node.js version in a container
 $ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{version} 20|22|24|lts
 ```

@@ -38,6 +38,30 @@ describe('AbortController', () => {
       }
     })
 
+    it('should throw an AbortError when aborted from its progress callback', () => {
+      const big = gdal.open('/vsimem/abort_sync_big.tif', 'w', 'GTiff', 1024, 1024, 1)
+      let calls = 0
+      const controller = new AbortController()
+      try {
+        big.bands.get(1).pixels.write(0, 0, 1024, 1024, new Float32Array(1024 * 1024))
+        gdal.translate('/vsimem/abort_out.tif', big, [ '-r', 'lanczos' ], {
+          abort_signal: controller.signal,
+          progress_cb: () => {
+            if (calls++ === 0) controller.abort()
+          }
+        })
+        assert.fail('should have thrown')
+      } catch (e) {
+        // Nothing can abort the signal from another task while the event loop is
+        // blocked, but the progress callback runs on this very thread
+        assert.equal((e as Error).name, 'AbortError')
+        assert.isAbove(calls, 0, 'should have received progress before being aborted')
+      } finally {
+        big.close()
+        gdal.vsimem.release('/vsimem/abort_sync_big.tif')
+      }
+    })
+
     it('should throw a TypeError on something which is not an AbortSignal', () => {
       // @ts-expect-error not an AbortSignal
       assert.throws(() => gdal.translate('/vsimem/abort_out.tif', ds, [], { abort_signal: {} }),
@@ -130,8 +154,12 @@ describe('AbortController', () => {
             }
           })
         assert.fail('should have rejected')
-      } catch (_e) {
+      } catch (e) {
+        assert.equal((e as Error).name, 'AbortError')
         const calls = progress
+        // The callback which aborted the operation has to have run, otherwise
+        // this test would pass without testing anything
+        assert.isAbove(calls, 0, 'should have received progress before being aborted')
         // Let any leftover progress notification drain
         await new Promise((resolve) => setImmediate(resolve))
         assert.equal(progress, calls, 'should not receive progress after being aborted')
@@ -314,7 +342,7 @@ describe('AbortController', () => {
       mdarray = ds.root.arrays.get('alnsf')
     })
     after(() => {
-      ds.close()
+      ds?.close()
       void global.gc!()
     })
 

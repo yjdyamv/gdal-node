@@ -50,14 +50,14 @@
     }
   ],
   "scripts": {
-    "test": "npm run lint:js && tsc --noEmit && mocha && npm run test:stress 20",
+    "test": "npm run lint:js && tsc --noEmit && npm run test:parallel && npm run test:stress 20",
     "bench": "node bench/streams.js",
     "build:cmake": "node scripts/build.mjs",
     "clean:cmake": "cmake-js clean",
     "package": "node scripts/package.mjs",
     "conan:install": "conan install . -of build-conan -s build_type=Release",
     "lint:cpp": "clang-format -i src/*.cpp src/*.hpp && clang-format -i src/*/*.cpp src/*/*.hpp",
-    "lint:js": "eslint lib test examples",
+    "lint:js": "eslint lib test examples .mocharc.js",
     "lint:fix": "eslint lib test examples --fix",
     "lint": "npm run lint:js && npm run lint:cpp",
     "install": "node scripts/install.mjs",
@@ -82,6 +82,7 @@
     "test:distros": "npm run test:u22 && npm run test:c10 && npm run test:f42",
     "test:clean": "npx rimraf test/data/*.tmp* test/data/temp/*",
     "test:stress": "node test/stress",
+    "test:parallel": "mocha --parallel --jobs 4",
     "postpublish": "gh workflow run test-npm.yml -F version=$npm_package_version"
   },
   "dependencies": {

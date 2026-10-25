@@ -50,11 +50,18 @@ const bundledSkip = function (this: Mocha.Context) {
   }
 }
 
+// The driver collection is the last thing holding on to the native driver
+// objects, so dropping it and running the GC right before the process exits is
+// what lets the ASAN leak check see them being freed. This has to happen at the
+// exit of the process and not in a root `afterAll` hook: mocha calls the root
+// hooks once per file in parallel mode, so every file of a worker after the
+// first one would find `gdal.drivers` deleted
 const cleanup = () => {
   // @ts-expect-error not a public API
   delete gdal.drivers
   global.gc!()
 }
+process.once('exit', cleanup)
 
 exports.mochaHooks = {
   beforeEach: function (done: () => void) {
@@ -62,6 +69,5 @@ exports.mochaHooks = {
     noFailNet.call(this)
     bundledSkip.call(this)
     done()
-  },
-  afterAll: cleanup
+  }
 }
