@@ -24,7 +24,7 @@ const expand = (template) => template
 const binding = path.resolve(root, expand(pkg.binary.module_path))
 const addon = path.join(binding, `${pkg.binary.module_name}.node`)
 if (!fs.existsSync(addon)) {
-  throw new Error(`${addon} does not exist, run \`npm run build:cmake\` first`)
+  throw new Error(`${addon} does not exist, run \`npm run build\` first`)
 }
 
 const destination = path.join(root, 'build', 'stage', expand(pkg.binary.remote_path))

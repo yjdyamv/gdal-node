@@ -345,6 +345,10 @@ $ npm test # test the addon built from the current sources
 $ npx mocha test/api_abort.test.ts
 # run the whole suite, up to four test files at a time, each in its own process
 $ npm run test:parallel
+# write the compilation database clangd and clang-tidy want
+# into the source directory (the Ninja and Makefile generators
+# only, the Visual Studio one cannot produce one)
+$ cmake --build <build-dir> --target compile-commands
 # test a given Linux version and Node.js version in a container
 $ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{version} 20|22|24|lts
 ```

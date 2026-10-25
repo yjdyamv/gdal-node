@@ -110,6 +110,13 @@ jobs:
       continue-on-error: true
       shell: bash
       run: node scripts/build.mjs 2>&1 | tee build.log
+    - name: Check the compilation database
+      # The build system exports it for clangd and clang-tidy: it is what Ninja
+      # is the default generator for, and a generator that cannot write it - the
+      # Visual Studio one, for instance - must not pass unnoticed
+      if: steps.build.outcome == 'success'
+      shell: bash
+      run: test -s build/compile_commands.json
     - name: Run the tests
       id: test
       if: steps.build.outcome == 'success'

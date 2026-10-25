@@ -43,6 +43,10 @@ jobs:
         path: ~/.conan2/p
         key: conan-coverage-${{ hashFiles('conanfile.py') }}
     - run: npm install --ignore-scripts
+    - name: Install the build dependencies
+      # Ninja is what scripts/build.mjs uses by default: the runner image ships
+      # it, but it is not part of the tools it guarantees
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
     - name: Build the addon with coverage
       run: node scripts/build.mjs --debug
       env:

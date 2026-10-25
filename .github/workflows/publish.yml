@@ -95,7 +95,7 @@ jobs:
           conan-${{ runner.os }}-${{ runner.arch }}-
     - run: npm install --ignore-scripts
     - name: Build the addon
-      run: npm run build:cmake
+      run: npm run build
     - run: npm test
     - name: Pack the prebuilt binary
       run: npm run package

@@ -1,0 +1,5 @@
+# Conan hashes the bytes of a recipe: the same recipe checked out with other
+# line endings is another recipe revision, with no binaries of its own.  GDAL is
+# always built from source here (conan-center carries no binary of it), so the
+# cache miss that follows means downloading and compiling it again.
+conan/recipes/** -text

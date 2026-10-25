@@ -8,31 +8,21 @@
   "configurePresets": [
     {
       "name": "default",
-      "displayName": "Ninja, Release",
-      "description": "GDAL comes from whatever GDAL_INCLUDE_DIR/GDAL_LIBRARY point at",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-ninja",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "conan-release",
       "displayName": "Ninja, Release, Conan dependencies",
-      "description": "Run 'conan install . -of build-conan' first",
-      "inherits": "default",
-      "binaryDir": "${sourceDir}/build-ninja-conan",
-      "toolchainFile": "${sourceDir}/build-conan/conan_toolchain.cmake"
+      "description": "Run 'npm run build' first: it writes build-conan/conan_toolchain.cmake",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "toolchainFile": "${sourceDir}/build-conan/conan_toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "default",
       "configurePreset": "default"
-    },
-    {
-      "name": "conan-release",
-      "configurePreset": "conan-release"
     }
   ]
 }
