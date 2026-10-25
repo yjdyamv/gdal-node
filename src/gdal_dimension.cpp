@@ -34,12 +34,13 @@ void Dimension::Initialize(Napi::Object target) {
   target.Set("Dimension", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 Dimension::Dimension(const Napi::CallbackInfo &info) : GDALObject<Dimension>(info), uid(0), this_(nullptr), parent_ds(0) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = node_gdal::ImportShared<GDALDimension>(info);
+  std::shared_ptr<GDALDimension> pending = node_gdal::TakePendingShared<GDALDimension>();
+  if (pending) {
+    this_ = pending;
     LOG("Created dimension [%p]", this_.get());
     return;
   }
@@ -72,8 +73,8 @@ Napi::Value Dimension::New(std::shared_ptr<GDALDimension> raw, GDALDataset *pare
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
-  std::vector<napi_value> args = {
-    Napi::External<void>::New(node_gdal::napi_env(), node_gdal::ExportShared(raw))};
+  node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
+  std::vector<napi_value> args;
   Napi::Object obj = Dimension::constructor.Value().New(args);
   Dimension *wrapped = node_gdal::UnwrapWrapped<Dimension>(obj);
 

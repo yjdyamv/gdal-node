@@ -24,7 +24,7 @@ void GeometryCollectionChildren::Initialize(Napi::Object target) {
   target.Set("GeometryCollectionChildren", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 GeometryCollectionChildren::GeometryCollectionChildren(const Napi::CallbackInfo &info) : GDALObject<GeometryCollectionChildren>(info) {

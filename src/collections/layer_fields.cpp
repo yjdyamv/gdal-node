@@ -30,7 +30,7 @@ void LayerFields::Initialize(Napi::Object target) {
   target.Set("LayerFields", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 LayerFields::LayerFields(const Napi::CallbackInfo &info) : GDALObject<LayerFields>(info) {

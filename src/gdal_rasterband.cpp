@@ -64,13 +64,14 @@ void RasterBand::Initialize(Napi::Object target) {
   target.Set("RasterBand", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 
 RasterBand::RasterBand(const Napi::CallbackInfo &info) : GDALObject<RasterBand>(info), uid(0), this_(nullptr), parent_ds(0) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<GDALRasterBand *>(info[0].As<Napi::External<void>>().Data());
+  GDALRasterBand *pending = node_gdal::TakePendingObject<GDALRasterBand>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created band [%p] (dataset = %p)", this_, this_->GetDataset());
   } else {
     Napi::Error::New(info.Env(), "Cannot create RasterBand directly").ThrowAsJavaScriptException();
@@ -93,6 +94,10 @@ void RasterBand::dispose() {
 
     LOG("Disposed band [%p]", this_);
 
+    // The band itself is not deleted here: a band is owned by its Dataset, and
+    // the ones the addon owns (the algebra operators) are deleted by the object
+    // store (see ObjectStore::dispose()), while the source Dataset is still
+    // alive, which is required by their destructor.
     this_ = NULL;
   }
 }
@@ -102,12 +107,13 @@ void RasterBand::dispose() {
  *
  * @class RasterBand
  */
-Napi::Value RasterBand::New(GDALRasterBand *raw, GDALDataset *raw_parent) {
+Napi::Value RasterBand::New(GDALRasterBand *raw, GDALDataset *raw_parent, bool owned) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), raw)};
+  node_gdal::detail::PendingObjectGuard pending(raw);
+  std::vector<napi_value> args;
   Napi::Object obj = RasterBand::constructor.Value().New(args);
   RasterBand *wrapped = node_gdal::UnwrapWrapped<RasterBand>(obj);
 
@@ -129,7 +135,7 @@ Napi::Value RasterBand::New(GDALRasterBand *raw, GDALDataset *raw_parent) {
   ds = object_store.get(raw_parent);
   Dataset *parent = node_gdal::UnwrapWrapped<Dataset>(ds);
   long parent_uid = parent->uid;
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid);
+  wrapped->uid = object_store.add(raw, *wrapped, parent_uid, owned);
   wrapped->parent_ds = raw_parent;
   wrapped->parent_uid = parent_uid;
 

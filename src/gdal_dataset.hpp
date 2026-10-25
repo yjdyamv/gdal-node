@@ -20,7 +20,7 @@ class Dataset : public GDALObject<Dataset> {
     public:
   static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
-  static Napi::Value New(GDALDataset *ds, GDALDataset *parent = nullptr, bool close = true);
+  static Napi::Value New(GDALDataset *ds, GDALDataset *parent = nullptr, bool close = true, bool shared_lock = true);
   static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(flush);
   GDAL_ASYNCABLE_DECLARE(getMetadata);

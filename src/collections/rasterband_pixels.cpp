@@ -31,7 +31,7 @@ void RasterBandPixels::Initialize(Napi::Object target) {
   target.Set("RasterBandPixels", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 RasterBandPixels::RasterBandPixels(const Napi::CallbackInfo &info) : GDALObject<RasterBandPixels>(info) {

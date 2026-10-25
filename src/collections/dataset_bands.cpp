@@ -26,7 +26,7 @@ void DatasetBands::Initialize(Napi::Object target) {
   target.Set("DatasetBands", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 DatasetBands::DatasetBands(const Napi::CallbackInfo &info) : GDALObject<DatasetBands>(info) {

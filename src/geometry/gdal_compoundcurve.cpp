@@ -28,7 +28,7 @@ void CompoundCurve::Initialize(Napi::Object target) {
   target.Set("CompoundCurve", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 void CompoundCurve::SetPrivate(Napi::Object _this, Napi::Value value) {

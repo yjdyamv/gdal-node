@@ -9,6 +9,8 @@
 
 #include <sstream>
 #include <thread>
+#include <type_traits>
+#include <algorithm>
 
 // Here used to be dragons, but now there is a shopping mall
 //
@@ -147,6 +149,12 @@ static inline void sortUnique(vector<long> &uids) {
   if (uids.front() == 0) uids.erase(uids.begin());
 }
 
+static inline void addUniqueLock(vector<AsyncLock> &locks, const AsyncLock &async_lock) {
+  // Dependent Datasets share the semaphore of their parent: acquiring the same
+  // semaphore twice in the same operation would block forever
+  if (std::find(locks.begin(), locks.end(), async_lock) == locks.end()) locks.push_back(async_lock);
+}
+
 /*
  * Lock a Dataset by uid, throws when the Dataset has been destroyed.
  * There is a single global condition which allows to avoid active spinning.
@@ -221,7 +229,7 @@ vector<AsyncLock> ObjectStore::_tryLockDatasets(vector<long> uids, bool &result)
     // Skip locking thread-safe datasets
     if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) continue;
 #endif
-    locks.push_back(parent->second->async_lock);
+    addUniqueLock(locks, parent->second->async_lock);
   }
   vector<AsyncLock> locked;
   int r = 0;
@@ -275,7 +283,7 @@ vector<AsyncLock> ObjectStore::resolveLocks(vector<long> uids) {
     // Do not lock thread-safe datasets
     if (parent->second->ptr->IsThreadSafe(GDAL_OF_RASTER)) { continue; }
 #endif
-    locks.push_back(parent->second->async_lock);
+    addUniqueLock(locks, parent->second->async_lock);
   }
   return locks;
 }
@@ -321,12 +329,16 @@ template <typename GDALPTR> ObjectStoreItem<GDALPTR>::ObjectStoreItem(Napi::Refe
 }
 ObjectStoreItem<GDALDataset *>::ObjectStoreItem(Napi::Reference<Napi::Object> &obj) : obj(obj) {
 }
+ObjectStoreItem<GDALRasterBand *>::ObjectStoreItem(Napi::Reference<Napi::Object> &obj) : obj(obj), owned(false) {
+}
 ObjectStoreItem<OGRLayer *>::ObjectStoreItem(Napi::Reference<Napi::Object> &obj) : obj(obj) {
 }
 
-template <typename GDALPTR> long ObjectStore::add(GDALPTR ptr, Napi::Reference<Napi::Object> &obj, long parent_uid) {
+template <typename GDALPTR>
+long ObjectStore::add(GDALPTR ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool owned) {
   uv_scoped_mutex lock(&master_lock);
   shared_ptr<ObjectStoreItem<GDALPTR>> item(new ObjectStoreItem<GDALPTR>(obj));
+  if constexpr (std::is_same_v<GDALPTR, GDALRasterBand *>) { item->owned = owned; }
   item->uid = uid++;
   if (parent_uid) {
     shared_ptr<ObjectStoreItem<GDALDataset *>> parent = uidMap<GDALDataset *>()[parent_uid];
@@ -351,10 +363,10 @@ long ObjectStore::add(OGRLayer *ptr, Napi::Reference<Napi::Object> &obj, long pa
 }
 
 // Creating a Dataset object is a special case
-// It contains a lock (unless it is a dependant Dataset)
-long ObjectStore::add(GDALDataset *ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool close) {
+// It contains a lock (unless it is a dependant Dataset that shares the lock of its parent)
+long ObjectStore::add(GDALDataset *ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool close, bool shared_lock) {
   long uid = ObjectStore::add<GDALDataset *>(ptr, obj, parent_uid);
-  if (parent_uid == 0) {
+  if (parent_uid == 0 || !shared_lock) {
     uidMap<GDALDataset *>()[uid] -> async_lock = make_shared<AsyncLockState>();
   } else {
     uidMap<GDALDataset *>()[uid] -> async_lock = uidMap<GDALDataset *>()[parent_uid] -> async_lock;
@@ -385,10 +397,10 @@ template <typename GDALPTR> Napi::Object ObjectStore::get(long uid) {
 // Explicit instantiation:
 // * allows calling object_store.add without <>
 // * makes sure that this class template won't be accidentally instantiated with an unsupported type
-template long ObjectStore::add(GDALDriver *, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(GDALRasterBand *, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(OGRSpatialReference *, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(GDALColorTable *, Napi::Reference<Napi::Object> &, long);
+template long ObjectStore::add(GDALDriver *, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(GDALRasterBand *, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(OGRSpatialReference *, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(GDALColorTable *, Napi::Reference<Napi::Object> &, long, bool);
 template bool ObjectStore::has(GDALDriver *);
 template bool ObjectStore::has(GDALDataset *);
 template bool ObjectStore::has(OGRLayer *);
@@ -403,10 +415,10 @@ template Napi::Object ObjectStore::get(OGRSpatialReference *);
 template Napi::Object ObjectStore::get(GDALColorTable *);
 template Napi::Object ObjectStore::get<GDALDataset *>(long uid);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
-template long ObjectStore::add(shared_ptr<GDALAttribute>, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(shared_ptr<GDALDimension>, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(shared_ptr<GDALGroup>, Napi::Reference<Napi::Object> &, long);
-template long ObjectStore::add(shared_ptr<GDALMDArray>, Napi::Reference<Napi::Object> &, long);
+template long ObjectStore::add(shared_ptr<GDALAttribute>, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(shared_ptr<GDALDimension>, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(shared_ptr<GDALGroup>, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(shared_ptr<GDALMDArray>, Napi::Reference<Napi::Object> &, long, bool);
 template bool ObjectStore::has(shared_ptr<GDALAttribute>);
 template bool ObjectStore::has(shared_ptr<GDALDimension>);
 template bool ObjectStore::has(shared_ptr<GDALGroup>);
@@ -481,6 +493,25 @@ template <> void ObjectStore::dispose(shared_ptr<ObjectStoreItem<OGRLayer *>> it
       uv_sem_post(&item->parent->async_lock->sem);
       uv_cond_broadcast(&object_store.master_sleep);
     }
+  }
+}
+
+// A band is owned by the Dataset it belongs to, so dropping the wrapper is all
+// that is normally needed here. The bands the addon creates itself (the ones
+// returned by the algebra operators) are the exception: they own a Dataset
+// instead of being owned by one, and their destructor still reads the bands
+// they compute from, so they have to be freed here - this runs before the
+// source Dataset is closed, which is not the case for the finalizer.
+template <> void ObjectStore::dispose(shared_ptr<ObjectStoreItem<GDALRasterBand *>> item, bool) {
+  if (item == nullptr) return;
+  ptrMap<GDALRasterBand *>().erase(item->ptr);
+  uidMap<GDALRasterBand *>().erase(item->uid);
+  if (item->parent != nullptr) { item->parent->children.remove(item->uid); }
+  if (item->owned) {
+    LOG("Deleting owned band [%ld] [%p]", item->uid, item->ptr);
+    item->owned = false;
+    delete item->ptr;
+    item->ptr = nullptr;
   }
 }
 

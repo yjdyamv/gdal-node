@@ -17,7 +17,7 @@ class RasterBand : public GDALObject<RasterBand> {
     public:
   static thread_local Napi::FunctionReference constructor;
   static void Initialize(Napi::Object target);
-  static Napi::Value New(GDALRasterBand *band, GDALDataset *parent);
+  static Napi::Value New(GDALRasterBand *band, GDALDataset *parent, bool owned = false);
   static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(flush);
   GDAL_ASYNCABLE_DECLARE(fill);

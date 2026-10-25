@@ -49,14 +49,15 @@ void Dataset::Initialize(Napi::Object target) {
   target.Set("Dataset", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 
 Dataset::Dataset(const Napi::CallbackInfo &info) : GDALObject<Dataset>(info), uid(0), parent_uid(0), this_dataset(nullptr), parent_ds(nullptr)  {
   LOG("Created Dataset [%p]", this_dataset);
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_dataset = static_cast<GDALDataset *>(info[0].As<Napi::External<void>>().Data());
+  GDALDataset *pending = node_gdal::TakePendingObject<GDALDataset>();
+  if (pending != nullptr) {
+    this_dataset = pending;
   } else {
     Napi::Error::New(node_gdal::napi_env(), "Cannot create dataset directly").ThrowAsJavaScriptException();
     return;
@@ -113,24 +114,27 @@ void Dataset::dispose(bool manual) {
  * @class Dataset
  */
 
-Napi::Value Dataset::New(GDALDataset *raw, GDALDataset *parent, bool close) {
+Napi::Value Dataset::New(GDALDataset *raw, GDALDataset *parent, bool close, bool shared_lock) {
 
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
   long parent_uid = 0;
   if (parent != nullptr) {
-    /* A dependent Dataset shares the lock of its parent
+    /* A dependent Dataset shares the lock of its parent, unless it is told not
+     * to - a readonly Dataset created by the algebra operators must not be able
+     * to deadlock (or release) the locks of the Dataset it was derived from.
      */
     Dataset *parent_ds = node_gdal::UnwrapWrapped<Dataset>(object_store.get(parent));
     parent_uid = parent_ds->uid;
   }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), raw)};
+  node_gdal::detail::PendingObjectGuard pending(raw);
+  std::vector<napi_value> args;
   Napi::Object obj = Dataset::constructor.Value().New(args);
   Dataset *wrapped = node_gdal::UnwrapWrapped<Dataset>(obj);
 
-  wrapped->uid = object_store.add(raw, *wrapped, parent_uid, close);
+  wrapped->uid = object_store.add(raw, *wrapped, parent_uid, close, shared_lock);
 
   return obj;
 }

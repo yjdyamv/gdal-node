@@ -32,7 +32,7 @@ void SimpleCurve::Initialize(Napi::Object target) {
   target.Set("SimpleCurve", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**

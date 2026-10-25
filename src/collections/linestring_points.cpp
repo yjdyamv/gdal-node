@@ -27,7 +27,7 @@ void LineStringPoints::Initialize(Napi::Object target) {
   target.Set("LineStringPoints", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 LineStringPoints::LineStringPoints(const Napi::CallbackInfo &info) : GDALObject<LineStringPoints>(info) {

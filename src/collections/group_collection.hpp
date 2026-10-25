@@ -35,7 +35,7 @@ class GroupCollection : public GDALObject<SELF> {
     target.Set(SELF::_className, lcons);
 
     SELF::constructor = Napi::Persistent(lcons);
-    SELF::constructor.SuppressDestruct();
+    node_gdal::OwnConstructorReference(env, SELF::constructor);
   }
 
   static NAPI_METHOD(toString) {

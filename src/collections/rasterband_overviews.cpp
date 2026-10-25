@@ -22,7 +22,7 @@ void RasterBandOverviews::Initialize(Napi::Object target) {
   target.Set("RasterBandOverviews", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 RasterBandOverviews::RasterBandOverviews(const Napi::CallbackInfo &info) : GDALObject<RasterBandOverviews>(info) {

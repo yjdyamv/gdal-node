@@ -29,7 +29,7 @@ void LinearRing::Initialize(Napi::Object target) {
   target.Set("LinearRing", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
@@ -44,7 +44,8 @@ Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
 
   if (!owned) { geom = static_cast<OGRLinearRing *>(geom->clone()); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), geom)};
+  node_gdal::detail::PendingObjectGuard pending(geom);
+  std::vector<napi_value> args;
   Napi::Object obj = LinearRing::constructor.Value().New(args);
   LinearRing *wrapped = node_gdal::UnwrapWrapped<LinearRing>(obj);
 

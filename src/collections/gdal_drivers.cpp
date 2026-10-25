@@ -24,13 +24,13 @@ void GDALDrivers::Initialize(Napi::Object target) {
   target.Set("GDALDrivers", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 GDALDrivers::GDALDrivers(const Napi::CallbackInfo &info) : GDALObject<GDALDrivers>(info) {
   // `gdal.drivers` is created by the module; the class is not constructible
   // from JS, which the test suite asserts
-  if (info.Length() > 0 && info[0].IsExternal()) return;
+  if (info.Length() > 0 && info[0].IsBoolean()) return;
   Napi::Error::New(info.Env(), "Cannot create GDALDrivers directly").ThrowAsJavaScriptException();
 }
 
@@ -46,7 +46,7 @@ GDALDrivers::~GDALDrivers() {
 
 Napi::Value GDALDrivers::New() {
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), nullptr)};
+  std::vector<napi_value> args = {Napi::Boolean::New(node_gdal::napi_env(), true)};
   Napi::Object obj = GDALDrivers::constructor.Value().New(args);
 
   return obj;

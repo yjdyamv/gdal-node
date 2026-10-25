@@ -62,7 +62,7 @@ void SpatialReference::Initialize(Napi::Object target) {
   target.Set("SpatialReference", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 SpatialReference::~SpatialReference() {
@@ -93,9 +93,10 @@ void SpatialReference::dispose() {
  */
 SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
   : GDALObject<SpatialReference>(info), this_(nullptr), owned_(false), uid(0) {
-  // Internal construction: the factory passes the OGR object through an External
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = info[0].As<Napi::External<OGRSpatialReference>>().Data();
+  // Internal construction: the factory hands the OGR object over directly
+  OGRSpatialReference *pending = node_gdal::TakePendingObject<OGRSpatialReference>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created SpatialReference [%p]", this_);
     return;
   }
@@ -152,7 +153,8 @@ Napi::Value SpatialReference::New(OGRSpatialReference *raw, bool owned) {
   OGRSpatialReference *cloned_srs = raw;
   if (!owned) cloned_srs = raw->Clone();
 
-  std::vector<napi_value> args = {Napi::External<OGRSpatialReference>::New(env, cloned_srs)};
+  node_gdal::detail::PendingObjectGuard pending(cloned_srs);
+  std::vector<napi_value> args;
   Napi::Object obj = constructor.Value().New(args);
   SpatialReference *wrapped = node_gdal::UnwrapWrapped<SpatialReference>(obj);
   wrapped->owned_ = true;

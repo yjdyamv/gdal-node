@@ -28,7 +28,7 @@ void Polygon::Initialize(Napi::Object target) {
   target.Set("Polygon", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 void Polygon::SetPrivate(Napi::Object _this, Napi::Value value) {

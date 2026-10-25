@@ -3,10 +3,12 @@
 
 #include <cpl_error.h>
 #include <gdal_version.h>
+#include <functional>
 #include <thread>
 #include <stdio.h>
 #include <string>
 #include <memory>
+#include <vector>
 
 // napi
 #include "napi-wrapper.h"
@@ -430,20 +432,87 @@ template <typename T> class GDALObject : public Napi::ObjectWrap<T> {
 // call, so the keys have to be registered to keep behaving like the originals.
 // The registry is per-thread: every V8 isolate (the main thread and each
 // worker_thread) has its own environment and a symbol created in one isolate
-// cannot be used in another. The references are never released because thread
-// destruction happens after the environment is gone.
+// cannot be used in another. The references are released by an environment
+// cleanup hook, which runs while the environment is still usable; the thread
+// local map is empty by the time its own destructor runs, after the environment
+// is gone.
 //
 namespace node_gdal {
 
+namespace detail {
+
+struct PrivateKeys {
+  std::map<std::string, Napi::Reference<Napi::Symbol>> keys;
+  // `napi_env` is also the name of the accessor in this namespace, so the type
+  // needs to be qualified
+  ::napi_env env = nullptr;
+};
+
+inline thread_local PrivateKeys private_keys;
+
+inline void releasePrivateKeys(void *data) {
+  static_cast<PrivateKeys *>(data)->keys.clear();
+}
+
+//
+// Every wrapped class keeps a persistent reference to its constructor in a
+// thread_local static, because every object of that class needs it to create a
+// new wrapper. The reference has to outlive the objects, but not the
+// environment: a worker_thread destroys its environment when it terminates, and
+// the reference would keep the constructor alive after that. The references are
+// therefore registered per environment and released by an environment cleanup
+// hook, exactly like the private keys above.
+//
+struct ConstructorReferences {
+  std::vector<std::function<void()>> resetters;
+  ::napi_env env = nullptr;
+};
+
+inline thread_local ConstructorReferences constructor_references;
+
+inline void releaseConstructorReferences(void *data) {
+  ConstructorReferences *refs = static_cast<ConstructorReferences *>(data);
+  for (auto &reset : refs->resetters) { reset(); }
+  refs->resetters.clear();
+  refs->env = nullptr;
+}
+
+} // namespace detail
+
 inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
-  static thread_local std::map<std::string, Napi::Reference<Napi::Symbol>> keys;
-  auto i = keys.find(name);
-  if (i != keys.end()) return i->second.Value();
+  ::napi_env raw_env = env;
+  detail::PrivateKeys &store = detail::private_keys;
+  if (store.env != raw_env) {
+    // A thread can only host one environment at a time, but clear the leftovers
+    // first in case it hosted one before
+    store.keys.clear();
+    store.env = raw_env;
+    napi_add_env_cleanup_hook(raw_env, detail::releasePrivateKeys, &store);
+  }
+  auto i = store.keys.find(name);
+  if (i != store.keys.end()) return i->second.Value();
   Napi::Symbol s = Napi::Symbol::New(env, name);
-  Napi::Reference<Napi::Symbol> ref = Napi::Persistent(s);
-  ref.SuppressDestruct();
-  keys.emplace(name, std::move(ref));
+  store.keys.emplace(name, Napi::Persistent(s));
   return s;
+}
+
+// Makes the thread_local constructor reference of a wrapped class release its
+// reference when the environment is destroyed. The reference destructor is
+// suppressed because the thread_local variables of the main thread are
+// destroyed after its environment is gone, but the reference is always empty by
+// then.
+inline void OwnConstructorReference(Napi::Env env, Napi::Reference<Napi::Function> &reference) {
+  reference.SuppressDestruct();
+  ::napi_env raw_env = env;
+  detail::ConstructorReferences &store = detail::constructor_references;
+  if (store.env != raw_env) {
+    // A thread can only host one environment at a time, but clear the leftovers
+    // first in case it hosted one before
+    store.resetters.clear();
+    store.env = raw_env;
+    napi_add_env_cleanup_hook(raw_env, detail::releaseConstructorReferences, &store);
+  }
+  store.resetters.push_back([&reference]() { reference.Reset(); });
 }
 
 } // namespace node_gdal
@@ -460,18 +529,62 @@ inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
 // Several classes (Group, MDArray, Attribute, Dimension) hold a
 // std::shared_ptr to their GDAL object rather than a raw pointer. A shared_ptr
 // cannot travel through Napi::External<void> by value, so the factory hands
-// over an owning copy and the constructor takes it.
+// over an owning copy and the constructor takes it. They travel in the same
+// thread-local slot as the raw pointers.
 //
 namespace node_gdal {
 
+//
+// A factory creates the wrapper of an existing GDAL object by calling the JS
+// constructor, and the constructor needs the pointer. The usual carrier is a
+// Napi::External, but an External is a JS value whose C++ allocation is freed by
+// a weak callback when the wrapper is garbage collected - and a wrapper which is
+// still alive when its environment is destroyed (a terminating worker thread, a
+// process that exits with open datasets) is never collected, so every such
+// External showed up as a leak. The pointer is handed over in a thread_local
+// slot instead: the constructor runs synchronously inside New() and takes it
+// back, and the guard restores the slot even when the constructor throws.
+//
+namespace detail {
+
+inline thread_local const void *pending_object = nullptr;
+
+struct PendingObjectGuard {
+  const void *previous;
+  explicit PendingObjectGuard(const void *ptr) : previous(pending_object) {
+    pending_object = ptr;
+  }
+  ~PendingObjectGuard() {
+    pending_object = previous;
+  }
+};
+
+} // namespace detail
+
+// Takes the pointer that the factory stored before calling the constructor.
+// Returns nullptr when the object is created directly from JS, which the
+// constructors report as an error.
+template <typename T> inline T *TakePendingObject() {
+  const void *ptr = detail::pending_object;
+  detail::pending_object = nullptr;
+  return const_cast<T *>(static_cast<const T *>(ptr));
+}
+
+// Allocates the owning copy of a shared_ptr that a factory hands over; taken
+// back and freed by TakePendingShared().
 template <typename T> inline void *ExportShared(const std::shared_ptr<T> &p) {
   return new std::shared_ptr<T>(p);
 }
 
-template <typename T> inline std::shared_ptr<T> ImportShared(const Napi::CallbackInfo &info) {
-  auto *p = static_cast<std::shared_ptr<T> *>(info[0].As<Napi::External<void>>().Data());
-  std::shared_ptr<T> r = *p;
-  delete p;
+// Same, for the classes that hold a std::shared_ptr to their GDAL object
+// (Group, MDArray, Attribute, Dimension): the factory allocates an owning copy
+// of the shared_ptr, which this takes and frees.
+template <typename T> inline std::shared_ptr<T> TakePendingShared() {
+  auto *ptr = static_cast<std::shared_ptr<T> *>(const_cast<void *>(detail::pending_object));
+  detail::pending_object = nullptr;
+  if (ptr == nullptr) { return std::shared_ptr<T>(); }
+  std::shared_ptr<T> r = *ptr;
+  delete ptr;
   return r;
 }
 

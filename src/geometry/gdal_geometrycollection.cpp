@@ -36,7 +36,7 @@ void GeometryCollection::Initialize(Napi::Object target) {
   target.Set("GeometryCollection", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 NAPI_METHOD(GeometryCollection::toString) {

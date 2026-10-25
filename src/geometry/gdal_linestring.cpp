@@ -28,7 +28,7 @@ void LineString::Initialize(Napi::Object target) {
   target.Set("LineString", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**

@@ -31,7 +31,7 @@ void Driver::Initialize(Napi::Object target) {
   target.Set("Driver", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 Driver::Driver(const Napi::CallbackInfo &info)
@@ -42,12 +42,13 @@ Driver::Driver(const Napi::CallbackInfo &info)
     return;
   }
 
-  if (!info[0].IsExternal()) {
+  GDALDriver *pending = node_gdal::TakePendingObject<GDALDriver>();
+  if (pending == nullptr) {
     Napi::Error::New(info.Env(), "Cannot create Driver directly").ThrowAsJavaScriptException();
     return;
   }
 
-  this_gdaldriver = info[0].As<Napi::External<GDALDriver>>().Data();
+  this_gdaldriver = pending;
   LOG("Created GDAL Driver [%p]", this_gdaldriver);
 }
 
@@ -81,7 +82,8 @@ Napi::Value Driver::New(GDALDriver *driver) {
   if (!driver) { return env.Null(); }
   if (object_store.has(driver)) { return object_store.get(driver); }
 
-  std::vector<napi_value> args = {Napi::External<GDALDriver>::New(env, driver)};
+  node_gdal::detail::PendingObjectGuard pending(driver);
+  std::vector<napi_value> args;
   Napi::Object obj = constructor.Value().New(args);
   Driver *wrapped = node_gdal::UnwrapWrapped<Driver>(obj);
 

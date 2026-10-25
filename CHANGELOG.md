@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
  - Support for linking against the GDAL of the system: the addon is always built with the GDAL resolved by Conan and always ships its data files. `--shared-gdal`, `npm install --shared_gdal`, the `shared` argument of `scripts/container.sh` and the `BUNDLED_GDAL`/`GDAL_INCLUDE_DIR`/`GDAL_LIBRARY` options of the CMake build have been removed, only the GDAL that `conan install .` provides can be used
 
+### Fixed
+ - `gdal.algebra` no longer leaks the bands it creates: the computed band and the anonymous dataset it owns are freed when the dataset the band was computed from is closed, in the order their destructors require. A chained operation no longer deadlocks either, because the computed datasets no longer share (and release) the lock of their source
+ - `FieldDefn` objects retrieved from `Layer.fields` no longer leak the `OGRFieldDefn` that they copy when they are garbage collected
+ - The private symbols used by the object wrappers and the persistent references to their constructors are now released when the Node-API environment is destroyed instead of being leaked once per thread
+ - The wrappers no longer allocate a `Napi::External` for every object they wrap: the pointer is handed from the factory to the constructor through a thread-local slot, so the objects which are still alive when an environment is destroyed no longer leak the JS value behind them
+
 # [3.13.0]
 
 ### Added

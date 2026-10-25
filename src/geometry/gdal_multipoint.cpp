@@ -28,7 +28,7 @@ void MultiPoint::Initialize(Napi::Object target) {
   target.Set("MultiPoint", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**

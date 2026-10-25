@@ -28,7 +28,7 @@ void LayerFeatures::Initialize(Napi::Object target) {
   target.Set("LayerFeatures", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 LayerFeatures::LayerFeatures(const Napi::CallbackInfo &info) : GDALObject<LayerFeatures>(info) {

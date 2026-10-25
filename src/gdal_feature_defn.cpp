@@ -27,12 +27,13 @@ void FeatureDefn::Initialize(Napi::Object target) {
   target.Set("FeatureDefn", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDefn>(info), this_(nullptr), owned_(true) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRFeatureDefn *>(info[0].As<Napi::External<void>>().Data());
+  OGRFeatureDefn *pending = node_gdal::TakePendingObject<OGRFeatureDefn>();
+  if (pending != nullptr) {
+    this_ = pending;
   } else if (info.Length() == 0) {
     // constructed from JS: new gdal.FeatureDefn()
     this_ = new OGRFeatureDefn();
@@ -73,7 +74,8 @@ Napi::Value FeatureDefn::New(OGRFeatureDefn *def, bool owned) {
   if (!def) { return node_gdal::napi_env().Null(); }
   if (!owned) { def = def->Clone(); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), def)};
+  node_gdal::detail::PendingObjectGuard pending(def);
+  std::vector<napi_value> args;
   Napi::Object obj = FeatureDefn::constructor.Value().New(args);
   FeatureDefn *wrapped = node_gdal::UnwrapWrapped<FeatureDefn>(obj);
 

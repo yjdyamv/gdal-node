@@ -29,7 +29,7 @@ void CircularString::Initialize(Napi::Object target) {
   target.Set("CircularString", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**

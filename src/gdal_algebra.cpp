@@ -17,6 +17,23 @@ namespace node_gdal {
  */
 
 namespace Algebra {
+/* Registers the Dataset a computed band belongs to and wraps the band.
+ *
+ * A computed band keeps reading the bands it was computed from, so it has to be
+ * freed while they are still alive. It is therefore registered as a child of the
+ * source Dataset instead of as a new root: the object store then frees it (see
+ * ObjectStore::dispose()) when that Dataset is closed, before GDALClose(), which
+ * is exactly the ordering its destructor needs.
+ */
+static Napi::Value WrapComputedBand(GDALRasterBand *band, GDALDataset *source_ds) {
+  /* Create an anonymous object cache entry, it will be immediately */
+  /* referenced as RasterBand.ds. This is a GDALComputedDataset that */
+  /* should not be closed, and that must not share the lock of the */
+  /* Dataset it was computed from - a chained operation locks both. */
+  Dataset::New(band->GetDataset(), source_ds, false, false);
+  return RasterBand::New(band, band->GetDataset(), true);
+}
+
 
 void Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -83,13 +100,10 @@ void Initialize(Napi::Object target) {
     job.persist(arg->Value());                                                                                        \
                                                                                                                        \
     GDALRasterBand *raw = arg->get();                                                                                  \
+    GDALDataset *source_ds = raw->GetDataset();                                                                        \
     job.main = [raw](const GDALExecutionProgress &) { return new GDALComputedRasterBand(OPERATOR(*raw)); };            \
-    job.rval = [](GDALRasterBand *r, const GetFromPersistentFunc &) {                                                  \
-      /* Create an anonymous object cache entry, it will be immediately */                                             \
-      /* referenced as RasterBand.ds. This is a GDALComputedDataset that */                                            \
-      /* should not be closed. */                                                                                      \
-      Dataset::New(r->GetDataset(), nullptr, false);                                                                   \
-      return RasterBand::New(r, r->GetDataset());                                                                      \
+    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
+      return WrapComputedBand(r, source_ds);                                                                           \
     };                                                                                                                 \
     return job.run(info, async, 1);                                                                                           \
   }
@@ -109,6 +123,8 @@ void Initialize(Napi::Object target) {
     if (arg1_band) job.persist(arg1_band->Value());                                                                   \
     if (arg2_band) job.persist(arg2_band->Value());                                                                   \
                                                                                                                        \
+    RasterBand *first_band = arg1_band ? arg1_band : arg2_band;                                                        \
+    GDALDataset *source_ds = first_band ? first_band->get()->GetDataset() : nullptr;                                   \
     if (arg1_band && arg2_band) {                                                                                      \
       GDALRasterBand *arg1 = arg1_band->get();                                                                         \
       GDALRasterBand *arg2 = arg2_band->get();                                                                         \
@@ -132,12 +148,8 @@ void Initialize(Napi::Object target) {
       return node_gdal::napi_env().Undefined();                                                                        \
     }                                                                                                                  \
                                                                                                                        \
-    job.rval = [](GDALRasterBand *r, const GetFromPersistentFunc &) {                                                  \
-      /* Create an anonymous object cache entry, it will be immediately */                                             \
-      /* referenced as RasterBand.ds. This is a GDALComputedDataset that */                                            \
-      /* should not be closed. */                                                                                      \
-      Dataset::New(r->GetDataset(), nullptr, false);                                                                   \
-      return RasterBand::New(r, r->GetDataset());                                                                      \
+    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
+      return WrapComputedBand(r, source_ds);                                                                           \
     };                                                                                                                 \
     return job.run(info, async, 2);                                                                                           \
   }
@@ -158,6 +170,7 @@ void Initialize(Napi::Object target) {
       Napi::Error::New(node_gdal::napi_env(), "At least two arguments must be given").ThrowAsJavaScriptException();                                                         \
       return node_gdal::napi_env().Undefined();                                                                        \
     }                                                                                                                  \
+    GDALDataset *source_ds = args_band[0]->get()->GetDataset();                                                        \
     GDALAsyncableJob<GDALRasterBand *> job(uids);                                                                      \
     GDALRasterBandH *handles = new GDALRasterBandH[args_band.size()];                                                  \
     size_t i = 0;                                                                                                      \
@@ -171,12 +184,8 @@ void Initialize(Napi::Object target) {
       return GDALRasterBand::FromHandle(OPERATOR(i, args.get()));                                                      \
     };                                                                                                                 \
                                                                                                                        \
-    job.rval = [](GDALRasterBand *r, const GetFromPersistentFunc &) {                                                  \
-      /* Create an anonymous object cache entry, it will be immediately */                                             \
-      /* referenced as RasterBand.ds. This is a GDALComputedDataset that */                                            \
-      /* should not be closed. */                                                                                      \
-      Dataset::New(r->GetDataset(), nullptr, false);                                                                   \
-      return RasterBand::New(r, r->GetDataset());                                                                      \
+    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
+      return WrapComputedBand(r, source_ds);                                                                           \
     };                                                                                                                 \
     return job.run(info, async, i);                                                                                           \
   }
@@ -780,6 +789,7 @@ GDAL_ASYNCABLE_DEFINE(ifThenElse) {
   if (arg3_band) job.persist(arg3_band->Value());
 
   GDALRasterBand *arg1 = arg1_band->get();
+  GDALDataset *source_ds = arg1->GetDataset();
   if (arg2_band && arg3_band) {
     GDALRasterBand *arg2 = arg2_band->get();
     GDALRasterBand *arg3 = arg3_band->get();
@@ -805,9 +815,8 @@ GDAL_ASYNCABLE_DEFINE(ifThenElse) {
       return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, arg2, arg3));
     };
   }
-  job.rval = [](GDALRasterBand *r, const GetFromPersistentFunc &) {
-    Dataset::New(r->GetDataset(), nullptr, false);
-    return RasterBand::New(r, r->GetDataset());
+  job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
+    return WrapComputedBand(r, source_ds);
   };
   return job.run(info, async, 3);
 }
@@ -853,12 +862,12 @@ GDAL_ASYNCABLE_DEFINE(asType) {
   GDALAsyncableJob<GDALRasterBand *> job(arg_band->parent_uid);
   job.persist(arg_band->Value());
   GDALRasterBand *arg = arg_band->get();
+  GDALDataset *source_ds = arg->GetDataset();
 
   job.main = [arg, type](const GDALExecutionProgress &) { return new GDALComputedRasterBand(arg->AsType(type)); };
 
-  job.rval = [](GDALRasterBand *r, const GetFromPersistentFunc &) {
-    Dataset::New(r->GetDataset(), nullptr, false);
-    return RasterBand::New(r, r->GetDataset());
+  job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
+    return WrapComputedBand(r, source_ds);
   };
   return job.run(info, async, 2);
 }
@@ -867,3 +876,5 @@ GDAL_ASYNCABLE_DEFINE(asType) {
 } // namespace node_gdal
 
 #endif
+
+

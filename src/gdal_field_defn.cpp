@@ -26,7 +26,7 @@ void FieldDefn::Initialize(Napi::Object target) {
   target.Set("FieldDefn", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**
@@ -38,8 +38,9 @@ void FieldDefn::Initialize(Napi::Object target) {
  * @param {string} type The type of the field (see {@link OFT|OFT constants})
  */
 FieldDefn::FieldDefn(const Napi::CallbackInfo &info) : GDALObject<FieldDefn>(info), this_(nullptr), owned_(false) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRFieldDefn *>(info[0].As<Napi::External<void>>().Data());
+  OGRFieldDefn *pending = node_gdal::TakePendingObject<OGRFieldDefn>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created FieldDefn [%p]", this_);
     return;
   }
@@ -88,9 +89,13 @@ Napi::Value FieldDefn::New(OGRFieldDefn *def, bool owned) {
   if (!def) { return node_gdal::napi_env().Null(); }
   if (!owned) { def = new OGRFieldDefn(def); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), def)};
+  node_gdal::detail::PendingObjectGuard pending(def);
+  std::vector<napi_value> args;
   Napi::Object obj = FieldDefn::constructor.Value().New(args);
   FieldDefn *wrapped = node_gdal::UnwrapWrapped<FieldDefn>(obj);
+  // The pointer is always ours: it is either the copy made above or the one the
+  // caller handed over. Without this the wrapper is not freed with the object
+  wrapped->owned_ = true;
 
   return obj;
 }

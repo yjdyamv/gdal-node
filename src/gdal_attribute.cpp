@@ -32,12 +32,13 @@ void Attribute::Initialize(Napi::Object target) {
   target.Set("Attribute", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 Attribute::Attribute(const Napi::CallbackInfo &info) : GDALObject<Attribute>(info), uid(0), this_(nullptr), parent_ds(0) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = node_gdal::ImportShared<GDALAttribute>(info);
+  std::shared_ptr<GDALAttribute> pending = node_gdal::TakePendingShared<GDALAttribute>();
+  if (pending) {
+    this_ = pending;
     LOG("Created attribute [%p]", this_.get());
     return;
   }
@@ -70,8 +71,8 @@ Napi::Value Attribute::New(std::shared_ptr<GDALAttribute> raw, GDALDataset *pare
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
-  std::vector<napi_value> args = {
-    Napi::External<void>::New(node_gdal::napi_env(), node_gdal::ExportShared(raw))};
+  node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
+  std::vector<napi_value> args;
   Napi::Object obj = Attribute::constructor.Value().New(args);
   Attribute *wrapped = node_gdal::UnwrapWrapped<Attribute>(obj);
 

@@ -28,7 +28,7 @@ void FeatureFields::Initialize(Napi::Object target) {
   target.Set("FeatureFields", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 FeatureFields::FeatureFields(const Napi::CallbackInfo &info) : GDALObject<FeatureFields>(info) {

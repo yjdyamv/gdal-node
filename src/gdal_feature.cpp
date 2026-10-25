@@ -42,7 +42,7 @@ void Feature::Initialize(Napi::Object target) {
   target.Set("Feature", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**
@@ -54,8 +54,9 @@ void Feature::Initialize(Napi::Object target) {
  * the feature will be created from
  */
 Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info), this_(nullptr), owned_(true) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRFeature *>(info[0].As<Napi::External<void>>().Data());
+  OGRFeature *pending = node_gdal::TakePendingObject<OGRFeature>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created Feature[%p]", this_);
   } else {
 
@@ -117,7 +118,8 @@ Napi::Value Feature::New(OGRFeature *feature) {
 Napi::Value Feature::New(OGRFeature *feature, bool owned) {
   if (!feature) { return node_gdal::napi_env().Null(); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), feature)};
+  node_gdal::detail::PendingObjectGuard pending(feature);
+  std::vector<napi_value> args;
   Napi::Object obj = Feature::constructor.Value().New(args);
   node_gdal::UnwrapWrapped<Feature>(obj)->owned_ = owned;
   return obj;

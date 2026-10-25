@@ -44,19 +44,20 @@ void MDArray::Initialize(Napi::Object target) {
   target.Set("MDArray", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 MDArray::MDArray(const Napi::CallbackInfo &info) : GDALObject<MDArray>(info), uid(0), this_(nullptr) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = node_gdal::ImportShared<GDALMDArray>(info);
+  std::shared_ptr<GDALMDArray> pending = node_gdal::TakePendingShared<GDALMDArray>();
+  if (pending) {
+    this_ = pending;
     LOG("Created MDArray [%p]", this_.get());
   } else {
     Napi::Error::New(info.Env(), "Cannot create MDArray directly").ThrowAsJavaScriptException();
     return;
   }
 
-  Napi::Value parent_ds = info.Length() > 1 ? info[1] : info.Env().Undefined();
+  Napi::Value parent_ds = info.Length() > 0 ? info[0] : info.Env().Undefined();
   GDAL_SET_PRIVATE(info.This(), "dims_", ArrayDimensions::New(info.This(), parent_ds));
   GDAL_SET_PRIVATE(info.This(), "attrs_", ArrayAttributes::New(info.This(), parent_ds));
 }
@@ -98,8 +99,8 @@ Napi::Value MDArray::New(std::shared_ptr<GDALMDArray> raw, GDALDataset *parent_d
     return node_gdal::napi_env().Undefined();
   }
 
-  std::vector<napi_value> args = {
-    Napi::External<void>::New(node_gdal::napi_env(), node_gdal::ExportShared(raw)), ds};
+  node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
+  std::vector<napi_value> args = {ds};
   Napi::Object obj = MDArray::constructor.Value().New(args);
   MDArray *wrapped = node_gdal::UnwrapWrapped<MDArray>(obj);
 

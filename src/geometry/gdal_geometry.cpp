@@ -92,7 +92,7 @@ void Geometry::Initialize(Napi::Object target) {
   target.Set("Geometry", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**
@@ -101,9 +101,9 @@ void Geometry::Initialize(Napi::Object target) {
  * @class Geometry
  */
 Geometry::Geometry(const Napi::CallbackInfo &info) : GeometryBase<Geometry, OGRGeometry>(info) {
-  // The factory hands the OGR object over through an External; the class is
-  // otherwise abstract in JS
-  if (info.Length() > 0 && info[0].IsExternal()) return;
+  // The factory hands the OGR object over directly; the class is otherwise
+  // abstract in JS
+  if (from_factory_) return;
 
   Napi::Error::New(
     info.Env(),

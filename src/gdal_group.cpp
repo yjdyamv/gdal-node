@@ -36,12 +36,13 @@ void Group::Initialize(Napi::Object target) {
   target.Set("Group", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 Group::Group(const Napi::CallbackInfo &info) : GDALObject<Group>(info), uid(0), this_(nullptr), parent_ds(0) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = node_gdal::ImportShared<GDALGroup>(info);
+  std::shared_ptr<GDALGroup> pending = node_gdal::TakePendingShared<GDALGroup>();
+  if (pending) {
+    this_ = pending;
     LOG("Created group [%p]", this_.get());
   } else {
     Napi::Error::New(info.Env(), "Cannot create Group directly").ThrowAsJavaScriptException();
@@ -49,7 +50,7 @@ Group::Group(const Napi::CallbackInfo &info) : GDALObject<Group>(info), uid(0), 
   }
 
   // the parent dataset travels as the second argument, for the sub-collections
-  Napi::Value parent_ds = info.Length() > 1 ? info[1] : info.Env().Undefined();
+  Napi::Value parent_ds = info.Length() > 0 ? info[0] : info.Env().Undefined();
   GDAL_SET_PRIVATE(info.This(), "groups_", GroupGroups::New(info.This(), parent_ds));
   GDAL_SET_PRIVATE(info.This(), "arrays_", GroupArrays::New(info.This(), parent_ds));
   GDAL_SET_PRIVATE(info.This(), "dims_", GroupDimensions::New(info.This(), parent_ds));
@@ -94,8 +95,8 @@ Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, Napi::Object parent_ds) {
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
-  std::vector<napi_value> args = {
-    Napi::External<void>::New(node_gdal::napi_env(), node_gdal::ExportShared(raw)), parent_ds};
+  node_gdal::detail::PendingObjectGuard pending(node_gdal::ExportShared(raw));
+  std::vector<napi_value> args = {parent_ds};
   Napi::Object obj = Group::constructor.Value().New(args);
   Group *wrapped = node_gdal::UnwrapWrapped<Group>(obj);
 

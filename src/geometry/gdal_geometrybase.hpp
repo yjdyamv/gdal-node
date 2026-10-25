@@ -88,6 +88,9 @@ template <class T, class OGRT> class GeometryBase : public GDALObject<T> {
   OGRT *this_;
   bool owned_;
   int size_;
+  // true when the wrapper was created by a factory rather than from JS: the base
+  // constructor then takes the OGR object from the thread-local slot
+  bool from_factory_;
   uv_sem_t *async_lock;
 };
 
@@ -108,9 +111,10 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
   if (!owned) { geom = static_cast<OGRT *>(geom->clone()); }
 
-  // node-addon-api allocates the wrapper itself, so the External carries the OGR
-  // object and not the pre-built wrapper - unlike the old binding
-  std::vector<napi_value> args = {Napi::External<OGRT>::New(env, geom)};
+  // node-addon-api allocates the wrapper itself, so the factory hands the OGR
+  // object over directly - unlike the old binding
+  node_gdal::detail::PendingObjectGuard pending(geom);
+  std::vector<napi_value> args;
   Napi::Object obj = T::constructor.Value().New(args);
 
   T *wrapped = node_gdal::UnwrapWrapped<T>(obj);
@@ -123,14 +127,16 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
 template <class T, class OGRT>
 GeometryBase<T, OGRT>::GeometryBase(const Napi::CallbackInfo &info)
-  : GDALObject<T>(info), this_(nullptr), owned_(true), size_(0) {
+  : GDALObject<T>(info), this_(nullptr), owned_(true), size_(0), from_factory_(false) {
   // The async locks must live outside the V8 memory management,
   // otherwise they won't be accessible from the async threads
   async_lock = new uv_sem_t;
   uv_sem_init(async_lock, 1);
 
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = info[0].As<Napi::External<OGRT>>().Data();
+  OGRT *pending = node_gdal::TakePendingObject<OGRT>();
+  if (pending != nullptr) {
+    from_factory_ = true;
+    this_ = pending;
   } else {
     // Constructed from JS: the derived class interprets its own arguments
     this_ = MakeGeometry<OGRT>();

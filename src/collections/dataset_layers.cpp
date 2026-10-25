@@ -29,7 +29,7 @@ void DatasetLayers::Initialize(Napi::Object target) {
   target.Set("DatasetLayers", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 DatasetLayers::DatasetLayers(const Napi::CallbackInfo &info) : GDALObject<DatasetLayers>(info) {

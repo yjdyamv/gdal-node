@@ -45,13 +45,14 @@ void Layer::Initialize(Napi::Object target) {
   target.Set("Layer", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 
 Layer::Layer(const Napi::CallbackInfo &info) : GDALObject<Layer>(info), uid(0), this_(nullptr), parent_ds(0) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRLayer *>(info[0].As<Napi::External<void>>().Data());
+  OGRLayer *pending = node_gdal::TakePendingObject<OGRLayer>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created layer [%p]", this_);
   } else {
     Napi::Error::New(info.Env(), "Cannot create Layer directly").ThrowAsJavaScriptException();
@@ -93,7 +94,8 @@ Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set) 
   if (!raw) { return node_gdal::napi_env().Null(); }
   if (object_store.has(raw)) { return object_store.get(raw); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), raw)};
+  node_gdal::detail::PendingObjectGuard pending(raw);
+  std::vector<napi_value> args;
   Napi::Object obj = Layer::constructor.Value().New(args);
   Layer *wrapped = node_gdal::UnwrapWrapped<Layer>(obj);
 

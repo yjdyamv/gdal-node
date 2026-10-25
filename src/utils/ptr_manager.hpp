@@ -45,6 +45,19 @@ template <typename GDALPTR> struct ObjectStoreItem {
   ObjectStoreItem(Napi::Reference<Napi::Object> &obj);
 };
 
+template <> struct ObjectStoreItem<GDALRasterBand *> {
+  long uid;
+  Napi::Reference<Napi::Object> &obj;
+  GDALRasterBand *ptr;
+  shared_ptr<ObjectStoreItem<GDALDataset *>> parent;
+  // Does the store own the band, ie must it free it? A band is normally owned by
+  // the Dataset it belongs to, the only exceptions are the bands the addon
+  // creates itself (the ones returned by the algebra operators), which own a
+  // Dataset instead of being owned by one.
+  bool owned;
+  ObjectStoreItem(Napi::Reference<Napi::Object> &obj);
+};
+
 template <> struct ObjectStoreItem<OGRLayer *> {
   long uid;
   Napi::Reference<Napi::Object> &obj;
@@ -68,9 +81,10 @@ template <> struct ObjectStoreItem<GDALDataset *> {
 
 class ObjectStore {
     public:
-  template <typename GDALPTR> long add(GDALPTR ptr, Napi::Reference<Napi::Object> &obj, long parent_uid);
+  template <typename GDALPTR>
+  long add(GDALPTR ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool owned = false);
   long add(OGRLayer *ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool is_result_set);
-  long add(GDALDataset *ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool close);
+  long add(GDALDataset *ptr, Napi::Reference<Napi::Object> &obj, long parent_uid, bool close, bool shared_lock = true);
 
   void dispose(long uid, bool manual = false);
   bool isAlive(long uid);

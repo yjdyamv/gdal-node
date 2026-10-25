@@ -29,7 +29,7 @@ void Point::Initialize(Napi::Object target) {
   target.Set("Point", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**
@@ -43,11 +43,6 @@ void Point::Initialize(Napi::Object target) {
  * @param {number} [z]
  */
 Point::Point(const Napi::CallbackInfo &info) : GeometryBase<Point, OGRPoint>(info) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRPoint *>(info[0].As<Napi::External<void>>().Data());
-    return;
-  }
-
   if (info.Length() == 1) {
     Napi::Error::New(info.Env(), "Point constructor must be given 0, 2, or 3 arguments").ThrowAsJavaScriptException();
     return;

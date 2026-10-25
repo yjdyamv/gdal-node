@@ -28,7 +28,7 @@ void MultiCurve::Initialize(Napi::Object target) {
   target.Set("MultiCurve", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 /**

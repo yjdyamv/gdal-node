@@ -25,7 +25,7 @@ void CompoundCurveCurves::Initialize(Napi::Object target) {
   target.Set("CompoundCurveCurves", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 CompoundCurveCurves::CompoundCurveCurves(const Napi::CallbackInfo &info) : GDALObject<CompoundCurveCurves>(info) {

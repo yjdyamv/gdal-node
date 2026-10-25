@@ -25,13 +25,14 @@ void CoordinateTransformation::Initialize(Napi::Object target) {
   target.Set("CoordinateTransformation", lcons);
 
   constructor = Napi::Persistent(lcons);
-  constructor.SuppressDestruct();
+  node_gdal::OwnConstructorReference(env, constructor);
 }
 
 CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &info)
   : GDALObject<CoordinateTransformation>(info), this_(nullptr) {
-  if (info.Length() > 0 && info[0].IsExternal()) {
-    this_ = static_cast<OGRCoordinateTransformation *>(info[0].As<Napi::External<void>>().Data());
+  OGRCoordinateTransformation *pending = node_gdal::TakePendingObject<OGRCoordinateTransformation>();
+  if (pending != nullptr) {
+    this_ = pending;
     LOG("Created CoordinateTransformation [%p]", this_);
     return;
   }
@@ -143,7 +144,8 @@ Napi::Value CoordinateTransformation::New(OGRCoordinateTransformation *transform
 
   if (!transform) { return node_gdal::napi_env().Null(); }
 
-  std::vector<napi_value> args = {Napi::External<void>::New(node_gdal::napi_env(), transform)};
+  node_gdal::detail::PendingObjectGuard pending(transform);
+  std::vector<napi_value> args;
   Napi::Object obj = CoordinateTransformation::constructor.Value().New(args);
   CoordinateTransformation *wrapped = node_gdal::UnwrapWrapped<CoordinateTransformation>(obj);
 
