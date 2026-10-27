@@ -175,7 +175,17 @@ static NAPI_METHOD(VerboseOutput) {
   return info.Env().Undefined();
 }
 
+/**
+ * Starts writing the GDAL debug messages to a file.
+ *
+ * Only available when the addon was built with `--enable_logging`.
+ *
+ * @static
+ * @method startLogging
+ * @param {string} filename Path to the file which the messages are written to
+ */
 static NAPI_METHOD(StartLogging) {
+
   Args args(info);
 
 #ifdef ENABLE_LOGGING
@@ -199,7 +209,14 @@ static NAPI_METHOD(StartLogging) {
   return info.Env().Undefined();
 }
 
+/**
+ * Stops writing the GDAL debug messages to a file.
+ *
+ * @static
+ * @method stopLogging
+ */
 static NAPI_METHOD(StopLogging) {
+
 #ifdef ENABLE_LOGGING
   if (log_file) {
     fclose(log_file);
@@ -210,7 +227,15 @@ static NAPI_METHOD(StopLogging) {
   return info.Env().Undefined();
 }
 
+/**
+ * Writes a message of its own to the log file of `startLogging`.
+ *
+ * @static
+ * @method log
+ * @param {string} message
+ */
 static NAPI_METHOD(Log) {
+
   Args args(info);
   std::string msg;
   if (!args.get(0, "message", msg)) return args.failed();
@@ -304,6 +329,10 @@ static NAPI_METHOD(decToDMS) {
 /**
  * Set paths where proj will search it data.
  *
+ * Also available under the name which it had before it was registered under
+ * the name given here, `setPROJSearchPath`, which has always been part of the
+ * published API.
+ *
  * @static
  * @method setPROJSearchPaths
  * @param {string} path `c:\ProjData`
@@ -365,6 +394,7 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   GDAL_SetMethod(env, target, "setConfigOption", setConfigOption);
   GDAL_SetMethod(env, target, "getConfigOption", getConfigOption);
   GDAL_SetMethod(env, target, "decToDMS", decToDMS);
+  GDAL_SetMethod(env, target, "setPROJSearchPaths", setPROJSearchPath);
   GDAL_SetMethod(env, target, "setPROJSearchPath", setPROJSearchPath);
   GDAL_SetMethod(env, target, "_triggerCPLError", ThrowDummyCPLError); // for tests
   GDAL_SetMethod(env, target, "_isAlive", isAlive);                    // for tests
@@ -619,7 +649,7 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   /**
    * @final
    * @constant
-   * @name CPLE_objectNull
+   * @name CPLE_ObjectNull
    * @type {number}
    */
   target.Set( Napi::String::New(env, "CPLE_ObjectNull"), Napi::Number::New(env, CPLE_ObjectNull));
@@ -821,7 +851,7 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   /**
    * @final
    * @constant
-   * @name GA_Readonly
+   * @name GA_ReadOnly
    * @type {number}
    */
   NODE_DEFINE_CONSTANT(target, GA_ReadOnly);
@@ -1803,10 +1833,11 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
 
   /**
    * Details about the last error that occurred. The property
-   * will be null or an object containing three properties: "number",
-   * "message", and "type".
+   * will be null or an object containing three properties: "code",
+   * "message", and "level".
    *
-   * @var {object} lastError
+   * @type {LastError|null}
+   * @var lastError
    */
   GDAL_DEFINE_ACCESSOR(target, "lastError", LastErrorGetter, LastErrorSetter);
 
@@ -1814,9 +1845,9 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
    * Should a warning be emitted to stderr when a synchronous operation
    * is blocking the event loop, can be safely disabled unless
    * the user application needs to remain responsive at all times
-   * Use `(gdal as any).eventLoopWarning = false` to set the value from TypeScript
    *
-   * @var {boolean} eventLoopWarning
+   * @type {boolean}
+   * @var eventLoopWarning
    */
   GDAL_DEFINE_ACCESSOR(target, "eventLoopWarning", EventLoopWarningGetter, EventLoopWarningSetter);
 

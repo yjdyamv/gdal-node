@@ -53,3 +53,61 @@ export class GDALAWSError extends GDALError {}
 export class AbortError extends GDALError {
   code: 'ABORT_ERR'
 }
+
+// lib/gdal.js installs the band operators on top of gdal.algebra, so there is
+// no registration which yatag could read them from
+/**
+ * The band operators, which apply `gdal.algebra` to the band.
+ *
+ * They are the equivalent of the arithmetic operators of JavaScript: they
+ * return a new virtual band which computes the result when it is read.
+ */
+export interface RasterBand {
+  abs(): RasterBand
+  sqrt(): RasterBand
+  log(): RasterBand
+  log10(): RasterBand
+  not(): RasterBand
+  add(rhs: RasterBand|number): RasterBand
+  sub(rhs: RasterBand|number): RasterBand
+  mul(rhs: RasterBand|number): RasterBand
+  div(rhs: RasterBand|number): RasterBand
+  pow(rhs: RasterBand|number): RasterBand
+  lt(rhs: RasterBand|number): RasterBand
+  lte(rhs: RasterBand|number): RasterBand
+  gt(rhs: RasterBand|number): RasterBand
+  gte(rhs: RasterBand|number): RasterBand
+  eq(rhs: RasterBand|number): RasterBand
+  notEq(rhs: RasterBand|number): RasterBand
+  and(rhs: RasterBand|number): RasterBand
+  or(rhs: RasterBand|number): RasterBand
+  min(rhs: RasterBand|number): RasterBand
+  max(rhs: RasterBand|number): RasterBand
+  mean(rhs: RasterBand|number): RasterBand
+  ifThenElse(ifValue: RasterBand|number, elseValue: RasterBand|number): RasterBand
+  asType(type: string): RasterBand
+}
+
+// the aliases of the multi geometry constructors, which lib/gdal.js sets on the
+// single geometry constructors
+export namespace Point {
+  const Multi: typeof MultiPoint
+}
+export namespace LineString {
+  const Multi: typeof MultiLineString
+}
+export namespace LinearRing {
+  const Multi: typeof MultiLineString
+}
+export namespace Polygon {
+  const Multi: typeof MultiPolygon
+}
+
+// the name which setPROJSearchPaths had before it was registered under the name
+// given in its documentation
+/**
+ * Set paths where proj will search it data.
+ *
+ * @deprecated use `setPROJSearchPaths`, which this is an alias of
+ */
+export function setPROJSearchPath(path: string): void

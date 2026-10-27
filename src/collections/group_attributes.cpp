@@ -97,6 +97,17 @@ int GroupAttributes::__count(std::shared_ptr<GDALGroup> parent) {
  */
 
 /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupAttributes
+ * @type {Group}
+ */
+
+/**
  * Returns the parent dataset.
  *
  * @readonly

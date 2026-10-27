@@ -7,7 +7,6 @@ import * as path from 'path'
 describe('object cache', () => {
   it('should return same object if pointer is same', () => {
     for (let i = 0; i < 10; i++) {
-      // @ts-expect-error not a public API
       gdal.log(`Object Cache test run #${i}`)
       const ds = gdal.open('temp', 'w', 'MEM', 4, 4, 1)
       const band1 = ds.bands.get(1)

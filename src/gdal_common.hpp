@@ -85,6 +85,9 @@ inline ObjectStore &object_store() {
 #define NAPI_GETTER(name) Napi::Value name(const Napi::CallbackInfo &info)
 #define NAPI_SETTER(name) void name(const Napi::CallbackInfo &info, const Napi::Value &value)
 
+// the marker of a read-only property, defined in gdal_common.cpp
+NAPI_SETTER(READ_ONLY_SETTER);
+
 // Building a string from a null pointer used to segfault, hence this helper
 class SafeString {
     public:
@@ -318,6 +321,13 @@ inline napi_value AsyncSetterEntryTrampoline(::napi_env env, napi_callback_info 
   Napi::CallbackInfo ci(env, info);
   const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
   if (entry == nullptr || entry->setter_async == nullptr) return nullptr;
+  // the asynchronous half of a read-only property is read-only as well and
+  // `READ_ONLY_SETTER` does not know its own name
+  if (entry->setter_async == &READ_ONLY_SETTER) {
+    std::string err = std::string(entry->name) + "Async is a read-only property";
+    Napi::Error::New(ci.Env(), err.c_str()).ThrowAsJavaScriptException();
+    return nullptr;
+  }
   Napi::Value value = ci.Length() > 0 ? ci[0] : ci.Env().Undefined();
   try {
     entry->setter_async(ci, value);

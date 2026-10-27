@@ -40,8 +40,13 @@ describe('gdal', () => {
         assert.isNull(gdal.lastError)
       })
       it('should throw when not null', () => {
+        // even a value of the right shape is refused: the last error belongs to GDAL
         assert.throws(() => {
-          gdal.lastError = {}
+          gdal.lastError = {
+            code: gdal.CPLE_AppDefined,
+            message: 'Not an error',
+            level: gdal.CE_Failure
+          }
         }, /null/)
       })
     })

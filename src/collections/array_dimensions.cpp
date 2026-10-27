@@ -111,14 +111,14 @@ int ArrayDimensions::__count(std::shared_ptr<GDALMDArray> parent) {
  */
 
 /**
- * Returns the parent group.
+ * Returns the parent array.
  *
  * @readonly
  * @kind member
  * @instance
  * @memberof ArrayDimensions
  * @name parent
- * @type {Group}
+ * @type {MDArray}
  */
 
 /**

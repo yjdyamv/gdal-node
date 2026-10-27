@@ -1,6 +1,7 @@
 import { assert } from 'chai'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as ts from 'typescript'
 import gdal from 'gdal-async'
 
 /**
@@ -17,6 +18,11 @@ import gdal from 'gdal-async'
  * These tests parse the registration and the comments out of the sources and check
  * that they agree, so that a method cannot be registered without being documented
  * and a doc comment cannot survive a method which is no longer there.
+ *
+ * The typings are checked against the module itself as well, because agreeing with
+ * the comments is not the same thing as describing the module: a comment which names
+ * the wrong class, or a member which the JS layer installs on a class of its own,
+ * gives a declaration which the compiler accepts and the runtime does not have.
  */
 
 const root = path.join(__dirname, '..')
@@ -278,5 +284,233 @@ describe('registration', () => {
       }
     }
     assert.deepEqual(missing, [], `registered but not declared in lib/index.d.ts: ${missing.join(', ')}`)
+  })
+})
+
+// ------------------------------------------------------------------ the runtime
+
+/**
+ * The doc comments are written by hand and `npm run yatag` believes them, so nothing
+ * makes sure that the typings describe the module: a comment which names the wrong
+ * class, or a member which the JS layer installs on a class of its own, produces a
+ * declaration which the compiler accepts and which the module does not have.
+ *
+ * `points` was documented as a member of `Geometry` while it is registered only on
+ * `SimpleCurve`, so the typings promised it on every geometry, and the static
+ * `wkbType` was declared on `Geometry` while only the concrete classes have it.
+ *
+ * These tests read the declarations with the compiler API and compare them with the
+ * runtime object. A member may be installed by the constructor instead of being an
+ * accessor of the prototype (`Envelope.minX`, `GDALError.code`), and the module has
+ * three kinds of objects which are declared as classes: the real classes, the
+ * collections exposed as plain objects (`gdal.fs`, `gdal.vsimem`) and the namespaces
+ * of the geometry classes (`gdal.Point.Multi`), so all of them are checked.
+ */
+
+/** The declarations of lib/index.d.ts, or null if `npm run yatag` has not run. */
+const declaration = (): ts.SourceFile | null => {
+  const file = path.join(root, 'lib/index.d.ts')
+  if (!fs.existsSync(file)) return null
+  return ts.createSourceFile('index.d.ts', fs.readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, true)
+}
+
+const runtime = gdal as unknown as Record<string, unknown>
+
+/** `name`, or `Symbol.x` for a computed name, or null if it cannot be read. */
+const declaredName = (node: ts.Node): string | null => {
+  const name = (node as ts.NamedDeclaration).name
+  if (name === undefined) return null
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text
+  if (ts.isComputedPropertyName(name)) return name.expression.getText()
+  return null
+}
+
+const isMember = (node: ts.Node): boolean =>
+  ts.isPropertySignature(node) ||
+  ts.isMethodSignature(node) ||
+  ts.isPropertyDeclaration(node) ||
+  ts.isMethodDeclaration(node) ||
+  ts.isGetAccessorDeclaration(node) ||
+  ts.isSetAccessorDeclaration(node)
+
+const isStatic = (node: ts.Node): boolean =>
+  ts.canHaveModifiers(node) &&
+  (ts.getModifiers(node) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)
+
+/** `Symbol.iterator` -> the symbol itself, since it is not a string key. */
+const wellKnown = (name: string): symbol | null => {
+  const match = /^Symbol\.([\w$]+)$/.exec(name)
+  if (match === null) return null
+  return (Symbol as unknown as Record<string, symbol>)[match[1]] ?? null
+}
+
+const hasMember = (owner: object, name: string): boolean => {
+  const symbol = wellKnown(name)
+  if (symbol === null) return name in owner
+  return (owner as Record<symbol, unknown>)[symbol] !== undefined
+}
+
+/** A class of the module, as the declarations see it. */
+interface Constructor {
+  prototype: object
+  new (...args: unknown[]): object
+}
+
+/**
+ * The objects of a class which could be constructed, for the members which the
+ * constructor installs on them rather than exposing them from the prototype.
+ * A constructor may accept any of the forms, so every one of them is tried.
+ */
+const instances = (constructor: Constructor): object[] => {
+  const attempts = [
+    () => new constructor(),
+    () => new constructor('test'),
+    () => new constructor('test', 'CPLE_Test')
+  ]
+  const made: object[] = []
+  for (const attempt of attempts) {
+    try {
+      made.push(attempt())
+    } catch {
+      // this constructor needs other arguments
+    }
+  }
+  return made
+}
+
+/** The classes which really have the member, for the messages. */
+const owners = (name: string, isStaticMember: boolean): string[] =>
+  Object.keys(gdal).filter((other) => {
+    const found = ctor(other)
+    if (found === undefined) return false
+    const owner = isStaticMember ? found : found.prototype
+    return owner !== undefined && Object.prototype.hasOwnProperty.call(owner, name)
+  })
+
+/**
+ * class name -> its declarations, since a class may be declared twice: `Dataset` is
+ * both a class and an interface which adds the `Symbol.dispose` of the typings.
+ */
+const declarations = (file: ts.SourceFile): Map<string, ts.Node[]> => {
+  const classes = new Map<string, ts.Node[]>()
+  for (const node of file.statements) {
+    if (!ts.isClassDeclaration(node) && !ts.isInterfaceDeclaration(node)) continue
+    if (node.name === undefined) continue
+    classes.set(node.name.text, [ ...(classes.get(node.name.text) ?? []), node ])
+  }
+  return classes
+}
+
+/** The names which are declared as a class - the interfaces are types only. */
+const declaredClasses = (file: ts.SourceFile): Set<string> =>
+  new Set(file.statements.filter(ts.isClassDeclaration).map((node) => node.name?.text).filter((name) => name !== undefined))
+
+describe('the typings', () => {
+  const file = declaration()
+  const declared = file === null ? null : declarations(file)
+
+  it('declares only classes which the module has', () => {
+    if (file === null) return // `npm run yatag` has not generated them
+
+    const missing = Array.from(declaredClasses(file)).filter((name) => !(name in runtime))
+    assert.deepEqual(missing, [], `declared but not in the module: ${missing.join(', ')}`)
+  })
+
+  it('declares the members which the module has', () => {
+    if (declared === null) return
+
+    const missing: string[] = []
+    for (const [ name, nodes ] of declared) {
+      const value = runtime[name]
+      if (value === undefined) continue // the case above
+      const isClass = typeof value === 'function'
+      const object = isClass ? instances(value as unknown as Constructor) : [ value as object ]
+
+      for (const node of nodes) {
+        for (const member of (node as ts.ClassDeclaration).members) {
+          if (!isMember(member)) continue
+          const memberName = declaredName(member)
+          if (memberName === null) continue
+
+          // the statics and the members of the plain objects are properties of the
+          // value itself, everything else belongs to the prototype
+          const target = isClass && !isStatic(member) ? (value as unknown as Constructor).prototype : (value as object)
+          if (hasMember(target, memberName)) continue
+          if (!isStatic(member) && object.some((made) => hasMember(made, memberName))) continue
+
+          const owner = owners(memberName, isStatic(member))
+          missing.push(owner.length === 0 ? `${name}.${memberName}` : `${name}.${memberName} (only ${owner.join(', ')} has it)`)
+        }
+      }
+    }
+
+    assert.deepEqual(missing, [], `declared but not in the module: ${missing.join(', ')}`)
+  })
+
+  it('declares the functions and the constants which the module has', () => {
+    if (file === null) return
+
+    const missing: string[] = []
+    for (const node of file.statements) {
+      if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
+        if (!(node.name.text in runtime)) missing.push(`${node.name.text}()`)
+        continue
+      }
+      if (!ts.isVariableStatement(node)) continue
+      for (const variable of node.declarationList.declarations) {
+        const name = declaredName(variable)
+        if (name !== null && !(name in runtime)) missing.push(name)
+      }
+    }
+
+    assert.deepEqual(missing, [], `declared but not in the module: ${missing.join(', ')}`)
+  })
+
+  it('declares the namespaces which the module has', () => {
+    if (file === null) return
+
+    const missing: string[] = []
+    for (const node of file.statements) {
+      if (!ts.isModuleDeclaration(node) || !ts.isIdentifier(node.name)) continue
+      const object = runtime[node.name.text]
+      if (object === undefined) {
+        missing.push(node.name.text)
+        continue
+      }
+
+      let body = node.body
+      while (body !== undefined && ts.isModuleDeclaration(body)) body = body.body
+      for (const member of body === undefined || !ts.isModuleBlock(body) ? [] : body.statements) {
+        if (!ts.isVariableStatement(member)) continue
+        for (const variable of member.declarationList.declarations) {
+          const name = declaredName(variable)
+          if (name === null) continue
+          if (!(name in (object as object))) missing.push(`${node.name.text}.${name}`)
+        }
+      }
+    }
+
+    assert.deepEqual(missing, [], `declared but not in the module: ${missing.join(', ')}`)
+  })
+
+  // `unknown` is the type which yatag writes when it does not know the type of a
+  // member, which happens with the members which are declared by a tag of their
+  // own and not by a `@type`: the compiler accepts them, but the user of the
+  // typings knows nothing about the value
+  it('declares the type of every member', () => {
+    if (file === null) return
+
+    const untyped: string[] = []
+    const visit = (node: ts.Node): void => {
+      if (node.kind === ts.SyntaxKind.UnknownKeyword) {
+        let owner: ts.Node | undefined = node.parent
+        while (owner !== undefined && !isMember(owner) && !ts.isVariableDeclaration(owner)) owner = owner.parent
+        untyped.push(owner === undefined ? node.getText() : declaredName(owner) ?? node.getText())
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(file)
+
+    assert.deepEqual(untyped, [], `declared without a type: ${untyped.join(', ')}`)
   })
 })

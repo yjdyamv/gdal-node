@@ -4,7 +4,6 @@ console.log(`GDAL Version: ${gdal.version}, source: ${gdal.bundled ? 'bundled' :
 
 // gc tracing
 try {
-  // @ts-expect-error not a public API
   gdal.startLogging(`${__dirname}/artifacts/log.txt`)
 } catch (_e) {
   /* ignore */

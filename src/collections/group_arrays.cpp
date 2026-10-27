@@ -94,6 +94,17 @@ int GroupArrays::__count(std::shared_ptr<GDALGroup> parent) {
  */
 
 /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupArrays
+ * @type {Group}
+ */
+
+/**
  * Returns the parent dataset.
  *
  * @readonly

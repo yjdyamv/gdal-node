@@ -103,6 +103,17 @@ int GroupDimensions::__count(std::shared_ptr<GDALGroup> parent) {
  */
 
 /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupDimensions
+ * @type {Group}
+ */
+
+/**
  * Returns the parent dataset.
  *
  * @readonly

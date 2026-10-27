@@ -20,12 +20,12 @@ Napi::FunctionReference &MultiCurve::constructor() {
  */
 
 /**
- * Converts it to a polygon.
+ * Builds the polygons which the lines of the collection form.
  *
  * @method polygonize
  * @instance
  * @memberof MultiCurve
- * @return {Polygon}
+ * @return {GeometryCollection} The polygons which the lines form, `null` if they do not close
  */
 namespace {
 

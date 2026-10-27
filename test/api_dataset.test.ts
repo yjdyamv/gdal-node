@@ -434,6 +434,10 @@ describe('gdal.Dataset', () => {
           assert.throws(() => {
             ds.layers.create('layer_name', null, console.log)
           })
+          // the abstract class has a wkbType but it cannot be constructed
+          assert.throws(() => {
+            ds.layers.create('layer_name', null, gdal.Geometry)
+          }, /geometry constructor/)
           assert.throws(() => {
             ds.layers.create('layer_name', null, 16819189)
           })

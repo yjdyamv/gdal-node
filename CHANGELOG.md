@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - `FieldDefn` objects retrieved from `Layer.fields` no longer leak the `OGRFieldDefn` that they copy when they are garbage collected
  - The private symbols used by the object wrappers and the persistent references to their constructors are now released when the Node-API environment is destroyed instead of being leaked once per thread
  - The wrappers no longer allocate a `Napi::External` for every object they wrap: the pointer is handed from the factory to the constructor through a thread-local slot, so the objects which are still alive when an environment is destroyed no longer leak the JS value behind them
+ - `gdal.setPROJSearchPaths` was documented but registered under the name `setPROJSearchPath`, so the documented name was `undefined` at runtime. Both names are registered now
+ - `MultiLineString.polygonize` and `MultiCurve.polygonize` documented their result as a `Polygon`, but they return a `GeometryCollection`, or `null` when the lines do not close
+ - `gdal.startLogging`, `gdal.stopLogging` and `gdal.log` were registered without documentation, so they were missing from the typings
 
 # [3.13.0]
 

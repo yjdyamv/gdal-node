@@ -207,6 +207,12 @@ export type units = {
 	value: number;
 }
 
+export interface LastError {
+	code: number;
+	message: string;
+	level: number;
+}
+
 export interface RasterReadableOptions extends stream.ReadableOptions {
 	blockOptimize?: boolean;
 	convertNoData?: boolean;
@@ -339,6 +345,14 @@ export interface xyz {
   /**
    * @final
    * @constant
+   * @name CPLE_ObjectNull
+   * @type {number}
+   */
+  export const CPLE_ObjectNull: number
+
+  /**
+   * @final
+   * @constant
    * @name CPLE_OpenFailed
    * @type {number}
    */
@@ -359,14 +373,6 @@ export interface xyz {
    * @type {number}
    */
   export const CPLE_UserInterrupt: number
-
-  /**
-   * @final
-   * @constant
-   * @name CPLE_objectNull
-   * @type {number}
-   */
-  export const CPLE_objectNull: number
 
   /**
    * @final
@@ -563,10 +569,10 @@ export interface xyz {
   /**
    * @final
    * @constant
-   * @name GA_Readonly
+   * @name GA_ReadOnly
    * @type {number}
    */
-  export const GA_Readonly: number
+  export const GA_ReadOnly: number
 
   /**
    * @final
@@ -1345,20 +1351,21 @@ export interface xyz {
    * Should a warning be emitted to stderr when a synchronous operation
    * is blocking the event loop, can be safely disabled unless
    * the user application needs to remain responsive at all times
-   * Use `(gdal as any).eventLoopWarning = false` to set the value from TypeScript
    *
-   * @var {boolean} eventLoopWarning
+   * @type {boolean}
+   * @var eventLoopWarning
    */
-  export let eventLoopWarning: unknown
+  export let eventLoopWarning: boolean
 
   /**
    * Details about the last error that occurred. The property
-   * will be null or an object containing three properties: "number",
-   * "message", and "type".
+   * will be null or an object containing three properties: "code",
+   * "message", and "level".
    *
-   * @var {object} lastError
+   * @type {LastError|null}
+   * @var lastError
    */
-  export let lastError: unknown
+  export let lastError: LastError|null
 
   /**
    * GDAL version (not the binding version)
@@ -1993,6 +2000,15 @@ export interface xyz {
   export function infoAsync(dataset: Dataset, args?: string[], callback?: callback<string>): Promise<string>
 
   /**
+ * Writes a message of its own to the log file of `startLogging`.
+ *
+ * @static
+ * @method log
+ * @param {string} message
+ */
+  export function log(message: string): void
+
+  /**
  * Creates or opens a dataset. Dataset should be explicitly closed with `dataset.close()` method if opened in `"w"` mode to flush any changes. Otherwise, datasets are closed when (and if) node decides to garbage collect them.
  *
  * @example
@@ -2230,6 +2246,10 @@ export interface xyz {
   /**
  * Set paths where proj will search it data.
  *
+ * Also available under the name which it had before it was registered under
+ * the name given here, `setPROJSearchPath`, which has always been part of the
+ * published API.
+ *
  * @static
  * @method setPROJSearchPaths
  * @param {string} path `c:\ProjData`
@@ -2272,6 +2292,25 @@ export interface xyz {
  * @return {Promise<void>}
  */
   export function sieveFilterAsync(options: SieveOptions, callback?: callback<void>): Promise<void>
+
+  /**
+ * Starts writing the GDAL debug messages to a file.
+ *
+ * Only available when the addon was built with `--enable_logging`.
+ *
+ * @static
+ * @method startLogging
+ * @param {string} filename Path to the file which the messages are written to
+ */
+  export function startLogging(filename: string): void
+
+  /**
+ * Stops writing the GDAL debug messages to a file.
+ *
+ * @static
+ * @method stopLogging
+ */
+  export function stopLogging(): void
 
   /**
  * Used to determine the bounds and resolution of the output virtual file which
@@ -2569,15 +2608,28 @@ export class ArrayAttributes implements Iterable<Attribute>, AsyncIterable<Attri
   readonly names: string[]
 
   /**
+ * Returns the parent array.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof ArrayAttributes
+ * @type {MDArray}
+ */
+  readonly parent: MDArray
+
+  /**
  * Returns the parent dataset.
  *
  * @readonly
- * @name ds
  * @kind member
+ * @name ds
  * @instance
  * @memberof ArrayAttributes
+ * @type {Dataset}
  */
-  readonly ds: unknown
+  readonly ds: Dataset
   [Symbol.iterator](): Iterator<Attribute>
   [Symbol.asyncIterator](): AsyncIterator<Attribute>
 
@@ -2687,16 +2739,16 @@ export class ArrayDimensions implements Iterable<Dimension>, AsyncIterable<Dimen
   readonly names: string[]
 
   /**
- * Returns the parent group.
+ * Returns the parent array.
  *
  * @readonly
  * @kind member
  * @instance
  * @memberof ArrayDimensions
  * @name parent
- * @type {Group}
+ * @type {MDArray}
  */
-  readonly parent: Group
+  readonly parent: MDArray
 
   /**
  * Returns the parent dataset.
@@ -4162,32 +4214,6 @@ export class Driver {
   openAsync(path: string, mode?: string, options?: StringOptions, callback?: callback<Dataset>): Promise<Dataset>
 }
 
-export class EnvContext {
-/**
- * The state which belongs to one Node-API environment.
- *
- * Every V8 isolate - the main thread and each worker_thread - has its own
- * environment and the addon keeps state for it: the object store, the interned
- * private property symbols, the constructor of every wrapped class, the pointer
- * a wrapper factory hands to the constructor and the two flags which say that
- * the environment is going away. All of it used to live in `thread_local`
- * variables, each with its own environment cleanup hook, which made the
- * teardown order something to be reasoned about by hand and made it impossible
- * to tell two loadings of the addon apart.
- *
- * There is one context per environment and it is found by the environment it
- * belongs to, so two loadings of the addon in one isolate share it. It outlives
- * the environment, though: V8 finalizes the objects which are still alive when
- * the isolate is torn down after the cleanup hooks of the environment have run,
- * and their destructors still have to reach the object store. The cleanup hook
- * therefore releases the symbols and the constructors, which are only usable
- * while the environment is alive, and leaves the rest to the thread's exit.
- *
- * @class EnvContext
- */
-  constructor()
-}
-
 export class Envelope {
 /**
    * A 2D bounding box. For 3D envelopes, see {@link Envelope3D}
@@ -5130,17 +5156,6 @@ export class Geometry {
  * @type {number}
  */
   coordinateDimension: number
-
-  /**
- * The points that make up the SimpleCurve geometry.
- *
- * @kind member
- * @name points
- * @instance
- * @memberof Geometry
- * @type {LineStringPoints}
- */
-  points: LineStringPoints
 
   /**
  * Closes any un-closed rings.
@@ -6441,6 +6456,18 @@ export class GroupArrays implements Iterable<MDArray>, AsyncIterable<MDArray> {
   readonly names: string[]
 
   /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupArrays
+ * @type {Group}
+ */
+  readonly parent: Group
+
+  /**
  * Returns the parent dataset.
  *
  * @readonly
@@ -6555,6 +6582,18 @@ export class GroupAttributes implements Iterable<Attribute>, AsyncIterable<Attri
  * @type {string[]}
  */
   readonly names: string[]
+
+  /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupAttributes
+ * @type {Group}
+ */
+  readonly parent: Group
 
   /**
  * Returns the parent dataset.
@@ -6676,6 +6715,18 @@ export class GroupDimensions implements Iterable<Dimension>, AsyncIterable<Dimen
   readonly names: string[]
 
   /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupDimensions
+ * @type {Group}
+ */
+  readonly parent: Group
+
+  /**
  * Returns the parent dataset.
  *
  * @readonly
@@ -6791,6 +6842,18 @@ export class GroupGroups implements Iterable<Group>, AsyncIterable<Group> {
  * @type {string[]}
  */
   readonly names: string[]
+
+  /**
+ * Returns the parent group.
+ *
+ * @readonly
+ * @kind member
+ * @name parent
+ * @instance
+ * @memberof GroupGroups
+ * @type {Group}
+ */
+  readonly parent: Group
 
   /**
  * Returns the parent dataset.
@@ -7950,14 +8013,14 @@ export class MultiCurve extends GeometryCollection {
   constructor()
 
   /**
- * Converts it to a polygon.
+ * Builds the polygons which the lines of the collection form.
  *
  * @method polygonize
  * @instance
  * @memberof MultiCurve
- * @return {Polygon}
+ * @return {GeometryCollection} The polygons which the lines form, `null` if they do not close
  */
-  polygonize(): Polygon
+  polygonize(): GeometryCollection
 }
 
 export class MultiLineString extends GeometryCollection {
@@ -7969,14 +8032,14 @@ export class MultiLineString extends GeometryCollection {
   constructor()
 
   /**
- * Converts it to a polygon.
+ * Builds the polygons which the lines of the collection form.
  *
  * @method polygonize
  * @instance
  * @memberof MultiLineString
- * @return {Polygon}
+ * @return {GeometryCollection} The polygons which the lines form, `null` if they do not close
  */
-  polygonize(): Polygon
+  polygonize(): GeometryCollection
 }
 
 export class MultiPoint extends GeometryCollection {
@@ -9696,6 +9759,17 @@ export class SimpleCurve extends Geometry {
   constructor()
 
   /**
+ * The points that make up the SimpleCurve geometry.
+ *
+ * @kind member
+ * @name points
+ * @instance
+ * @memberof SimpleCurve
+ * @type {LineStringPoints}
+ */
+  points: LineStringPoints
+
+  /**
  * Returns the point at the specified distance along the SimpleCurve.
  *
  * @method value
@@ -11190,3 +11264,61 @@ export class GDALAWSError extends GDALError {}
 export class AbortError extends GDALError {
   code: 'ABORT_ERR'
 }
+
+// lib/gdal.js installs the band operators on top of gdal.algebra, so there is
+// no registration which yatag could read them from
+/**
+ * The band operators, which apply `gdal.algebra` to the band.
+ *
+ * They are the equivalent of the arithmetic operators of JavaScript: they
+ * return a new virtual band which computes the result when it is read.
+ */
+export interface RasterBand {
+  abs(): RasterBand
+  sqrt(): RasterBand
+  log(): RasterBand
+  log10(): RasterBand
+  not(): RasterBand
+  add(rhs: RasterBand|number): RasterBand
+  sub(rhs: RasterBand|number): RasterBand
+  mul(rhs: RasterBand|number): RasterBand
+  div(rhs: RasterBand|number): RasterBand
+  pow(rhs: RasterBand|number): RasterBand
+  lt(rhs: RasterBand|number): RasterBand
+  lte(rhs: RasterBand|number): RasterBand
+  gt(rhs: RasterBand|number): RasterBand
+  gte(rhs: RasterBand|number): RasterBand
+  eq(rhs: RasterBand|number): RasterBand
+  notEq(rhs: RasterBand|number): RasterBand
+  and(rhs: RasterBand|number): RasterBand
+  or(rhs: RasterBand|number): RasterBand
+  min(rhs: RasterBand|number): RasterBand
+  max(rhs: RasterBand|number): RasterBand
+  mean(rhs: RasterBand|number): RasterBand
+  ifThenElse(ifValue: RasterBand|number, elseValue: RasterBand|number): RasterBand
+  asType(type: string): RasterBand
+}
+
+// the aliases of the multi geometry constructors, which lib/gdal.js sets on the
+// single geometry constructors
+export namespace Point {
+  const Multi: typeof MultiPoint
+}
+export namespace LineString {
+  const Multi: typeof MultiLineString
+}
+export namespace LinearRing {
+  const Multi: typeof MultiLineString
+}
+export namespace Polygon {
+  const Multi: typeof MultiPolygon
+}
+
+// the name which setPROJSearchPaths had before it was registered under the name
+// given in its documentation
+/**
+ * Set paths where proj will search it data.
+ *
+ * @deprecated use `setPROJSearchPaths`, which this is an alias of
+ */
+export function setPROJSearchPath(path: string): void

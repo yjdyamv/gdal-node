@@ -25,50 +25,63 @@ const size = ds.rasterSize
 console.log(`Size is ${size.x}, ${size.y}`)
 
 // spatial reference
+// a raster may have none at all, as is the case with a plain image
+const srs = ds.srs
 console.log('Coordinate System is: ')
-console.log(ds.srs.toPrettyWKT())
+console.log(srs === null ? 'null' : srs.toPrettyWKT())
 
 // geotransform
+// a raster which is georeferenced with ground control points, or not at all,
+// has none
 const geotransform = ds.geoTransform
-console.log(`Origin = (${geotransform[0]}, ${geotransform[3]})`)
-console.log(`Pixel Size = (${geotransform[1]}, ${geotransform[5]})`)
-console.log('GeoTransform =')
-console.log(geotransform)
 
-// corners
-const corners = {
-  'Upper Left  ': { x: 0, y: 0 },
-  'Upper Right ': { x: size.x, y: 0 },
-  'Bottom Right': { x: size.x, y: size.y },
-  'Bottom Left ': { x: 0, y: size.y },
-  'Center      ': { x: size.x / 2, y: size.y / 2 }
-}
+if (geotransform === null) {
+  console.log('No geotransform')
+} else {
+  console.log(`Origin = (${geotransform[0]}, ${geotransform[3]})`)
+  console.log(`Pixel Size = (${geotransform[1]}, ${geotransform[5]})`)
+  console.log('GeoTransform =')
+  console.log(geotransform)
 
-const wgs84 = gdal.SpatialReference.fromEPSG(4326)
-const coord_transform = new gdal.CoordinateTransformation(ds.srs, wgs84)
+  // corners
+  // the corners are placed by the geotransform and then transformed to WGS84,
+  // so they need the spatial reference of the raster as well as its geotransform
+  if (srs !== null) {
+    const corners = {
+      'Upper Left  ': { x: 0, y: 0 },
+      'Upper Right ': { x: size.x, y: 0 },
+      'Bottom Right': { x: size.x, y: size.y },
+      'Bottom Left ': { x: 0, y: size.y },
+      'Center      ': { x: size.x / 2, y: size.y / 2 }
+    }
 
-console.log('Corner Coordinates:')
-const corner_names = Object.keys(corners)
-corner_names.forEach((corner_name) => {
-  // convert pixel x,y to the coordinate system of the raster
-  // then transform it to WGS84
-  const corner = corners[corner_name]
-  const pt_orig = {
-    x:
-      geotransform[0] + corner.x * geotransform[1] + corner.y * geotransform[2],
-    y: geotransform[3] + corner.x * geotransform[4] + corner.y * geotransform[5]
+    const wgs84 = gdal.SpatialReference.fromEPSG(4326)
+    const coord_transform = new gdal.CoordinateTransformation(srs, wgs84)
+
+    console.log('Corner Coordinates:')
+    const corner_names = Object.keys(corners)
+    corner_names.forEach((corner_name) => {
+      // convert pixel x,y to the coordinate system of the raster
+      // then transform it to WGS84
+      const corner = corners[corner_name]
+      const pt_orig = {
+        x:
+          geotransform[0] + corner.x * geotransform[1] + corner.y * geotransform[2],
+        y: geotransform[3] + corner.x * geotransform[4] + corner.y * geotransform[5]
+      }
+      const pt_wgs84 = coord_transform.transformPoint(pt_orig)
+      const description = util.format(
+        '%s (%d, %d) (%s, %s)',
+        corner_name,
+        Math.floor(pt_orig.x * 100) / 100,
+        Math.floor(pt_orig.y * 100) / 100,
+        gdal.decToDMS(pt_wgs84.x, 'Long'),
+        gdal.decToDMS(pt_wgs84.y, 'Lat')
+      )
+      console.log(description)
+    })
   }
-  const pt_wgs84 = coord_transform.transformPoint(pt_orig)
-  const description = util.format(
-    '%s (%d, %d) (%s, %s)',
-    corner_name,
-    Math.floor(pt_orig.x * 100) / 100,
-    Math.floor(pt_orig.y * 100) / 100,
-    gdal.decToDMS(pt_wgs84.x, 'Long'),
-    gdal.decToDMS(pt_wgs84.y, 'Lat')
-  )
-  console.log(description)
-})
+}
 
 // bands
 ds.bands.forEach((band) => {
@@ -85,9 +98,15 @@ ds.bands.forEach((band) => {
   if (band.description) {
     console.log(`  Description = ${band.description}`)
   }
-  console.log(`  Min=${Math.floor(band.minimum * 1000) / 1000}`)
-  console.log(`  Max=${Math.floor(band.maximum * 1000) / 1000}`)
-  if (band.noDataValue !== null) {
+  // the statistics are null until something computes them
+  if (band.minimum !== null) {
+    console.log(`  Min=${Math.floor(band.minimum * 1000) / 1000}`)
+  }
+  if (band.maximum !== null) {
+    console.log(`  Max=${Math.floor(band.maximum * 1000) / 1000}`)
+  }
+  // a band without a nodata value reports it as NaN
+  if (band.noDataValue !== null && !Number.isNaN(band.noDataValue)) {
     console.log(`  NoData Value=${band.noDataValue}`)
   }
 
@@ -123,8 +142,12 @@ ds.bands.forEach((band) => {
     }
   }
 
-  if (band.scale !== 1 || band.offset !== 0) {
-    console.log(`  Offset: ${band.offset},   Scale: ${band.scale}`)
+  // the scale and the offset are null unless the band has them, the identity
+  // value of a band which has none being 1 and 0
+  if (band.scale !== null || band.offset !== null) {
+    const scale = band.scale === null ? 1 : band.scale
+    const offset = band.offset === null ? 0 : band.offset
+    console.log(`  Offset: ${offset},   Scale: ${scale}`)
   }
 
   // band metadata

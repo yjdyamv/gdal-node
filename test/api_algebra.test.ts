@@ -335,6 +335,48 @@ describe('algebra', () => {
     })
   })
 
+  describe('the member function form of the operators', () => {
+    const expectSame = (a: gdal.RasterBand, b: gdal.RasterBand) => {
+      const da = a.pixels.read(0, 0, w, h)
+      const db = b.pixels.read(0, 0, w, h)
+      assert.lengthOf(da, w * h)
+      for (let i = 0; i < w * h; i++) {
+        if (isNaN(da[i]) || isNaN(db[i])) {
+          assert.isTrue(isNaN(da[i]) && isNaN(db[i]), `pixel ${i} is NaN in only one of the results`)
+        } else {
+          assert.closeTo(da[i], db[i], 1e-3)
+        }
+      }
+    }
+
+    const pairs = [
+      { name: 'abs', member: () => arg1Band.abs(), module: () => gdal.algebra.abs(arg1Band) },
+      { name: 'sqrt', member: () => arg1Band.sqrt(), module: () => gdal.algebra.sqrt(arg1Band) },
+      { name: 'log', member: () => arg1Band.log(), module: () => gdal.algebra.log(arg1Band) },
+      { name: 'log10', member: () => arg1Band.log10(), module: () => gdal.algebra.log10(arg1Band) },
+      { name: 'not', member: () => arg1Band.not(), module: () => gdal.algebra.not(arg1Band) },
+      { name: 'add', member: () => arg1Band.add(arg2Band), module: () => gdal.algebra.add(arg1Band, arg2Band) },
+      { name: 'sub', member: () => arg1Band.sub(arg2Band), module: () => gdal.algebra.sub(arg1Band, arg2Band) },
+      { name: 'mul', member: () => arg1Band.mul(arg2Band), module: () => gdal.algebra.mul(arg1Band, arg2Band) },
+      { name: 'div', member: () => arg1Band.div(arg2Band), module: () => gdal.algebra.div(arg1Band, arg2Band) },
+      { name: 'pow', member: () => arg1Band.pow(arg2Band), module: () => gdal.algebra.pow(arg1Band, arg2Band) },
+      { name: 'lt', member: () => arg1Band.lt(arg2Band), module: () => gdal.algebra.lt(arg1Band, arg2Band) },
+      { name: 'lte', member: () => arg1Band.lte(arg2Band), module: () => gdal.algebra.lte(arg1Band, arg2Band) },
+      { name: 'gt', member: () => arg1Band.gt(arg2Band), module: () => gdal.algebra.gt(arg1Band, arg2Band) },
+      { name: 'gte', member: () => arg1Band.gte(arg2Band), module: () => gdal.algebra.gte(arg1Band, arg2Band) },
+      { name: 'eq', member: () => arg1Band.eq(arg2Band), module: () => gdal.algebra.eq(arg1Band, arg2Band) },
+      { name: 'notEq', member: () => arg1Band.notEq(arg2Band), module: () => gdal.algebra.notEq(arg1Band, arg2Band) },
+      { name: 'and', member: () => arg1Band.and(arg2Band), module: () => gdal.algebra.and(arg1Band, arg2Band) },
+      { name: 'or', member: () => arg1Band.or(arg2Band), module: () => gdal.algebra.or(arg1Band, arg2Band) }
+    ]
+
+    for (const pair of pairs) {
+      it(`${pair.name}() should give the same result as algebra.${pair.name}()`, () => {
+        assert.instanceOf(pair.member(), gdal.RasterBand)
+        expectSame(pair.member(), pair.module())
+      })
+    }
+  })
   it('should support being called as RasterBand member functions', () => {
     const r = arg1Band.mul(arg2Band).abs().sqrt().lt(0.5).ifThenElse(arg1Band, arg2Band).asType(gdal.GDT_Int32)
     const data = r.pixels.read(0, 0, w, h)

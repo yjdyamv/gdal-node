@@ -2,14 +2,15 @@
 // supporting multiple concurrent connections
 // serving raster data from a GDAL dataset
 //
-// This is the same as serve.js but using pre-ES2017 syntax
+// This is the same as serve-async.js but using pre-ES2017 syntax
 
 const gdal = require('..')
 const http = require('http')
 const path = require('path')
 
 const datasetFile = path.join(__dirname, '..', 'test', 'data', 'sample.tif')
-const port = 8010
+// the port to listen on, 0 lets the system pick a free one
+const port = +(process.argv[2] || 8010)
 const wgs84 = gdal.SpatialReference.fromEPSG(4326)
 
 gdal.openAsync(datasetFile).then((ds) => {
@@ -69,9 +70,12 @@ gdal.openAsync(datasetFile).then((ds) => {
   })
 
   server.listen(port, 'localhost', () => {
-    console.log(`Server up and running on http://localhost:${port}`)
+    // the port which was bound, which is not the one which was asked for when
+    // it is 0
+    const address = server.address()
+    console.log(`Server up and running on http://localhost:${address.port}`)
     console.log('Try:')
-    console.log(`curl http://localhost:${port}/pixels/120/100`)
-    console.log(`curl http://localhost:${port}/WGS84/-110.3/44.55`)
+    console.log(`curl http://localhost:${address.port}/pixels/120/100`)
+    console.log(`curl http://localhost:${address.port}/WGS84/-110.3/44.55`)
   })
 })

@@ -65,7 +65,7 @@ GDAL_SYNC_METHOD(SimpleCurve::getLength, getLengthBody)
  * @kind member
  * @name points
  * @instance
- * @memberof Geometry
+ * @memberof SimpleCurve
  * @type {LineStringPoints}
  */
 /**

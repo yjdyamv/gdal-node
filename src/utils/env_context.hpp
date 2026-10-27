@@ -43,8 +43,6 @@ struct PendingObject {
  * and their destructors still have to reach the object store. The cleanup hook
  * therefore releases the symbols and the constructors, which are only usable
  * while the environment is alive, and leaves the rest to the thread's exit.
- *
- * @class EnvContext
  */
 class EnvContext {
     public:

@@ -21,12 +21,12 @@ Napi::FunctionReference &MultiLineString::constructor() {
  */
 
 /**
- * Converts it to a polygon.
+ * Builds the polygons which the lines of the collection form.
  *
  * @method polygonize
  * @instance
  * @memberof MultiLineString
- * @return {Polygon}
+ * @return {GeometryCollection} The polygons which the lines form, `null` if they do not close
  */
 namespace {
 

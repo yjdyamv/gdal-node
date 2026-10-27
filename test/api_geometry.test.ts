@@ -257,6 +257,8 @@ describe('gdal.Geometry', () => {
   })
   describe('"wkbType" property', () => {
     it('should be set', () => {
+      // the abstract base class has no geometry type of its own
+      assert.equal(gdal.Geometry.wkbType, gdal.wkbUnknown)
       assert.equal(gdal.Point.wkbType, 1)
       assert.equal(gdal.LineString.wkbType, 2)
       assert.equal(gdal.Polygon.wkbType, 3)

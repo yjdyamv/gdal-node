@@ -143,14 +143,24 @@ function defaultIterator() {
   }
 }
 
+// The collections of the field definitions and of the curves have no
+// asynchronous accessors - their values are already in memory - so the async
+// iterator resolves the synchronous ones.
 function defaultAsyncIterator() {
   let i = 0
 
+  const count = typeof this.countAsync === 'function'
+    ? () => this.countAsync()
+    : () => Promise.resolve(this.count())
+  const get = typeof this.getAsync === 'function'
+    ? (index) => this.getAsync(index)
+    : (index) => Promise.resolve(this.get(index))
+
   return {
-    next: () => this.countAsync()
-      .then((count) => {
-        if (i < count) {
-          return this.getAsync(i++).then((value) => ({ done: false, value }))
+    next: () => count()
+      .then((n) => {
+        if (i < n) {
+          return get(i++).then((value) => ({ done: false, value }))
         }
         return { done: true, value: null }
       })
