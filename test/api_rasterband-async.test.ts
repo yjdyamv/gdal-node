@@ -104,6 +104,20 @@ describe('gdal.RasterBandAsync', () => {
           }
           gdal.eventLoopWarning = true
         })
+        it('should call the callback with the array', (done) => {
+          const ds = gdal.open(`${__dirname}/data/sample.tif`)
+          const band = ds.bands.get(1)
+          const w = 20
+          const h = 30
+          band.pixels.readAsync<Uint8Array>(190, 290, w, h, undefined, { buffer_width: w }, (e, data) => {
+            assert.isNull(e)
+            assert.instanceOf(data, Uint8Array)
+            assert.equal(data.length, w * h)
+            assert.equal(data[10 * 20 + 10], 10)
+            ds.close()
+            done()
+          })
+        })
         it('should return a TypedArray', () => {
           gdal.openAsync(`${__dirname}/data/sample.tif`, (e, ds) => {
             const band = ds.bands.get(1)
@@ -113,6 +127,22 @@ describe('gdal.RasterBandAsync', () => {
               assert.instanceOf(data, Uint8Array)
               assert.equal(data.length, w * h)
               assert.equal(data[10 * 20 + 10], 10)
+            })
+          })
+        })
+      })
+      describe('writeAsync() w/cb', () => {
+        it('should call the callback after writing the pixels', (done) => {
+          const ds = gdal.open('/vsimem/write_async_cb.tif', 'w', 'GTiff', 4, 4, 1, gdal.GDT_Byte)
+          const band = ds.bands.get(1)
+          const data = Uint8Array.from(Array.from(Array(16).keys()))
+          band.pixels.writeAsync(0, 0, 4, 4, data, { buffer_width: 4 }, (e) => {
+            assert.isNull(e)
+            band.pixels.readAsync<Uint8Array>(0, 0, 4, 4, undefined, { buffer_width: 4 }, (e2, out) => {
+              assert.isNull(e2)
+              assert.deepEqual(Array.from(out), Array.from(data))
+              ds.close()
+              done()
             })
           })
         })

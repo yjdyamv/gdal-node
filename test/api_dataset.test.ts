@@ -1277,4 +1277,33 @@ describe('gdal.Dataset', () => {
       }, /already been destroyed/)
     })
   })
+  describe('explicit resource management', () => {
+    it('should close the dataset when a using block ends', () => {
+      let ds: gdal.Dataset
+      {
+        using opened = gdal.open(`${__dirname}/data/sample.tif`)
+        ds = opened
+        assert.isOk(opened.rasterSize)
+      }
+      assert.throws(() => ds.rasterSize, /already/)
+    })
+    it('should close the dataset when an await using block ends', async () => {
+      let ds: gdal.Dataset
+      {
+        await using opened = await gdal.openAsync(`${__dirname}/data/sample.tif`)
+        ds = opened
+        assert.isOk(opened.rasterSize)
+      }
+      assert.throws(() => ds.rasterSize, /already/)
+    })
+    it('should close the dataset when the block throws', () => {
+      let ds: gdal.Dataset
+      assert.throws(() => {
+        using opened = gdal.open(`${__dirname}/data/sample.tif`)
+        ds = opened
+        throw new Error('the body of the block failed')
+      }, /the body of the block failed/)
+      assert.throws(() => ds.rasterSize, /already/)
+    })
+  })
 })

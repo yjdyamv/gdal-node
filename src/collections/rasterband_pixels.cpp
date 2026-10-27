@@ -342,26 +342,28 @@ struct readBody : node_gdal::AsyncMethodBody {
     Napi::Value array;
     Napi::Object obj;
     Napi::FunctionReference *cb = nullptr;
-    // An internal argument, appended by the argument mangling in lib/gdal.js
     Napi::Value abort_signal;
+    Napi::Object options;
     GDALDataType type;
 
     if (!args.get(0, "x_offset", x)) return args.failed();
     if (!args.get(1, "y_offset", y)) return args.failed();
     if (!args.get(2, "x_size", w)) return args.failed();
     if (!args.get(3, "y_size", h)) return args.failed();
+    if (!args.optional(5, "options", options)) return args.failed();
 
     std::string type_name = "";
 
     buffer_w = w;
     buffer_h = h;
     type = band->get()->GetRasterDataType();
-    if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
-    if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
-    if (!args.optional(7, "data_type", type_name)) return args.failed();
+    if (!args.from(options, "buffer_width", buffer_w)) return args.failed();
+    if (!args.from(options, "buffer_height", buffer_h)) return args.failed();
+    if (!args.from(options, "type", type_name)) return args.failed();
+    if (type_name.empty() && !args.from(options, "data_type", type_name)) return args.failed();
     if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
 
-    if (!info[4].IsUndefined() && !info[4].IsNull()) {
+    if (args.present(4)) {
       if (!args.get(4, "data", obj)) return args.failed();
       type = TypedArray::Identify(obj);
       if (type == GDT_Unknown) {
@@ -376,20 +378,22 @@ struct readBody : node_gdal::AsyncMethodBody {
       return node_gdal::napi_env().Undefined();
     }
     pixel_space = bytes_per_pixel;
-    if (!args.optional(8, "pixel_space", pixel_space)) return args.failed();
+    if (!args.from(options, "pixel_space", pixel_space)) return args.failed();
     line_space = pixel_space * buffer_w;
-    if (!args.optional(9, "line_space", line_space)) return args.failed();
-    if (!args.optionalCallback(11, "progress_cb", cb)) return args.failed();
+    if (!args.from(options, "line_space", line_space)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", cb)) return args.failed();
     GDALRIOResampleAlg resampling;
+    Napi::Value resampling_alg = node_gdal::napi_env().Undefined();
+    if (!args.from(options, "resampling", resampling_alg)) return args.failed();
     try {
-      resampling = parseResamplingAlg(info[10]);
+      resampling = parseResamplingAlg(resampling_alg);
     } catch (const char *e) {
       Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
     offset = 0;
-    if (!args.optional(12, "offset", offset)) return args.failed();
-    NODE_ABORT_SIGNAL_FROM_ARG_OPT(13, abort_signal);
+    if (!args.from(options, "offset", offset)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
 
     if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
       Napi::Error::New(node_gdal::napi_env(), "has to write before the start of the TypedArray").ThrowAsJavaScriptException();
@@ -446,7 +450,7 @@ struct readBody : node_gdal::AsyncMethodBody {
     job.rval = [](CPLErr err, const GetFromPersistentFunc &getter) {
       return getter("array");
     };
-    return job.run(info, node_gdal::is_async<Async>, 14);
+    return job.run(info, node_gdal::is_async<Async>, 6);
   }
 };
 
@@ -527,19 +531,20 @@ struct writeBody : node_gdal::AsyncMethodBody {
     Napi::Object passed_array;
     GDALDataType type;
     Napi::FunctionReference *cb = nullptr;
-    // An internal argument, appended by the argument mangling in lib/gdal.js
     Napi::Value abort_signal;
+    Napi::Object options;
 
     if (!args.get(0, "x_offset", x)) return args.failed();
     if (!args.get(1, "y_offset", y)) return args.failed();
     if (!args.get(2, "x_size", w)) return args.failed();
     if (!args.get(3, "y_size", h)) return args.failed();
     if (!args.get(4, "data", passed_array)) return args.failed();
+    if (!args.optional(5, "options", options)) return args.failed();
 
     buffer_w = w;
     buffer_h = h;
-    if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
-    if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
+    if (!args.from(options, "buffer_width", buffer_w)) return args.failed();
+    if (!args.from(options, "buffer_height", buffer_h)) return args.failed();
 
     type = TypedArray::Identify(passed_array);
     if (type == GDT_Unknown) {
@@ -553,13 +558,13 @@ struct writeBody : node_gdal::AsyncMethodBody {
       return node_gdal::napi_env().Undefined();
     }
     pixel_space = bytes_per_pixel;
-    if (!args.optional(7, "pixel_space", pixel_space)) return args.failed();
+    if (!args.from(options, "pixel_space", pixel_space)) return args.failed();
     line_space = pixel_space * buffer_w;
-    if (!args.optional(8, "line_space", line_space)) return args.failed();
-    if (!args.optionalCallback(9, "progress_cb", cb)) return args.failed();
+    if (!args.from(options, "line_space", line_space)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", cb)) return args.failed();
     offset = 0;
-    if (!args.optional(10, "offset", offset)) return args.failed();
-    NODE_ABORT_SIGNAL_FROM_ARG_OPT(11, abort_signal);
+    if (!args.from(options, "offset", offset)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
 
     if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
       Napi::Error::New(node_gdal::napi_env(), "has to read before the start of the TypedArray").ThrowAsJavaScriptException();
@@ -606,7 +611,7 @@ struct writeBody : node_gdal::AsyncMethodBody {
     };
     job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
 
-    return job.run(info, node_gdal::is_async<Async>, 12);
+    return job.run(info, node_gdal::is_async<Async>, 6);
   }
 };
 

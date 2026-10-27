@@ -7,6 +7,14 @@
   "main": "./lib/gdal.js",
   "types": "./lib/index.d.ts",
   "type": "commonjs",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/gdal.js"
+    },
+    "./package.json": "./package.json",
+    "./lib/*": "./lib/*"
+  },
   "keywords": [
     "gdal",
     "libgdal",
@@ -126,6 +134,6 @@
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

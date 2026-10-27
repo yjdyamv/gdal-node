@@ -137,6 +137,7 @@ class Args {
 
   // A missing property is left alone, a present one has to be valid
   bool from(const Napi::Object &obj, const char *key, int &out);
+  bool from(const Napi::Object &obj, const char *key, int64_t &out);
   bool from(const Napi::Object &obj, const char *key, short &out);
   bool from(const Napi::Object &obj, const char *key, double &out);
   bool from(const Napi::Object &obj, const char *key, std::string &out);

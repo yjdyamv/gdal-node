@@ -89,8 +89,6 @@ Napi::Value TypedArray::New(GDALDataType type, int64_t length) {
     return env.Undefined();
   }
 
-  array.As<Napi::Object>().Set("_gdal_type", Napi::Number::New(env, type));
-
   return array;
 }
 
@@ -137,14 +135,45 @@ Napi::Value TypedArray::New(GDALDataType type, void *data, int64_t length) {
   Napi::Value array = constructor.New({underlyingAB});
   if (array.IsEmpty() || !array.IsObject()) { throw GDALError("Error creating TypedArray"); }
 
-  array.As<Napi::Object>().Set("_gdal_type", Napi::Number::New(env, type));
-
   return array;
 }
 
 GDALDataType TypedArray::Identify(Napi::Object obj) {
-  Napi::Env env = node_gdal::napi_env();
+  ::napi_env napiEnv = node_gdal::napi_env();
 
+  // A typed array knows the type of the values it holds
+  napi_typedarray_type kind;
+  size_t element_length = 0;
+  void *data = nullptr;
+  napi_value arraybuffer = nullptr;
+  size_t byte_offset = 0;
+  if (napi_get_typedarray_info(napiEnv, obj, &kind, &element_length, &data, &arraybuffer, &byte_offset) == napi_ok) {
+    switch (kind) {
+      case napi_int8_array:
+      case napi_uint8_array:
+      case napi_uint8_clamped_array: return GDT_Byte;
+      case napi_int16_array: return GDT_Int16;
+      case napi_uint16_array: return GDT_UInt16;
+      case napi_int32_array: return GDT_Int32;
+      case napi_uint32_array: return GDT_UInt32;
+#if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 5)
+      case napi_bigint64_array: return GDT_Int64;
+      case napi_biguint64_array: return GDT_UInt64;
+#endif
+#if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 11)
+#ifdef NODE_API_HAS_FLOAT16_ARRAY
+      case napi_float16_array: return GDT_Float16;
+#endif
+#endif
+      case napi_float32_array: return GDT_Float32;
+      case napi_float64_array: return GDT_Float64;
+      default: return GDT_Unknown;
+    }
+  }
+
+  // A DataView is not a typed array and does not say what it holds. The only one
+  // which reaches the addon is the polyfilled Float16Array of Node.js < 24, which
+  // lib/gdal.js hands over tagged with the data type of its elements
   if (!obj.HasOwnProperty("_gdal_type")) return GDT_Unknown;
   Napi::Value val = obj.Get("_gdal_type");
   if (!val.IsNumber()) return GDT_Unknown;

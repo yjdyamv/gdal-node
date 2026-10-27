@@ -40,6 +40,7 @@ It adds a number of features:
 - Built-in support for HDF5, NetCDF, GRIB, WMS, WMTS, WCS and FlatGeobuf (since 3.3)
 - **`worker_threads` support** - every thread gets its own isolated copy of the addon (unreleased)
 - **`AbortController` support** - long-running operations can be interrupted with an `AbortSignal` (unreleased)
+- **`using` and `await using` support** - a `Dataset` closes itself when an explicit resource management block ends (unreleased)
 - Numerous bugfixes including a number of memory leaks
 
 ## Long term support of this project
@@ -56,6 +57,8 @@ Pre-built binaries are provided for most recent Linux distributions, Windows 64 
 ```sh
 npm install gdal-async
 ```
+
+Node.js 22 or newer is required.
 
 ## Sample usage
 
@@ -181,6 +184,25 @@ try {
     const data = await band.pixels.readAsync(0, 0, rasterSize.x, rasterSize.y);
 } catch (e => console.error(e));
 ```
+
+### Explicit resource management (unreleased)
+
+A `Dataset` implements both `Symbol.dispose` and `Symbol.asyncDispose`, so `using` and `await using` close it when the block ends, exactly like an explicit `ds.close()` would, even when the block throws:
+
+```js
+const gdal = require('gdal-async');
+{
+    using ds = gdal.open('sample.tif');
+    const data = ds.bands.get(1).pixels.read(0, 0, ds.rasterSize.x, ds.rasterSize.y);
+}   // ds has been closed here
+
+{
+    await using ds = await gdal.openAsync('sample.tif');
+    const data = await ds.bands.getAsync(1).then((band) => band.pixels.readAsync(0, 0, 832, 663));
+}   // ds has been closed here
+```
+
+With TypeScript this requires `esnext.disposable` in `lib` (or at least TypeScript 5.2 and a `target` which supports the syntax).
 
 ### TypeScript (starting from 3.1)
 

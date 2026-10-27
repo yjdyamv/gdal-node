@@ -712,13 +712,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 #define NODE_ABORT_SIGNAL_FROM_OBJ_OPT(obj, var)                                                                       \
   if (!(obj).IsEmpty() && (obj).Has("abort_signal")) var = (obj).Get("abort_signal");
 
-// ----- special case: AbortSignal as an internal positional argument -----
-// Used by the methods whose options are flattened into positional arguments by
-// the argument mangling in lib/gdal.js: the AbortSignal is appended after the
-// last documented argument and it is never part of the public API
-#define NODE_ABORT_SIGNAL_FROM_ARG_OPT(num, var)                                                                       \
-  if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) var = info[num];
-
 // ----- special case: progress callback in [options] argument -------
 
 // The progress callback is released by hand when the AbortSignal turns out to

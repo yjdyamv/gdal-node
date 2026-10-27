@@ -209,6 +209,16 @@ bool Args::from(const Napi::Object &obj, const char *key, int &out) {
   return true;
 }
 
+bool Args::from(const Napi::Object &obj, const char *key, int64_t &out) {
+  if (failed_) { return false; }
+  if (obj.IsEmpty() || !obj.Has(key)) { return true; }
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) { return true; }
+  if (!value.IsNumber()) { return rejectValue(value, key, "an integer"); }
+  out = value.As<Napi::Number>().Int64Value();
+  return true;
+}
+
 bool Args::from(const Napi::Object &obj, const char *key, short &out) {
   if (failed_) { return false; }
   if (obj.IsEmpty() || !obj.Has(key)) { return true; }
