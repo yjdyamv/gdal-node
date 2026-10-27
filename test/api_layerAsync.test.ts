@@ -970,6 +970,26 @@ describe('gdal.LayerAsync', () => {
             }, /already destroyed/)
           })
         })
+        it('should require an object', () => {
+          prepare_dataset_layer_test('w', (dataset, layer) => {
+            // the message used to be the one of `Object.entries()`:
+            // `Cannot convert undefined or null to object`
+            // the typings require the object, but JavaScript does not
+            const fromObject = layer.fields.fromObject as unknown as (obj?: unknown) => void
+            const check = (fn: () => void) => {
+              let error: unknown
+              try {
+                fn()
+              } catch (e) {
+                error = e
+              }
+              assert.instanceOf(error, TypeError)
+              assert.equal((error as Error).message, 'object must be given')
+            }
+            check(() => fromObject())
+            check(() => fromObject(null))
+          })
+        })
         // the shapefile of the other cases supports neither lists nor binary
         // values, so the values which are not primitives need another format
         const with_layer = (cb: (layer: gdal.Layer) => void) => {

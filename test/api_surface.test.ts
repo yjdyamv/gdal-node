@@ -167,6 +167,53 @@ describe('API surface', () => {
       assert.lengthOf(seen, 2)
       assert.lengthOf(collection.children.map((child) => child), 2)
     })
+
+    it('should require a callback for forEach() and map()', () => {
+      const ds = gdal.open(path.join(__dirname, 'data', 'sample.tif'))
+      const lds = gdal.open(path.join(__dirname, 'data', 'cutline.shp'))
+      const layer = lds.layers.get(0)
+      const mds = gdal.open(path.join(__dirname, 'data', 'gfs.t00z.alnsf.nc'), 'mr')
+      const array = mds.root.arrays.get(0)
+      // a callback which is not a function used to be reported by V8 when the
+      // first element was reached (`callback is not a function`), which says
+      // nothing about the call which was made
+      const collections = {
+        bands: ds.bands,
+        layers: ds.layers,
+        features: layer.features,
+        fields: layer.fields,
+        feature_fields: layer.features.first()!.fields,
+        defn_fields: layer.features.first()!.defn.fields,
+        children: new gdal.GeometryCollection().children,
+        points: new gdal.LineString().points,
+        curves: new gdal.CompoundCurve().curves,
+        groups: mds.root.groups,
+        arrays: mds.root.arrays,
+        dimensions: array.dimensions,
+        attributes: array.attributes
+      } as unknown as Record<string, {
+        forEach: (cb?: unknown) => void
+        map: (cb?: unknown) => unknown[]
+      }>
+      // the third argument of assert.throws() is the message of the assertion and
+      // not the expected message, so the error is caught here to check both its
+      // class and its text
+      for (const [ name, collection ] of Object.entries(collections)) {
+        for (const method of [ 'forEach', 'map' ]) {
+          let error: unknown
+          try {
+            (collection as unknown as Record<string, () => void>)[method]()
+          } catch (e) {
+            error = e
+          }
+          assert.instanceOf(error, TypeError, `${name}.${method}()`)
+          assert.equal((error as Error).message, 'callback must be a function', `${name}.${method}()`)
+        }
+      }
+      ds.close()
+      lds.close()
+      mds.close()
+    })
   })
 
   describe('the geometry statics', () => {

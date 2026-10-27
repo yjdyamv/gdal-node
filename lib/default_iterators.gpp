@@ -100,6 +100,7 @@
 module.exports = function (gdal) {
 
 function defaultForEach(callback) {
+  if (typeof callback !== 'function') throw new TypeError('callback must be a function')
   const n = this.count()
   for (let i = 0; i < n; i++) {
     if (callback(this.get(i), i) === false) return
@@ -114,6 +115,7 @@ function defaultForEach(callback) {
  * @typedef {(obj: T, index: number) => U} mapCb<T,U>
  */
 function defaultMap(callback) {
+  if (typeof callback !== 'function') throw new TypeError('callback must be a function')
   const result = []
   this.forEach((value, i) => {
     result.push(callback(value, i))
