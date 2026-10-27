@@ -743,6 +743,14 @@ describe('gdal.Layer', () => {
           })
         })
       })
+      describe('layer', () => {
+        it('should return the layer which it belongs to', () => {
+          prepare_dataset_layer_test('r', (dataset, layer) => {
+            assert.strictEqual(layer.fields.layer, layer)
+            assert.strictEqual(layer.fields.layer.fields, layer.fields)
+          })
+        })
+      })
       describe('count()', () => {
         it('should return an integer', () => {
           prepare_dataset_layer_test('r', (dataset, layer) => {

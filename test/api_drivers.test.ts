@@ -50,6 +50,18 @@ describe('gdal.drivers', () => {
         gdal.drivers.get(gdal.drivers.count())
       }, /Cannot find driver with index/)
     })
+    it('should refuse an index which cannot name a driver', () => {
+      // the number used to be narrowed to an int before the lookup, which wraps
+      // around: `2 ** 32` returned the driver 0 and `2 ** 31` was reported back
+      // as the index `-2147483648`, which is not the one which was passed
+      for (const index of [ NaN, Infinity, -Infinity, 2 ** 31, 2 ** 32, -1e300 ]) {
+        assert.throws(() => {
+          gdal.drivers.get(index)
+        }, /Cannot find driver with index: /, `get(${index})`)
+      }
+      // and the drivers are still reachable by the indexes which exist
+      assert.instanceOf(gdal.drivers.get(0), gdal.Driver)
+    })
 
     type driverMeta = Record<'DMD_LONGNAME' | 'DMD_MIMETYPE' | 'DMD_EXTENSION' | 'DCAP_CREATE', string | undefined>
     // raster drivers

@@ -2,6 +2,9 @@
 #include "../gdal_common.hpp"
 #include "../gdal_driver.hpp"
 
+#include <climits>
+#include <cmath>
+
 namespace node_gdal {
 
 Napi::FunctionReference &GDALDrivers::constructor() {
@@ -100,7 +103,19 @@ Napi::Value get(const Napi::CallbackInfo &info) {
     return node_gdal::napi_env().Undefined();
 
   } else if (info[0].IsNumber()) {
-    int i = static_cast<int>(info[0].As<Napi::Number>().Int64Value());
+    // The number is narrowed to an int below, which wraps around for a value
+    // which is not finite or which does not fit in an int: `2 ** 32` became
+    // driver 0 and `2 ** 31` was reported back as `-2147483648`. Such a value
+    // cannot name a driver, so it is refused with the number which was given
+    const double value = info[0].As<Napi::Number>().DoubleValue();
+
+    if (!std::isfinite(value) || value < INT_MIN || value > INT_MAX) {
+      char number[32];
+      std::snprintf(number, sizeof(number), "%g", value);      Napi::Error::New(node_gdal::napi_env(), std::string("Cannot find driver with index: ") + number).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    int i = static_cast<int>(value);
 
     gdal_driver = GetGDALDriverManager()->GetDriver(i);
     if (gdal_driver) {
