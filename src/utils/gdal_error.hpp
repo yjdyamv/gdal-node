@@ -21,10 +21,12 @@ namespace node_gdal {
  * A GDALError carries the class and the code of the error it should become along
  * with the message, so a failure raised a few layers down still arrives in JS as
  * the right kind of error. It is turned into a JS error in one place, see
- * toJS(), which is also the only place which decides which `Napi::Error`
- * subclass to build.
+ * toJS(), which is also the only place which decides which class to build.
  *
- * @class GDALError
+ * The class is one of the classes of initErrorClasses(): `gdal.GDALError`, one
+ * of its subclasses - one per CPLE error number - or `gdal.AbortError`. They are
+ * declared in lib/types-extra.d.ts, which is where their documentation lives,
+ * because they are properties of the module and not methods of a class.
  */
 class GDALError : public std::exception {
     public:
@@ -66,9 +68,19 @@ class GDALError : public std::exception {
   std::string code_;
 };
 
-// The JS error for `error`: the subclass selected by its name, with the name and
-// the code set when they are not the defaults. This is the single place which
-// builds an error out of a C++ failure.
+// Creates the JS classes of the failures: `gdal.GDALError`, a subclass of it for
+// every CPLE error number and `gdal.AbortError`, all of them subclasses of
+// `Error`, and puts them on the exports. The errors of a bad argument stay
+// `TypeError`s and `RangeError`s.
+//
+// The prototype chain is what `instanceof` looks at, so the class of an error is
+// its prototype: `e instanceof gdal.GDALError` holds for every failure GDAL
+// reported and `e instanceof gdal.AbortError` only for an interrupted operation.
+void initErrorClasses(Napi::Env env, Napi::Object target);
+
+// The JS error for `error`: the class selected by its name, with the code set
+// when it is not the one of the class. This is the single place which builds an
+// error out of a C++ failure.
 Napi::Error toJS(Napi::Env env, const GDALError &error);
 
 // Throws the JS error of `error`. `name` and `code` are kept, so a `TypeError`
@@ -77,8 +89,8 @@ Napi::Error toJS(Napi::Env env, const GDALError &error);
 // left alone - nothing can be called into JS while one is.
 void throwError(Napi::Env env, const GDALError &error);
 
-// The subclasses are what the `NODE_THROW_*` macros and the argument checks
-// raise, so that the class of the error is decided where it is known
+// The subclasses are what the failures of the methods raise, so that the class
+// of the error is decided where it is known
 Napi::Value throwTypeError(Napi::Env env, const std::string &message);
 Napi::Value throwRangeError(Napi::Env env, const std::string &message);
 

@@ -91,7 +91,7 @@ struct fillNodataBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_src, gdal_mask, search_dist, smooth_iterations](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, NULL, NULL, NULL);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -252,7 +252,7 @@ struct contourGenerateBody : node_gdal::AsyncMethodBody {
         elev_field,
         interruptible ? ProgressTrampoline : nullptr,
         interruptible ? (void *)&progress : nullptr);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -364,7 +364,7 @@ struct sieveFilterBody : node_gdal::AsyncMethodBody {
           NULL,
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr);
-        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (err) { throw GDALError::fromGDAL(); }
         return err;
       };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -446,9 +446,9 @@ struct checksumImageBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       int r = GDALChecksumImage(gdal_src, x, y, w, h);
   #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 6)
-      if (r == -1) throw GDALError(CPLGetLastErrorMsg());
+      if (r == -1) throw GDALError::fromGDAL();
   #else
-      if (CPLGetLastErrorType() != CE_None) throw GDALError(CPLGetLastErrorMsg());
+      if (CPLGetLastErrorType() != CE_None) throw GDALError::fromGDAL();
   #endif
       return r;
     };
@@ -581,7 +581,7 @@ struct polygonizeBody : node_gdal::AsyncMethodBody {
             interruptible ? ProgressTrampoline : nullptr,
             interruptible ? (void *)&progress : nullptr);
           if (papszOptions) CSLDestroy(papszOptions);
-          if (err) throw GDALError(CPLGetLastErrorMsg());
+          if (err) throw GDALError::fromGDAL();
           return err;
         };
     } else {
@@ -597,7 +597,7 @@ struct polygonizeBody : node_gdal::AsyncMethodBody {
             interruptible ? ProgressTrampoline : nullptr,
             interruptible ? (void *)&progress : nullptr);
           if (papszOptions) CSLDestroy(papszOptions);
-          if (err) throw GDALError(CPLGetLastErrorMsg());
+          if (err) throw GDALError::fromGDAL();
           return err;
         };
     }
@@ -686,7 +686,7 @@ NAPI_METHOD(Algorithms::addPixelFunc) {
 
   if (err != CE_None) {
 
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
 
   } else {
 

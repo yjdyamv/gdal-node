@@ -56,7 +56,7 @@ NAPI_METHOD(MultiPolygon::unionCascaded) {
   MultiPolygon *geom = node_gdal::UnwrapWrapped<MultiPolygon>(info.This().As<Napi::Object>());
   auto r = geom->this_->UnionCascaded();
   if (r == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 

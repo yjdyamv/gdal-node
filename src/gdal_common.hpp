@@ -136,6 +136,11 @@ inline napi_value RethrowAsJavaScriptException(Napi::Env env) noexcept {
     throw;
   } catch (const Napi::Error &e) {
     e.ThrowAsJavaScriptException();
+  } catch (const GDALError &e) {
+    // The class and the code of the failure are what the caller has to look at,
+    // so this goes through the same path a body struct would take and not
+    // through the generic std::exception arm below
+    throwError(env, e);
   } catch (const std::exception &e) {
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
   } catch (const char *err) {
@@ -169,6 +174,22 @@ napi_value SetterTrampoline(::napi_env env, napi_callback_info info) {
 
 inline napi_value UndefinedTrampoline(::napi_env env, napi_callback_info) {
   return Napi::Env(env).Undefined();
+}
+
+// The free functions of the module and the static methods of the classes are
+// not installed through the trampolines above: they go in as ordinary
+// `Napi::Function`s, and node-addon-api's wrapper for those catches
+// `Napi::Error` only, so a `GDALError` raised by one of them would unwind
+// through N-API and abort the process. This gives them the same boundary the
+// methods have.
+template <Napi::Value (*FN)(const Napi::CallbackInfo &)>
+inline Napi::Value FreeFunctionTrampoline(const Napi::CallbackInfo &info) {
+  try {
+    return FN(info);
+  } catch (...) {
+    RethrowAsJavaScriptException(info.Env());
+    return info.Env().Undefined();
+  }
 }
 
 } // namespace node_gdal
@@ -385,11 +406,6 @@ inline Napi::ClassPropertyDescriptor<T> GDALInstanceAccessorT(const char *name) 
   return Napi::ClassPropertyDescriptor<T>(d);
 }
 
-// Module-level (free) functions
-inline Napi::Function GDALFunction(Napi::Env env, Napi::Value (*fn)(const Napi::CallbackInfo &)) {
-  return Napi::Function::New(env, fn);
-}
-
 // ----- throwing / rejecting helpers -------
 
 // These are referenced from the macros below as node_gdal::..., so they must
@@ -408,10 +424,6 @@ inline Napi::Value RejectPromise(const Napi::CallbackInfo &info, const char *msg
 }
 
 } // namespace node_gdal
-
-#define NODE_THROW_LAST_CPLERR node_gdal::throwError(info.Env(), node_gdal::GDALError::fromGDAL())
-
-#define NODE_THROW_OGRERR(err) node_gdal::throwError(info.Env(), node_gdal::GDALError(getOGRErrMsg(err)))
 
 //
 // Object handle helpers
@@ -903,9 +915,10 @@ NAPI_SETTER(READ_ONLY_SETTER);
 
 // module-level asyncable free functions
 #define GDAL_SetAsyncableMethod(env, target, name, method)                                                             \
-  target.Set(name, Napi::Function::New(env, method));                                                                  \
-  target.Set(name "Async", Napi::Function::New(env, method##Async));
+  target.Set(name, Napi::Function::New(env, &node_gdal::FreeFunctionTrampoline<method>));                              \
+  target.Set(name "Async", Napi::Function::New(env, &node_gdal::FreeFunctionTrampoline<method##Async>));
 
 // module-level plain free function
-#define GDAL_SetMethod(env, target, name, method) target.Set(name, Napi::Function::New(env, method));
+#define GDAL_SetMethod(env, target, name, method)                                                                      \
+  target.Set(name, Napi::Function::New(env, &node_gdal::FreeFunctionTrampoline<method>));
 #endif

@@ -128,7 +128,10 @@ SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
     int err = srs->importFromWkt(&wkt_c);
     if (err) {
       delete srs;
-      NODE_THROW_OGRERR(err);
+      // A constructor cannot let a C++ exception escape: node-addon-api's
+      // constructor wrapper catches `Napi::Error` only, anything else unwinds
+      // through N-API and aborts the process.
+      node_gdal::throwError(info.Env(), GDALError(getOGRErrMsg(err)));
       return;
     }
   }
@@ -195,7 +198,7 @@ struct setWellKnownGeogCSBody : node_gdal::SyncMethodBody {
       return info.Env().Undefined();
     }
     int err = obj->get()->SetWellKnownGeogCS(param.c_str());
-    if (err) { NODE_THROW_OGRERR(err); }
+    if (err) { throw GDALError(getOGRErrMsg(err)); }
     return info.Env().Undefined();
   }
 };
@@ -223,7 +226,7 @@ struct morphToESRIBody : node_gdal::SyncMethodBody {
       return info.Env().Undefined();
     }
     int err = obj->get()->morphToESRI();
-    if (err) { NODE_THROW_OGRERR(err); }
+    if (err) { throw GDALError(getOGRErrMsg(err)); }
     return info.Env().Undefined();
   }
 };
@@ -251,7 +254,7 @@ struct morphFromESRIBody : node_gdal::SyncMethodBody {
       return info.Env().Undefined();
     }
     int err = obj->get()->morphFromESRI();
-    if (err) { NODE_THROW_OGRERR(err); }
+    if (err) { throw GDALError(getOGRErrMsg(err)); }
     return info.Env().Undefined();
   }
 };
@@ -544,7 +547,7 @@ struct autoIdentifyEPSGBody : node_gdal::SyncMethodBody {
       return info.Env().Undefined();
     }
     int err = obj->get()->AutoIdentifyEPSG();
-    if (err) { NODE_THROW_OGRERR(err); }
+    if (err) { throw GDALError(getOGRErrMsg(err)); }
     return info.Env().Undefined();
   }
 };
@@ -635,7 +638,7 @@ NAPI_METHOD(SpatialReference::exportToWKT) {
 
   int err = srs->this_->exportToWkt(&str);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
   result = SafeString::New(str);
@@ -667,7 +670,7 @@ NAPI_METHOD(SpatialReference::exportToPrettyWKT) {
 
   int err = srs->this_->exportToPrettyWkt(&str, simplify);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
   result = SafeString::New(str);
@@ -693,7 +696,7 @@ NAPI_METHOD(SpatialReference::exportToProj4) {
 
   int err = srs->this_->exportToProj4(&str);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -724,7 +727,7 @@ NAPI_METHOD(SpatialReference::exportToXML) {
 
   int err = srs->this_->exportToXML(&str);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
   result = SafeString::New(str);
@@ -776,7 +779,7 @@ NAPI_METHOD(SpatialReference::fromWKT) {
   int err = srs->importFromWkt(&str);
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -804,7 +807,7 @@ NAPI_METHOD(SpatialReference::fromProj4) {
   int err = srs->importFromProj4(input.c_str());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -840,7 +843,7 @@ NAPI_METHOD(SpatialReference::fromWMSAUTO) {
   int err = srs->importFromWMSAUTO(input.c_str());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -868,7 +871,7 @@ NAPI_METHOD(SpatialReference::fromXML) {
   int err = srs->importFromXML(input.c_str());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -900,7 +903,7 @@ NAPI_METHOD(SpatialReference::fromURN) {
   int err = srs->importFromURN(input.c_str());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -1049,7 +1052,7 @@ NAPI_METHOD(SpatialReference::fromMICoordSys) {
   int err = srs->importFromMICoordSys(input.c_str());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -1141,7 +1144,7 @@ NAPI_METHOD(SpatialReference::fromEPSG) {
   int err = srs->importFromEPSG(epsg);
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -1179,7 +1182,7 @@ NAPI_METHOD(SpatialReference::fromEPSGA) {
   int err = srs->importFromEPSGA(epsg);
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -1226,7 +1229,7 @@ NAPI_METHOD(SpatialReference::fromESRI) {
   int err = srs->importFromESRI(list.get());
   if (err) {
     delete srs;
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -1313,7 +1316,7 @@ NAPI_METHOD(SpatialReference::validate) {
     return node_gdal::napi_env().Undefined();
   }
 
-  NODE_THROW_OGRERR(err);
+  throw GDALError(getOGRErrMsg(err));
   return node_gdal::napi_env().Undefined();
 }
 

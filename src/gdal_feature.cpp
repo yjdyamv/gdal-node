@@ -234,7 +234,7 @@ NAPI_METHOD(Feature::setGeometry) {
   }
 
   OGRErr err = feature->this_->SetGeometry(geom ? geom->get() : NULL);
-  if (err) { NODE_THROW_OGRERR(err); }
+  if (err) { throw GDALError(getOGRErrMsg(err)); }
 
   feature->updateMemory();
 
@@ -349,7 +349,7 @@ NAPI_METHOD(Feature::setFrom) {
   }
 
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 

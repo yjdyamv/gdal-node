@@ -207,7 +207,7 @@ GDAL_ASYNC_METHOD(RasterBand::flush, flushBody)
  * @method getMaskFlags
  * @instance
  * @memberof RasterBand
- * @return {number} Mask flags
+ * @return {number} Mask flags ({@link GMF|see GMF constants})
  */
 namespace {
 // RasterBand::getMaskFlags()
@@ -222,8 +222,6 @@ struct getMaskFlagsBody : node_gdal::SyncMethodBody {
 } // namespace
 
 GDAL_SYNC_METHOD(RasterBand::getMaskFlags, getMaskFlagsBody)
-// TODO: expose GMF constants in API
-// ({@link GMF|see flags})
 
 /**
  * Adds a mask band to the current band.
@@ -233,7 +231,7 @@ GDAL_SYNC_METHOD(RasterBand::getMaskFlags, getMaskFlagsBody)
  * @instance
  * @memberof RasterBand
 
- * @param {number} flags Mask flags
+ * @param {number} flags Mask flags ({@link GMF|see GMF constants})
  */
 namespace {
 // RasterBand::createMaskBand()
@@ -245,15 +243,13 @@ struct createMaskBandBody : node_gdal::SyncMethodBody {
     auto obj = node_gdal::unwrapThis<RasterBand>(info, "RasterBand");
     if (!obj) { return obj.failure; }
     int err = obj->get()->CreateMaskBand(param);
-    if (err) { NODE_THROW_LAST_CPLERR; }
+    if (err) { throw GDALError::fromGDAL(); }
     return info.Env().Undefined();
   }
 };
 } // namespace
 
 GDAL_SYNC_METHOD(RasterBand::createMaskBand, createMaskBandBody)
-// TODO: expose GMF constants in API
-// ({@link GMF|see flags})
 
 /**
  * Return the mask band associated with the band.
@@ -319,7 +315,7 @@ struct fillBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_obj, real, imaginary](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = gdal_obj->Fill(real, imaginary);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -430,7 +426,7 @@ NAPI_METHOD(RasterBand::getStatistics) {
       Napi::Error::New(node_gdal::napi_env(), "Statistics cannot be efficiently computed without scanning raster").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 
@@ -539,7 +535,7 @@ struct computeStatisticsBody : node_gdal::AsyncMethodBody {
       if (!stats_file_err.empty()) {
         throw GDALError(stats_file_err);
       } else if (err != CPLE_None) {
-        throw GDALError(CPLGetLastErrorMsg());
+        throw GDALError::fromGDAL();
       }
 
       return stats;
@@ -588,7 +584,7 @@ NAPI_METHOD(RasterBand::setStatistics) {
   CPLErr err = band->get()->SetStatistics(min, max, mean, std_dev);
 
   if (err) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
   return node_gdal::napi_env().Undefined();
@@ -682,7 +678,7 @@ struct setMetadataBody : node_gdal::AsyncMethodBody {
     GDALAsyncableJob<CPLErr> job(band->parent_uid);
     job.main = [raw, options, domain](const GDALExecutionProgress &) {
       CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-      if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
+      if (r == CE_Failure) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
@@ -1436,7 +1432,7 @@ NAPI_SETTER(RasterBand::unitTypeSetter) {
   std::string input = value.As<Napi::String>().Utf8Value();
   GDAL_LOCK_PARENT_VOID(band);
   CPLErr err = band->get()->SetUnitType(input.c_str());
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(RasterBand::noDataValueSetter) {
@@ -1454,7 +1450,7 @@ NAPI_SETTER(RasterBand::noDataValueSetter) {
     return;
   }
 
-  if (err != CE_None) { NODE_THROW_LAST_CPLERR; }
+  if (err != CE_None) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(RasterBand::scaleSetter) {
@@ -1467,7 +1463,7 @@ NAPI_SETTER(RasterBand::scaleSetter) {
   double input = value.As<Napi::Number>().DoubleValue();
   GDAL_LOCK_PARENT_VOID(band);
   CPLErr err = band->get()->SetScale(input);
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(RasterBand::offsetSetter) {
@@ -1480,7 +1476,7 @@ NAPI_SETTER(RasterBand::offsetSetter) {
   double input = value.As<Napi::Number>().DoubleValue();
   GDAL_LOCK_PARENT_VOID(band);
   CPLErr err = band->get()->SetOffset(input);
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(RasterBand::categoryNamesSetter) {
@@ -1511,7 +1507,7 @@ NAPI_SETTER(RasterBand::categoryNamesSetter) {
 
   if (list) { delete[] list; }
 
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(RasterBand::colorInterpretationSetter) {
@@ -1529,7 +1525,7 @@ NAPI_SETTER(RasterBand::colorInterpretationSetter) {
 
   GDAL_LOCK_PARENT_VOID(band);
   CPLErr err = band->get()->SetColorInterpretation(ci);
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 /**
@@ -1592,7 +1588,7 @@ NAPI_SETTER(RasterBand::colorTableSetter) {
 
   GDAL_LOCK_PARENT_VOID(band);
   CPLErr err = band->get()->SetColorTable(raw);
-  if (err != CE_None) { NODE_THROW_LAST_CPLERR; }
+  if (err != CE_None) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_GETTER(RasterBand::uidGetter) {

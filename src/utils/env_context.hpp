@@ -80,6 +80,12 @@ class EnvContext {
     return store_;
   }
 
+  // The constructors of the JS classes of the failures, by name, see
+  // node_gdal::initErrorClasses
+  std::map<std::string, Napi::FunctionReference> &error_classes() {
+    return error_classes_;
+  }
+
   // The pointer which a wrapper factory of the calling thread handed to the
   // constructor of its class, see node_gdal::detail::PendingObjectGuard
   PendingObject &pending_object() {
@@ -114,6 +120,7 @@ class EnvContext {
   ObjectStore store_;
   std::map<std::string, Napi::Reference<Napi::Symbol>> symbols_;
   std::map<std::type_index, Napi::FunctionReference> constructors_;
+  std::map<std::string, Napi::FunctionReference> error_classes_;
   PendingObject pending_object_;
   bool shutting_down_ = false;
 

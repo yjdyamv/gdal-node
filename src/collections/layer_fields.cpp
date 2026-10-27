@@ -157,7 +157,7 @@ NAPI_METHOD(LayerFields::get) {
 
   auto r = def->GetFieldDefn(field_index);
   if (r == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
   return FieldDefn::New(r);
@@ -234,7 +234,7 @@ NAPI_METHOD(LayerFields::remove) {
 
   int err = layer->get()->DeleteField(field_index);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -281,7 +281,7 @@ NAPI_METHOD(LayerFields::add) {
         field_def = node_gdal::UnwrapWrapped<FieldDefn>(element.As<Napi::Object>());
         err = layer->get()->CreateField(field_def->get(), approx);
         if (err) {
-          NODE_THROW_OGRERR(err);
+          throw GDALError(getOGRErrMsg(err));
           return node_gdal::napi_env().Undefined();
         }
       } else {
@@ -293,7 +293,7 @@ NAPI_METHOD(LayerFields::add) {
     field_def = node_gdal::UnwrapWrapped<FieldDefn>(info[0].As<Napi::Object>());
     err = layer->get()->CreateField(field_def->get(), approx);
     if (err) {
-      NODE_THROW_OGRERR(err);
+      throw GDALError(getOGRErrMsg(err));
       return node_gdal::napi_env().Undefined();
     }
   } else {
@@ -371,7 +371,7 @@ NAPI_METHOD(LayerFields::reorder) {
   delete[] field_map_array;
 
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
   return node_gdal::napi_env().Undefined();

@@ -112,7 +112,7 @@ struct getBody : node_gdal::AsyncMethodBody {
     job.main = [raw, band_id](const GDALExecutionProgress &) {
       CPLErrorReset();
       GDALRasterBand *band = raw->GetRasterBand(band_id);
-      if (band == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (band == nullptr) { throw GDALError::fromGDAL(); }
       return band;
     };
     job.rval = [raw](GDALRasterBand *band, const GetFromPersistentFunc &) { return RasterBand::New(band, raw); };
@@ -193,7 +193,7 @@ struct createBody : node_gdal::AsyncMethodBody {
     job.main = [raw, type, options](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = raw->AddBand(type, options->get());
-      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err != CE_None) { throw GDALError::fromGDAL(); }
       return raw->GetRasterBand(raw->GetRasterCount());
     };
     job.rval = [raw, ds](GDALRasterBand *r, const GetFromPersistentFunc &) {

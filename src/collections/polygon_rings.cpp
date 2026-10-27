@@ -111,7 +111,7 @@ NAPI_METHOD(PolygonRings::get) {
     r = geom->get()->getInteriorRing(i - 1);
   }
   if (r == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
   return LinearRing::New(r, false);
@@ -162,7 +162,7 @@ NAPI_METHOD(PolygonRings::add) {
         ring = node_gdal::UnwrapWrapped<LinearRing>(element.As<Napi::Object>());
         OGRErr err = geom->get()->addRing(ring->get());
         if (err) {
-          NODE_THROW_OGRERR(err);
+          throw GDALError(getOGRErrMsg(err));
           return node_gdal::napi_env().Undefined();
         }
       } else {
@@ -174,7 +174,7 @@ NAPI_METHOD(PolygonRings::add) {
     ring = node_gdal::UnwrapWrapped<LinearRing>(info[0].As<Napi::Object>());
     OGRErr err = geom->get()->addRing(ring->get());
     if (err) {
-      NODE_THROW_OGRERR(err);
+      throw GDALError(getOGRErrMsg(err));
       return node_gdal::napi_env().Undefined();
     }
   } else {

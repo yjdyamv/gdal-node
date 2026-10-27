@@ -216,7 +216,7 @@ NAPI_METHOD(ColorTable::get) {
   CPLErrorReset();
   const GDALColorEntry *color = raw->GetColorEntry(index);
   if (color == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 
@@ -314,7 +314,7 @@ NAPI_METHOD(ColorTable::ramp) {
 
   int r = raw->CreateColorRamp(start_index, &start_color, end_index, &end_color);
   if (r == -1) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 

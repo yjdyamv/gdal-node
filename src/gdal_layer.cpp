@@ -391,7 +391,7 @@ NAPI_METHOD(Layer::setAttributeFilter) {
   }
 
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 

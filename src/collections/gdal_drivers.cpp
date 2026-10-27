@@ -109,7 +109,7 @@ NAPI_METHOD(GDALDrivers::get) {
     return node_gdal::napi_env().Undefined();
   }
 
-  NODE_THROW_LAST_CPLERR;
+  throw GDALError::fromGDAL();
   return node_gdal::napi_env().Undefined();
 }
 

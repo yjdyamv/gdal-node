@@ -97,7 +97,7 @@ NAPI_METHOD(GeometryCollectionChildren::get) {
 
   auto r = geom->get()->getGeometryRef(i);
   if (r == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
   return Geometry::New(r, false);
@@ -123,7 +123,7 @@ NAPI_METHOD(GeometryCollectionChildren::remove) {
 
   OGRErr err = geom->get()->removeGeometry(i);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -171,7 +171,7 @@ NAPI_METHOD(GeometryCollectionChildren::add) {
         child = node_gdal::UnwrapWrapped<Geometry>(element.As<Napi::Object>());
         OGRErr err = geom->get()->addGeometry(child->get());
         if (err) {
-          NODE_THROW_OGRERR(err);
+          throw GDALError(getOGRErrMsg(err));
           return node_gdal::napi_env().Undefined();
         }
       } else {
@@ -183,7 +183,7 @@ NAPI_METHOD(GeometryCollectionChildren::add) {
     child = node_gdal::UnwrapWrapped<Geometry>(info[0].As<Napi::Object>());
     OGRErr err = geom->get()->addGeometry(child->get());
     if (err) {
-      NODE_THROW_OGRERR(err);
+      throw GDALError(getOGRErrMsg(err));
       return node_gdal::napi_env().Undefined();
     }
   } else {

@@ -132,7 +132,7 @@ struct getBody : node_gdal::AsyncMethodBody {
       double val;
       CPLErrorReset();
       CPLErr err = raw->RasterIO(GF_Read, x, y, 1, 1, &val, 1, 1, GDT_Float64, 0, 0);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return val;
     };
 
@@ -192,7 +192,7 @@ struct setBody : node_gdal::AsyncMethodBody {
     job.main = [raw, x, y, val](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = raw->RasterIO(GF_Write, x, y, 1, 1, (void *)&val, 1, 1, GDT_Float64, 0, 0);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
 
@@ -443,7 +443,7 @@ struct readBody : node_gdal::AsyncMethodBody {
       CPLErr err =
         gdal_band->RasterIO(GF_Read, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
 
-      if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
+      if (err != CE_None) throw GDALError::fromGDAL();
       return err;
     };
 
@@ -606,7 +606,7 @@ struct writeBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       CPLErr err =
         gdal_band->RasterIO(GF_Write, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
-      if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
+      if (err != CE_None) throw GDALError::fromGDAL();
       return err;
     };
     job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
@@ -692,7 +692,7 @@ struct readBlockBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = gdal_band->ReadBlock(x, y, data);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &getter) { return getter("array"); };
@@ -763,7 +763,7 @@ struct writeBlockBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
       CPLErrorReset();
       CPLErr err = gdal_band->WriteBlock(x, y, data);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
@@ -826,7 +826,7 @@ struct clampBlockBody : node_gdal::AsyncMethodBody {
       xy r;
       CPLErrorReset();
       CPLErr err = gdal_band->GetActualBlockSize(x, y, &r.x, &r.y);
-      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err != CE_None) { throw GDALError::fromGDAL(); }
       return r;
     };
     job.rval = [](xy r, const GetFromPersistentFunc &) {

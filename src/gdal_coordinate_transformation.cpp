@@ -81,8 +81,12 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
     }
 
     OGRCoordinateTransformation *transform = OGRCreateCoordinateTransformation(source->get(), target->get());
+    // A constructor cannot let a C++ exception escape: node-addon-api's
+    // constructor wrapper catches `Napi::Error` only, anything else unwinds
+    // through N-API and aborts the process. Like the argument checks above,
+    // this sets the exception pending and returns.
     if (!transform) {
-      NODE_THROW_LAST_CPLERR;
+      node_gdal::throwError(info.Env(), GDALError::fromGDAL());
       return;
     }
     this_ = Handle<OGRCoordinateTransformation>::owned(transform, &free_transformation);
@@ -103,7 +107,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
 
     OGRErr err = source->get()->exportToWkt(&src_wkt);
     if (err) {
-      NODE_THROW_OGRERR(err);
+      node_gdal::throwError(info.Env(), GDALError(getOGRErrMsg(err)));
       return;
     }
 
@@ -113,7 +117,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
     GeoTransformTransformer *transform = new GeoTransformTransformer();
     transform->hSrcImageTransformer = GDALCreateGenImgProjTransformer2(ds->get(), NULL, papszTO);
     if (!transform->hSrcImageTransformer) {
-      NODE_THROW_LAST_CPLERR;
+      node_gdal::throwError(info.Env(), GDALError::fromGDAL());
       return;
     }
 

@@ -275,7 +275,7 @@ struct setMetadataBody : node_gdal::AsyncMethodBody {
     GDALAsyncableJob<CPLErr> job(ds->uid);
     job.main = [raw, options, domain](const GDALExecutionProgress &) {
       CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-      if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
+      if (r == CE_Failure) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
@@ -475,7 +475,7 @@ struct executeSQLBody : node_gdal::AsyncMethodBody {
     job.main = [raw, sql, sql_dialect, geom_filter](const GDALExecutionProgress &) {
       CPLErrorReset();
       OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? NULL : sql_dialect.c_str());
-      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (layer == nullptr) throw GDALError::fromGDAL();
       return layer;
     };
     job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, true); };
@@ -645,7 +645,7 @@ NAPI_METHOD(Dataset::setGCPs) {
   CPLErr err = raw->SetGCPs(gcps.Length(), list.get(), projection.c_str());
 
   if (err) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 
@@ -757,7 +757,7 @@ struct buildOverviewsBody : node_gdal::AsyncMethodBody {
         b.get(),
         interruptible ? ProgressTrampoline : nullptr,
         interruptible ? (void *)&progress : nullptr);
-      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err != CE_None) { throw GDALError::fromGDAL(); }
       return err;
     };
     job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
@@ -1070,7 +1070,7 @@ NAPI_SETTER(Dataset::srsSetter) {
   AsyncGuard lock({ds->uid}, eventLoopWarn);
   CPLErr err = raw->SetProjection(wkt.c_str());
 
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 NAPI_SETTER(Dataset::geoTransformSetter) {
@@ -1107,7 +1107,7 @@ NAPI_SETTER(Dataset::geoTransformSetter) {
   AsyncGuard lock({ds->uid}, eventLoopWarn);
   CPLErr err = raw->SetGeoTransform(buffer);
 
-  if (err) { NODE_THROW_LAST_CPLERR; }
+  if (err) { throw GDALError::fromGDAL(); }
 }
 
 /**

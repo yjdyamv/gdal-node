@@ -121,7 +121,7 @@ struct getBody : node_gdal::AsyncMethodBody {
         std::unique_ptr<std::string> layer_name_ptr(layer_name);
         CPLErrorReset();
         OGRLayer *lyr = raw->GetLayerByName(layer_name->c_str());
-        if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (lyr == nullptr) { throw GDALError::fromGDAL(); }
         return lyr;
       };
     } else if (info[0].IsNumber()) {
@@ -129,7 +129,7 @@ struct getBody : node_gdal::AsyncMethodBody {
       job.main = [raw, id](const GDALExecutionProgress &) {
         CPLErrorReset();
         OGRLayer *lyr = raw->GetLayer(id);
-        if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (lyr == nullptr) { throw GDALError::fromGDAL(); }
         return lyr;
       };
     } else {
@@ -228,7 +228,7 @@ struct createBody : node_gdal::AsyncMethodBody {
       std::unique_ptr<std::string> layer_name_ptr(layer_name);
       CPLErrorReset();
       OGRLayer *layer = raw->CreateLayer(layer_name->c_str(), srs, geom_type, options->get());
-      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (layer == nullptr) throw GDALError::fromGDAL();
       return layer;
     };
 
@@ -353,7 +353,7 @@ struct copyBody : node_gdal::AsyncMethodBody {
       std::unique_ptr<std::string> new_name_ptr(new_name);
       CPLErrorReset();
       OGRLayer *layer = raw->CopyLayer(src, new_name->c_str(), options->get());
-      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (layer == nullptr) throw GDALError::fromGDAL();
       return layer;
     };
 

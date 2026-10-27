@@ -131,7 +131,7 @@ NAPI_METHOD(Driver::deleteDataset) {
 
   CPLErr err = driver->getGDALDriver()->Delete(name.c_str());
   if (err) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return info.Env().Undefined();
   }
   return info.Env().Undefined();
@@ -226,7 +226,7 @@ struct createBody : node_gdal::AsyncMethodBody {
       std::unique_ptr<StringList> options_ptr(options);
       CPLErrorReset();
       GDALDataset *ds = raw->Create(filename.c_str(), x_size, y_size, n_bands, type, options->get());
-      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      if (!ds) throw GDALError::fromGDAL();
       return ds;
     };
     job.rval = DatasetRval;
@@ -341,7 +341,7 @@ struct createCopyBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       GDALDataset *ds = raw->CreateCopy(
         filename.c_str(), raw_ds, strict, options->get(), interruptible ? ProgressTrampoline : nullptr, (void *)&progress);
-      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      if (!ds) throw GDALError::fromGDAL();
       return ds;
     };
     return job.run(info, node_gdal::is_async<Async>, 5);
@@ -373,7 +373,7 @@ NAPI_METHOD(Driver::copyFiles) {
 
   CPLErr err = driver->getGDALDriver()->CopyFiles(new_name.c_str(), old_name.c_str());
   if (err) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return info.Env().Undefined();
   }
 
@@ -401,7 +401,7 @@ NAPI_METHOD(Driver::rename) {
 
   CPLErr err = driver->getGDALDriver()->Rename(new_name.c_str(), old_name.c_str());
   if (err) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return info.Env().Undefined();
   }
 
@@ -497,7 +497,7 @@ struct openBody : node_gdal::AsyncMethodBody {
       const char *driver_list[2] = {raw->GetDescription(), nullptr};
       CPLErrorReset();
       GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), NULL);
-      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      if (!ds) throw GDALError::fromGDAL();
       return ds;
     };
     job.rval = DatasetRval;

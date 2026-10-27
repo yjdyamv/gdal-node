@@ -10,6 +10,8 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "import": "./lib/gdal.mjs",
+      "require": "./lib/gdal.js",
       "default": "./lib/gdal.js"
     },
     "./package.json": "./package.json",
@@ -58,7 +60,7 @@
     }
   ],
   "scripts": {
-    "test": "npm run lint:js && tsc --noEmit && npm run test:parallel && npm run test:stress 20",
+    "test": "npm run lint:js && tsc --noEmit && npm run iterators -- --check && npm run test:parallel && npm run test:stress 20",
     "bench": "node bench/streams.js",
     "build": "node scripts/build.mjs",
     "clean": "cmake-js clean",
@@ -69,11 +71,11 @@
     "lint": "npm run lint:js && npm run lint:cpp",
     "install": "node scripts/install.mjs",
     "postinstall": "node scripts/motd",
-    "yatag": "npx yatag",
-    "gpp": "gpp -H lib/default_iterators.gpp -o lib/default_iterators.js && eslint --fix lib/default_iterators.js",
-    "doc:build": "npx documentation build --config=documentation.yml src/*.cpp src/collections/*.cpp src/geometry/*.cpp lib/*.js -f=html -o=doc --theme=node_modules/documentation-hipster/index.js",
+    "yatag": "node scripts/generate-typings.js",
+    "iterators": "node scripts/generate-default-iterators.js",
+    "doc:build": "npm run yatag && npx typedoc",
     "doc:publish": "npm run doc:build && node ./scripts/publish-docs.js",
-    "preversion": "npm run lint && npx yatag && npm run test",
+    "preversion": "npm run lint && npm run yatag && npm run doc:build && npm run test",
     "gcov": "mkdir -p coverage && cd coverage && gcov -o ../build/CMakeFiles/gdal.dir/src ../src/*",
     "lcov": "npx c8 report --reporter=text-lcov > coverage/tests.lcov",
     "codecov": "cd coverage && curl -s https://codecov.io/bash | bash",
@@ -102,7 +104,6 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^10.0.1",
-    "@mmomtchev/documentation": "^14.0.1",
     "@mmomtchev/node-pre-gyp-github": "^2.0.0",
     "@octokit/core": "^7.0.2",
     "@types/chai": "^4.2.18",
@@ -119,8 +120,6 @@
     "c8": "^11.0.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "documentation-hipster": "^1.0.0",
-    "documentation-polyglot": "^1.0.1",
     "eslint": "^10.0.0",
     "eslint-plugin-array-func": "^4.0.0",
     "eslint-plugin-mocha": "^11.0.0",
@@ -131,6 +130,7 @@
     "semver": "^7.3.5",
     "tsconfig-paths": "^4.0.0",
     "tsx": "^4.20.5",
+    "typedoc": "^0.28.20",
     "typescript": "^6.0.3"
   },
   "engines": {

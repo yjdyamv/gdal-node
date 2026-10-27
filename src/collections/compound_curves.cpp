@@ -152,7 +152,7 @@ NAPI_METHOD(CompoundCurveCurves::add) {
         ring = node_gdal::UnwrapWrapped<SimpleCurve>(element.As<Napi::Object>());
         OGRErr err = geom->get()->addCurve(ring->get());
         if (err) {
-          NODE_THROW_OGRERR(err);
+          throw GDALError(getOGRErrMsg(err));
           return node_gdal::napi_env().Undefined();
         }
       } else {
@@ -164,7 +164,7 @@ NAPI_METHOD(CompoundCurveCurves::add) {
     ring = node_gdal::UnwrapWrapped<SimpleCurve>(info[0].As<Napi::Object>());
     OGRErr err = geom->get()->addCurve(ring->get());
     if (err) {
-      NODE_THROW_OGRERR(err);
+      throw GDALError(getOGRErrMsg(err));
       return node_gdal::napi_env().Undefined();
     }
   } else {

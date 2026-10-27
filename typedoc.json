@@ -1,0 +1,29 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "node-gdal-async",
+  "entryPoints": ["lib/index.d.ts"],
+  "out": "doc",
+  "readme": "README.md",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": false,
+  "cleanOutputDir": true,
+  "navigationLinks": {
+    "GitHub": "https://github.com/mmomtchev/node-gdal-async",
+    "npm": "https://www.npmjs.com/package/gdal-async"
+  },
+  "validation": {
+    "invalidLink": false
+  },
+  "externalSymbolLinkMappings": {
+    "@types/node": {
+      "*": "https://nodejs.org/api/"
+    }
+  },
+  "visibilityFilters": {
+    "protected": false,
+    "private": false,
+    "inherited": true,
+    "external": true
+  }
+}

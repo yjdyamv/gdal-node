@@ -322,7 +322,7 @@ struct reprojectImageBody : node_gdal::AsyncMethodBody {
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr,
           opts);
-        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (err) { throw GDALError::fromGDAL(); }
         return err;
       };
     } else {
@@ -339,7 +339,7 @@ struct reprojectImageBody : node_gdal::AsyncMethodBody {
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr,
           opts);
-        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (err) { throw GDALError::fromGDAL(); }
         return err;
       };
     }
@@ -470,7 +470,7 @@ struct suggestedWarpOutputBody : node_gdal::AsyncMethodBody {
       void *hGenTransformArg =
         GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), NULL, t_srs_str.c_str(), TRUE, 1000.0, 0);
 
-      if (!hGenTransformArg) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (!hGenTransformArg) { throw GDALError::fromGDAL(); }
 
       GDALTransformerFunc pfnTransformer;
 
@@ -480,7 +480,7 @@ struct suggestedWarpOutputBody : node_gdal::AsyncMethodBody {
 
         if (!hTransformArg) {
           GDALDestroyGenImgProjTransformer(hGenTransformArg);
-          throw GDALError(CPLGetLastErrorMsg());
+          throw GDALError::fromGDAL();
         }
       } else {
         hTransformArg = hGenTransformArg;
@@ -492,7 +492,7 @@ struct suggestedWarpOutputBody : node_gdal::AsyncMethodBody {
       GDALDestroyGenImgProjTransformer(hGenTransformArg);
       if (maxError > 0.0) { GDALDestroyApproxTransformer(hTransformArg); }
 
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      if (err) { throw GDALError::fromGDAL(); }
       return r;
     };
 

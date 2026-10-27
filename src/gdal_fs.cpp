@@ -145,7 +145,7 @@ struct statBody : node_gdal::AsyncMethodBody {
       VSIStatBufL stat;
       CPLErrorReset();
       int r = VSIStatL(filename.c_str(), &stat);
-      if (r < 0) throw GDALError(CPLGetLastErrorMsg());
+      if (r < 0) throw GDALError::fromGDAL();
       return stat;
     };
 
@@ -257,7 +257,7 @@ struct readDirBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
 
       char **names = VSIReadDir(directory.c_str());
-      if (names == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (names == nullptr) throw GDALError::fromGDAL();
 
       return names;
     };

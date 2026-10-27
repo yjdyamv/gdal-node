@@ -1914,9 +1914,15 @@ describe('gdal.RasterBand', () => {
       })
     })
     describe('getMaskBand()', () => {
+      it('should have the mask flags of the mask', () => {
+        assert.equal(gdal.GMF_ALL_VALID, 0x01)
+        assert.equal(gdal.GMF_PER_DATASET, 0x02)
+        assert.equal(gdal.GMF_ALPHA, 0x04)
+        assert.equal(gdal.GMF_NODATA, 0x08)
+      })
       it('should retrieve the band nodata mask', () => {
         const band = gdal.open(`${__dirname}/data/test_with_mask_1bit.tif`).bands.get(1)
-        assert.equal(band.getMaskFlags(), 2)
+        assert.equal(band.getMaskFlags(), gdal.GMF_PER_DATASET)
         const mask = band.getMaskBand()
         assert.isNotNull(mask)
         assert.equal(mask.pixels.get(0, 0), 0)
@@ -1926,9 +1932,9 @@ describe('gdal.RasterBand', () => {
     describe('createMaskBand()', () => {
       it('should create the band nodata mask', () => {
         const band = gdal.open('temp', 'w', 'MEM', 16, 16, 1, gdal.GDT_Byte).bands.get(1)
-        assert.equal(band.getMaskFlags(), 1)
-        band.createMaskBand(2)
-        assert.equal(band.getMaskFlags(), 2)
+        assert.equal(band.getMaskFlags(), gdal.GMF_ALL_VALID)
+        band.createMaskBand(gdal.GMF_NODATA | gdal.GMF_PER_DATASET)
+        assert.equal(band.getMaskFlags(), gdal.GMF_NODATA | gdal.GMF_PER_DATASET)
         const mask = band.getMaskBand()
         assert.isNotNull(mask)
         assert.instanceOf(mask, gdal.RasterBand)

@@ -31,6 +31,7 @@ void EnvContext::release() {
   // environment, so they have to be dropped while it is still usable - that is
   // why this runs from a cleanup hook and not when the context is destroyed
   constructors_.clear();
+  error_classes_.clear();
   symbols_.clear();
 }
 

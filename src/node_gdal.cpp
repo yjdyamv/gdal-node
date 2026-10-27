@@ -154,7 +154,7 @@ struct gdal_openBody : node_gdal::AsyncMethodBody {
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
     job.main = [path, flags](const GDALExecutionProgress &) {
       GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), flags, NULL, NULL, NULL);
-      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      if (!ds) throw GDALError::fromGDAL();
       return ds;
     };
     return job.run(info, node_gdal::is_async<Async>, 2);
@@ -323,7 +323,16 @@ static NAPI_METHOD(setPROJSearchPath) {
 }
 
 static NAPI_METHOD(ThrowDummyCPLError) {
-  CPLError(CE_Failure, CPLE_AppDefined, "Mock error");
+  Args args(info);
+  int code = CPLE_AppDefined;
+  bool raise = false;
+  if (!args.optional(0, "code", code)) return args.failed();
+  if (!args.optional(1, "raise", raise)) return args.failed();
+
+  CPLError(CE_Failure, code, "Mock error");
+  // the JS error of the CPL error which was just set, for the tests which check
+  // the class of every CPLE error number
+  if (raise) throwError(info.Env(), GDALError::fromGDAL());
   return info.Env().Undefined();
 }
 
@@ -349,6 +358,8 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   // the first object is wrapped. Everything which goes through the ambient
   // node_gdal::napi_env()/object_store() finds it through the thread's context
   EnvContext::find(env);
+  // the classes of the failures, before anything which can fail
+  initErrorClasses(env, target);
 
   GDAL_SetAsyncableMethod(env, target, "open", gdal_open);
   GDAL_SetMethod(env, target, "setConfigOption", setConfigOption);
@@ -1184,6 +1195,46 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   target.Set(
     Napi::String::New(env, "GCI_YCbCr_CrBand"),
     Napi::String::New(env, GDALGetColorInterpretationName(GCI_YCbCr_CrBand)));
+
+  /*
+   * Mask flags.
+   */
+
+  /**
+   * Mask flags: all pixels are valid, no mask is needed
+   * @final
+   * @constant
+   * @name GMF_ALL_VALID
+   * @type {number}
+   */
+  target.Set( Napi::String::New(env, "GMF_ALL_VALID"), Napi::Number::New(env, GMF_ALL_VALID));
+
+  /**
+   * Mask flags: the mask is a per dataset mask
+   * @final
+   * @constant
+   * @name GMF_PER_DATASET
+   * @type {number}
+   */
+  target.Set( Napi::String::New(env, "GMF_PER_DATASET"), Napi::Number::New(env, GMF_PER_DATASET));
+
+  /**
+   * Mask flags: the mask is the alpha band
+   * @final
+   * @constant
+   * @name GMF_ALPHA
+   * @type {number}
+   */
+  target.Set( Napi::String::New(env, "GMF_ALPHA"), Napi::Number::New(env, GMF_ALPHA));
+
+  /**
+   * Mask flags: the mask is built from the nodata value
+   * @final
+   * @constant
+   * @name GMF_NODATA
+   * @type {number}
+   */
+  target.Set( Napi::String::New(env, "GMF_NODATA"), Napi::Number::New(env, GMF_NODATA));
 
   /*
    * Palette types.

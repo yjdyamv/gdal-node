@@ -111,11 +111,11 @@ struct translateBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       auto b = aosOptions;
       auto psOptions = GDALTranslateOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (psOptions == nullptr) throw GDALError::fromGDAL();
       if (interruptible) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
       GDALDataset *r = GDALDatasetFromHandle(GDALTranslate(dst.c_str(), GDALDatasetToHandle(raw), psOptions, nullptr));
       GDALTranslateOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -226,7 +226,7 @@ struct vectorTranslateBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       if (progress_cb) aosOptions->AddString("-progress");
       auto psOptions = GDALVectorTranslateOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (psOptions == nullptr) throw GDALError::fromGDAL();
 
       if (interruptible) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
@@ -235,7 +235,7 @@ struct vectorTranslateBody : node_gdal::AsyncMethodBody {
         GDALVectorTranslate(dst_filename.c_str(), GDALDatasetToHandle(dst_raw), 1, &srcH, psOptions, nullptr));
 
       GDALVectorTranslateOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -302,10 +302,10 @@ struct infoBody : node_gdal::AsyncMethodBody {
     job.main = [raw, aosOptions](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto psOptions = GDALInfoOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (psOptions == nullptr) throw GDALError::fromGDAL();
       char *r = GDALInfo(GDALDatasetToHandle(raw), psOptions);
       GDALInfoOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       std::string s(r);
       CPLFree(r);
       return s;
@@ -428,7 +428,7 @@ struct warpBody : node_gdal::AsyncMethodBody {
       [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, interruptible](const GDALExecutionProgress &progress) {
         CPLErrorReset();
         auto psOptions = GDALWarpAppOptionsNew(aosOptions->List(), nullptr);
-        if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (psOptions == nullptr) throw GDALError::fromGDAL();
         if (interruptible) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
         GDALDatasetH r = GDALWarp(
           dst_path.length() > 0 ? dst_path.c_str() : nullptr,
@@ -438,7 +438,7 @@ struct warpBody : node_gdal::AsyncMethodBody {
           psOptions,
           nullptr);
         GDALWarpAppOptionsFree(psOptions);
-        if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (r == nullptr) throw GDALError::fromGDAL();
         return GDALDatasetFromHandle(r);
       };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -569,7 +569,7 @@ struct buildvrtBody : node_gdal::AsyncMethodBody {
       [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, interruptible](const GDALExecutionProgress &progress) {
         CPLErrorReset();
         auto psOptions = GDALBuildVRTOptionsNew(aosOptions->List(), nullptr);
-        if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (psOptions == nullptr) throw GDALError::fromGDAL();
         if (interruptible) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
         GDALDatasetH r = GDALBuildVRT(
@@ -581,7 +581,7 @@ struct buildvrtBody : node_gdal::AsyncMethodBody {
           nullptr);
 
         GDALBuildVRTOptionsFree(psOptions);
-        if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (r == nullptr) throw GDALError::fromGDAL();
         return GDALDatasetFromHandle(r);
       };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -695,7 +695,7 @@ struct rasterizeBody : node_gdal::AsyncMethodBody {
     job.main = [dst_path, dst_raw, src_raw, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALRasterizeOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (psOptions == nullptr) throw GDALError::fromGDAL();
       if (interruptible) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
       GDALDatasetH r = GDALRasterize(
@@ -706,7 +706,7 @@ struct rasterizeBody : node_gdal::AsyncMethodBody {
         nullptr);
 
       GDALRasterizeOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return GDALDatasetFromHandle(r);
     };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
@@ -808,7 +808,7 @@ struct demBody : node_gdal::AsyncMethodBody {
     job.main = [dst_path, mode, raw, colorFilename, aosOptions, interruptible](const GDALExecutionProgress &progress) {
       CPLErrorReset();
       auto psOptions = GDALDEMProcessingOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (psOptions == nullptr) throw GDALError::fromGDAL();
       if (interruptible) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
       GDALDataset *r = GDALDatasetFromHandle(GDALDEMProcessing(
         dst_path.c_str(),
@@ -819,7 +819,7 @@ struct demBody : node_gdal::AsyncMethodBody {
         nullptr));
 
       GDALDEMProcessingOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return GDALDatasetFromHandle(r);
     };
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };

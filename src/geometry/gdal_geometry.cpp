@@ -1016,7 +1016,7 @@ struct convexHullBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->ConvexHull();
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1060,7 +1060,7 @@ struct boundaryBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Boundary();
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1113,7 +1113,7 @@ struct intersectionBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Intersection(gdal_x);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1166,7 +1166,7 @@ struct unionGeometryBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Union(gdal_x);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1219,7 +1219,7 @@ struct differenceBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Difference(gdal_x);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1272,7 +1272,7 @@ struct symDifferenceBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->SymDifference(gdal_x);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1324,7 +1324,7 @@ struct simplifyBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Simplify(tolerance);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1376,7 +1376,7 @@ struct simplifyPreserveTopologyBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->SimplifyPreserveTopology(tolerance);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1434,7 +1434,7 @@ struct bufferBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, distance, number_of_segments](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Buffer(distance, number_of_segments);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1481,7 +1481,7 @@ struct makeValidBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->MakeValid();
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (r == nullptr) throw GDALError::fromGDAL();
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1696,7 +1696,7 @@ struct exportToKMLBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToKML();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (text == nullptr) throw GDALError::fromGDAL();
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -1752,7 +1752,7 @@ struct exportToGMLBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToGML();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (text == nullptr) throw GDALError::fromGDAL();
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -1808,7 +1808,7 @@ struct exportToJSONBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToJson();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (text == nullptr) throw GDALError::fromGDAL();
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -2240,7 +2240,7 @@ struct createFromGeoJsonBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       std::unique_ptr<std::string> val_ptr(val);
       OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(val->c_str());
-      if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (geom == nullptr) throw GDALError::fromGDAL();
       return geom;
     };
     job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
@@ -2311,7 +2311,7 @@ struct createFromGeoJsonBufferBody : node_gdal::AsyncMethodBody {
       }
       OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(oDocument.GetRoot());
 
-      if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (geom == nullptr) throw GDALError::fromGDAL();
       return geom;
     };
     job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
@@ -2333,13 +2333,7 @@ GDAL_ASYNC_METHOD(Geometry::createFromGeoJsonBuffer, createFromGeoJsonBufferBody
  */
 NAPI_GETTER(Geometry::srsGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-#if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 7)
-  // This const_cast is ok because New with false makes a copy
-  // TODO: Implement this with proper C++ overloading semantics
-  return SpatialReference::New(const_cast<OGRSpatialReference *>(geom->get()->getSpatialReference()), false);
-#else
-  return SpatialReference::New(geom->get()->getSpatialReference(), false);
-#endif
+  return SpatialReference::New(geom->get()->getSpatialReference());
 }
 
 NAPI_SETTER(Geometry::srsSetter) {

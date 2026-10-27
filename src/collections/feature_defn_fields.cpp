@@ -141,7 +141,7 @@ NAPI_METHOD(FeatureDefnFields::get) {
 
   CPLErrorReset();
   auto r = feature_def->get()->GetFieldDefn(field_index);
-  if (r == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+  if (r == nullptr) { throw GDALError::fromGDAL(); }
   return FieldDefn::New(r);
 }
 
@@ -207,7 +207,7 @@ NAPI_METHOD(FeatureDefnFields::remove) {
 
   int err = feature_def->get()->DeleteFieldDefn(field_index);
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
 
@@ -332,7 +332,7 @@ NAPI_METHOD(FeatureDefnFields::reorder) {
   delete[] field_map_array;
 
   if (err) {
-    NODE_THROW_OGRERR(err);
+    throw GDALError(getOGRErrMsg(err));
     return node_gdal::napi_env().Undefined();
   }
   return node_gdal::napi_env().Undefined();

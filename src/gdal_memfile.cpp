@@ -235,7 +235,7 @@ NAPI_METHOD(Memfile::vsimemRelease) {
   CPLErrorReset();
   void *data = VSIGetMemFileBuffer(filename.c_str(), &len, false);
   if (data == nullptr) {
-    NODE_THROW_LAST_CPLERR;
+    throw GDALError::fromGDAL();
     return node_gdal::napi_env().Undefined();
   }
 

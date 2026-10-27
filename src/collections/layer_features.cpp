@@ -116,7 +116,7 @@ struct getBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_layer, feature_id](const GDALExecutionProgress &) {
       CPLErrorReset();
       OGRFeature *feature = gdal_layer->GetFeature(feature_id);
-      if (feature == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (feature == nullptr) throw GDALError::fromGDAL();
       return feature;
     };
     job.rval = [](OGRFeature *feature, const GetFromPersistentFunc &) { return Feature::New(feature); };

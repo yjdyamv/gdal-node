@@ -342,7 +342,7 @@ struct readBody : node_gdal::AsyncMethodBody {
           (void *)((uint8_t *)buffer + offset * bytes_per_pixel),
           buffer,
           length * bytes_per_pixel);
-        if (!success) { throw GDALError(CPLGetLastErrorMsg()); }
+        if (!success) { throw GDALError::fromGDAL(); }
         return success;
       };
     job.rval = [](bool success, const GetFromPersistentFunc &getter) { return getter("array"); };
