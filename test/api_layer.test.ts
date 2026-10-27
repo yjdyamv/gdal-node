@@ -1077,4 +1077,29 @@ describe('gdal.Layer', () => {
       })
     })
   })
+
+  describe('flush()', () => {
+    it('should flush the written data', () => {
+      const ds = gdal.open('', 'w', 'Memory')
+      const layer = ds.layers.create('', null, gdal.Point)
+      layer.features.add(new gdal.Feature(layer))
+      assert.doesNotThrow(() => layer.flush())
+    })
+
+    it('should throw if the dataset is already closed', () => {
+      const ds = gdal.open('', 'w', 'Memory')
+      const layer = ds.layers.create('', null, gdal.Point)
+      ds.close()
+      assert.throws(() => layer.flush(), /already been destroyed/)
+    })
+  })
+
+  describe('fields.fromJSON()', () => {
+    it('should create the fields from an object', () => {
+      const ds = gdal.open('', 'w', 'Memory')
+      const layer = ds.layers.create('', null, gdal.Point)
+      layer.fields.fromJSON({ a: 'string', b: 'integer' })
+      assert.deepEqual(layer.fields.getNames(), [ 'a', 'b' ])
+    })
+  })
 })

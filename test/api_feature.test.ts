@@ -679,4 +679,10 @@ describe('gdal.Feature', () => {
       })
     })
   })
+
+  describe('fields.featureDefn', () => {
+    it('should return the feature definition the collection belongs to', () => {
+      assert.strictEqual(defn.fields.featureDefn, defn)
+    })
+  })
 })

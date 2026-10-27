@@ -1956,4 +1956,29 @@ describe('gdal.RasterBand', () => {
       })
     })
   })
+
+  describe('getBySampleCount()', () => {
+    it('should return a band', () => {
+      const band = gdal.open(`${__dirname}/data/sample.tif`).bands.get(1)
+      assert.instanceOf(band.overviews.getBySampleCount(2), gdal.RasterBand)
+    })
+
+    it('should throw if the dataset is already closed', () => {
+      const ds = gdal.open(`${__dirname}/data/sample.tif`)
+      const band = ds.bands.get(1)
+      ds.close()
+      assert.throws(() => band.overviews.getBySampleCount(2), /already been destroyed/)
+    })
+  })
+
+  describe('colorTable.band', () => {
+    it('should return the band the color table belongs to', () => {
+      const band = gdal.open(`${__dirname}/data/CM13ct.png`).bands.get(1)
+      assert.strictEqual(band.colorTable!.band, band)
+    })
+
+    it('should be undefined for a color table which does not belong to a band', () => {
+      assert.isUndefined(new gdal.ColorTable(gdal.GPI_RGB).band)
+    })
+  })
 })

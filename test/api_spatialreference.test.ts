@@ -431,4 +431,44 @@ describe('gdal.SpatialReference', () => {
         .isSame(gdal.SpatialReference.fromCRSURL('http://www.opengis.net/def/crs/EPSG/0/3857')), false)
     })
   })
+
+  describe('morphFromESRI()', () => {
+    it('should morph the projection', () => {
+      const srs = gdal.SpatialReference.fromEPSG(4326)
+      assert.doesNotThrow(() => srs.morphFromESRI())
+      assert.doesNotThrow(() => srs.morphToESRI())
+    })
+  })
+
+  describe('isSameVertCS()', () => {
+    it('should return true for the same vertical coordinate system', () => {
+      assert.isTrue(gdal.SpatialReference.fromEPSG(5773)
+        .isSameVertCS(gdal.SpatialReference.fromEPSG(5773)))
+    })
+
+    it('should return false when there is no vertical coordinate system', () => {
+      assert.isFalse(gdal.SpatialReference.fromEPSG(4326)
+        .isSameVertCS(gdal.SpatialReference.fromEPSG(4326)))
+    })
+  })
+
+  describe('EPSGTreatsAsLatLong()', () => {
+    it('should return true for a geographic coordinate system', () => {
+      assert.isTrue(gdal.SpatialReference.fromEPSG(4326).EPSGTreatsAsLatLong())
+    })
+
+    it('should return false for a projected coordinate system', () => {
+      assert.isFalse(gdal.SpatialReference.fromEPSG(3857).EPSGTreatsAsLatLong())
+    })
+  })
+
+  describe('EPSGTreatsAsNorthingEasting()', () => {
+    it('should return true for a northing-easting coordinate system', () => {
+      assert.isTrue(gdal.SpatialReference.fromEPSG(2193).EPSGTreatsAsNorthingEasting())
+    })
+
+    it('should return false for a lat-long coordinate system', () => {
+      assert.isFalse(gdal.SpatialReference.fromEPSG(4326).EPSGTreatsAsNorthingEasting())
+    })
+  })
 })

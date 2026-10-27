@@ -987,4 +987,18 @@ describe('gdal.RasterBandAsync', () => {
       })
     })
   })
+
+  describe('getBySampleCountAsync()', () => {
+    it('should return a band', async () => {
+      const band = gdal.open(`${__dirname}/data/sample.tif`).bands.get(1)
+      assert.instanceOf(await band.overviews.getBySampleCountAsync(2), gdal.RasterBand)
+    })
+
+    it('should reject if the dataset is already closed', async () => {
+      const ds = gdal.open(`${__dirname}/data/sample.tif`)
+      const band = ds.bands.get(1)
+      ds.close()
+      await assert.isRejected(band.overviews.getBySampleCountAsync(2), /already been destroyed/)
+    })
+  })
 })

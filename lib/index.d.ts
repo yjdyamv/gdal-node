@@ -4101,10 +4101,10 @@ export class Driver {
  * @method copyFiles
  * @instance
  * @memberof Driver
- * @param {string} name_old New name for the dataset.
- * @param {string} name_new Old name of the dataset.
+ * @param {string} new_name New name for the dataset.
+ * @param {string} old_name Old name of the dataset.
  */
-  copyFiles(name_old: string, name_new: string): void
+  copyFiles(new_name: string, old_name: string): void
 
   /**
  * Renames the dataset.

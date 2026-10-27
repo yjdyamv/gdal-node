@@ -264,6 +264,52 @@ describe('gdal.drivers', () => {
     })
   })
 
+
+  describe('copyFiles()', () => {
+    const filename = (): string => `/vsimem/copyFiles_${String(Math.random()).substring(2)}.tif`
+
+    it('should copy the files of a dataset', () => {
+      const driver = gdal.drivers.get('GTiff')
+      const source = filename()
+      const target = filename()
+      driver.createCopy(source, gdal.open(`${__dirname}/data/sample.tif`)).close()
+
+      driver.copyFiles(target, source)
+
+      assert.deepEqual(gdal.open(target).rasterSize, gdal.open(source).rasterSize)
+    })
+
+    it('should throw if the dataset does not exist', () => {
+      const driver = gdal.drivers.get('GTiff')
+      assert.throws(() => {
+        driver.copyFiles(filename(), filename())
+      })
+    })
+  })
+
+  describe('rename()', () => {
+    const filename = (): string => `/vsimem/rename_${String(Math.random()).substring(2)}.tif`
+
+    it('should rename the files of a dataset', () => {
+      const driver = gdal.drivers.get('GTiff')
+      const source = filename()
+      const target = filename()
+      driver.createCopy(source, gdal.open(`${__dirname}/data/sample.tif`)).close()
+      const size = gdal.open(source).rasterSize
+
+      driver.rename(target, source)
+
+      assert.deepEqual(gdal.open(target).rasterSize, size)
+      assert.throws(() => gdal.open(source))
+    })
+
+    it('should throw if the dataset does not exist', () => {
+      const driver = gdal.drivers.get('GTiff')
+      assert.throws(() => {
+        driver.rename(filename(), filename())
+      })
+    })
+  })
   describe('createCopyAsync', () => {
     it('should operate normally', () => {
       const driver = gdal.drivers.get('MEM')
