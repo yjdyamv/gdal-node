@@ -105,6 +105,11 @@ jobs:
         key: ccache-${{ matrix.os }}
         max-size: 500M
     - run: npm install --ignore-scripts
+    - name: Check that the typings are up to date
+      # lib/index.d.ts is committed and the build regenerates it as its last
+      # step, so this has to run before the build to catch a comment which
+      # changed without regenerating the declarations
+      run: npm run yatag -- --check
     - name: Build the addon
       id: build
       continue-on-error: true

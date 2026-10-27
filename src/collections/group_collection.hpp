@@ -68,10 +68,10 @@ class GroupCollection : public GDALObject<SELF> {
       Args args(info);
 
       Napi::Object this_obj = info.This().As<Napi::Object>();
-      Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
-      Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
-      NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
-      NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
+      Napi::Object parent_ds = node_gdal::get_private(this_obj, "parent_ds_").As<Napi::Object>();
+      Napi::Object parent_obj = node_gdal::get_private(this_obj, "parent_").As<Napi::Object>();
+      Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(parent_ds, "Dataset");
+      NODEPARENT *parent = node_gdal::unwrap_or_throw<NODEPARENT>(parent_obj, "NODEPARENT");
 
       std::shared_ptr<GDALPARENT> raw = parent->get();
       GDALDataset *gdal_ds = ds->get();
@@ -103,10 +103,10 @@ class GroupCollection : public GDALObject<SELF> {
     template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
       Napi::Object this_obj = info.This().As<Napi::Object>();
-      Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
-      Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
-      NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
-      NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
+      Napi::Object parent_ds = node_gdal::get_private(this_obj, "parent_ds_").As<Napi::Object>();
+      Napi::Object parent_obj = node_gdal::get_private(this_obj, "parent_").As<Napi::Object>();
+      Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(parent_ds, "Dataset");
+      NODEPARENT *parent = node_gdal::unwrap_or_throw<NODEPARENT>(parent_obj, "NODEPARENT");
 
       std::shared_ptr<GDALPARENT> raw = parent->get();
 
@@ -125,10 +125,10 @@ class GroupCollection : public GDALObject<SELF> {
   static NAPI_GETTER(namesGetter) {
 
     Napi::Object this_obj = info.This().As<Napi::Object>();
-    Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
+    Napi::Object parent_ds = node_gdal::get_private(this_obj, "parent_ds_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent_ds);
 
-    Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
+    Napi::Object parent_obj = node_gdal::get_private(this_obj, "parent_").As<Napi::Object>();
     NODEPARENT *parent = node_gdal::UnwrapWrapped<NODEPARENT>(parent_obj);
 
     if (!ds->isAlive()) {
@@ -146,11 +146,11 @@ class GroupCollection : public GDALObject<SELF> {
   }
 
   static NAPI_GETTER(parentGetter) {
-    return GDAL_GET_PRIVATE(info.This().As<Napi::Object>(), "parent_");
+    return node_gdal::get_private(info.This().As<Napi::Object>(), "parent_");
   }
 
   static NAPI_GETTER(dsGetter) {
-    return GDAL_GET_PRIVATE(info.This().As<Napi::Object>(), "parent_ds_");
+    return node_gdal::get_private(info.This().As<Napi::Object>(), "parent_ds_");
   }
 
   GroupCollection(const Napi::CallbackInfo &info) : GDALObject<SELF>(info) {
@@ -162,8 +162,8 @@ class GroupCollection : public GDALObject<SELF> {
       return;
     }
     Napi::Object this_obj = info.This().As<Napi::Object>();
-    GDAL_SET_PRIVATE(this_obj, "parent_ds_", info[1]);
-    GDAL_SET_PRIVATE(this_obj, "parent_", info[0]);
+    node_gdal::set_private(this_obj, "parent_ds_", info[1]);
+    node_gdal::set_private(this_obj, "parent_", info[0]);
   }
 
     protected:

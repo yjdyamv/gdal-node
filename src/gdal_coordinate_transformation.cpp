@@ -95,7 +95,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
     // todo: allow additional options using StringList
 
     Dataset *ds;
-    char **papszTO = NULL;
+    char **papszTO = nullptr;
     char *src_wkt;
 
     ds = node_gdal::UnwrapWrapped<Dataset>(info[1].As<Napi::Object>());
@@ -115,7 +115,7 @@ CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &inf
     papszTO = CSLSetNameValue(papszTO, "INSERT_CENTER_LONG", "FALSE");
 
     GeoTransformTransformer *transform = new GeoTransformTransformer();
-    transform->hSrcImageTransformer = GDALCreateGenImgProjTransformer2(ds->get(), NULL, papszTO);
+    transform->hSrcImageTransformer = GDALCreateGenImgProjTransformer2(ds->get(), nullptr, papszTO);
     if (!transform->hSrcImageTransformer) {
       node_gdal::throwError(info.Env(), GDALError::fromGDAL());
       return;

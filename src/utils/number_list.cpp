@@ -4,10 +4,10 @@
 
 namespace node_gdal {
 
-IntegerList::IntegerList() : list(NULL), len(0), name("") {
+IntegerList::IntegerList() : list(nullptr), len(0), name("") {
 }
 
-IntegerList::IntegerList(const char *name) : list(NULL), len(0) {
+IntegerList::IntegerList(const char *name) : list(nullptr), len(0) {
   name = (std::string(" ") + name).c_str();
 }
 
@@ -49,10 +49,10 @@ int IntegerList::parse(Napi::Value value) {
   return 0;
 }
 
-DoubleList::DoubleList() : list(NULL), len(0), name("") {
+DoubleList::DoubleList() : list(nullptr), len(0), name("") {
 }
 
-DoubleList::DoubleList(const char *name) : list(NULL), len(0) {
+DoubleList::DoubleList(const char *name) : list(nullptr), len(0) {
   name = (std::string(" ") + name).c_str();
 }
 

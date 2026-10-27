@@ -1,0 +1,12 @@
+{
+  "all": true,
+  "include": ["lib/**/*.js"],
+  "exclude": ["lib/binding/**"],
+  "reporter": ["text-summary", "text", "lcov"],
+  "report-dir": "coverage",
+  "check-coverage": true,
+  "lines": 93,
+  "statements": 93,
+  "functions": 93,
+  "branches": 80
+}

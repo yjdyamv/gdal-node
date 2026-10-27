@@ -31,7 +31,7 @@ CurveBase<T, OGRT, COLLECTIONT>::CurveBase(const Napi::CallbackInfo &info) : Geo
 
 template <class T, class OGRT, class COLLECTIONT>
 void CurveBase<T, OGRT, COLLECTIONT>::SetPrivate(Napi::Object _this, Napi::Value value) {
-  GDAL_SET_PRIVATE(_this, "points_", value);
+  node_gdal::set_private(_this, "points_", value);
 };
 
 } // namespace node_gdal

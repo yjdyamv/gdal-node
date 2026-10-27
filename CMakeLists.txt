@@ -298,8 +298,9 @@ add_custom_command(TARGET gdal POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${BINDING_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:gdal> ${BINDING_DIR}/gdal.node
   # lib/index.d.ts is the TypeScript declaration of the addon.  It is generated
-  # from the JSDoc comments of the sources, it is not committed (it is listed in
+  # from the JSDoc comments of the sources (plus lib/types-extra.d.ts, which
+  # holds the members that have no comment), it is not committed (it is listed in
   # .gitignore) and the tests do not compile without it.
   COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR}
-          ${NODE_EXECUTABLE} node_modules/yatag/yatag.js
+          ${NODE_EXECUTABLE} scripts/generate-typings.js
   VERBATIM)

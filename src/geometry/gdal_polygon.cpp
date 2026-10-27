@@ -33,7 +33,7 @@ void Polygon::Initialize(Napi::Object target) {
 }
 
 void Polygon::SetPrivate(Napi::Object _this, Napi::Value value) {
-  GDAL_SET_PRIVATE(_this, "rings_", value);
+  node_gdal::set_private(_this, "rings_", value);
 };
 
 /**
@@ -79,7 +79,7 @@ GDAL_SYNC_METHOD(Polygon::getArea, getAreaBody)
  * @type {PolygonRings}
  */
 NAPI_GETTER(Polygon::ringsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "rings_");
+  return node_gdal::get_private(info.This(), "rings_");
 }
 
 } // namespace node_gdal

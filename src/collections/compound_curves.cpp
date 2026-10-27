@@ -35,7 +35,7 @@ CompoundCurveCurves::CompoundCurveCurves(const Napi::CallbackInfo &info) : GDALO
     Napi::Error::New(info.Env(), "Cannot create CompoundCurveCurves directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 CompoundCurveCurves::~CompoundCurveCurves() {
@@ -70,7 +70,7 @@ NAPI_METHOD(CompoundCurveCurves::toString) {
 NAPI_METHOD(CompoundCurveCurves::count) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
 
   return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumCurves());
@@ -95,7 +95,7 @@ NAPI_METHOD(CompoundCurveCurves::get) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
 
   int i;
@@ -133,7 +133,7 @@ NAPI_METHOD(CompoundCurveCurves::get) {
 NAPI_METHOD(CompoundCurveCurves::add) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
 
   SimpleCurve *ring;
@@ -148,7 +148,7 @@ NAPI_METHOD(CompoundCurveCurves::add) {
     int length = array.Length();
     for (int i = 0; i < length; i++) {
       Napi::Value element = array.As<Napi::Object>().Get(i);
-      if (IS_WRAPPED(element, SimpleCurve)) {
+      if (node_gdal::IsInstanceOf<SimpleCurve>(element)) {
         ring = node_gdal::UnwrapWrapped<SimpleCurve>(element.As<Napi::Object>());
         OGRErr err = geom->get()->addCurve(ring->get());
         if (err) {
@@ -160,7 +160,7 @@ NAPI_METHOD(CompoundCurveCurves::add) {
         return node_gdal::napi_env().Undefined();
       }
     }
-  } else if (IS_WRAPPED(info[0], SimpleCurve)) {
+  } else if (node_gdal::IsInstanceOf<SimpleCurve>(info[0])) {
     ring = node_gdal::UnwrapWrapped<SimpleCurve>(info[0].As<Napi::Object>());
     OGRErr err = geom->get()->addCurve(ring->get());
     if (err) {

@@ -1103,7 +1103,7 @@ struct intersectionBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-    Geometry *x = NULL;
+    Geometry *x = nullptr;
 
     if (!args.getWrapped(0, "geometry to use for intersection", "Geometry", x)) return args.failed();
 
@@ -1156,7 +1156,7 @@ struct unionGeometryBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-    Geometry *x = NULL;
+    Geometry *x = nullptr;
 
     if (!args.getWrapped(0, "geometry to use for union", "Geometry", x)) return args.failed();
 
@@ -1209,7 +1209,7 @@ struct differenceBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-    Geometry *x = NULL;
+    Geometry *x = nullptr;
 
     if (!args.getWrapped(0, "geometry to use for difference", "Geometry", x)) return args.failed();
 
@@ -1262,7 +1262,7 @@ struct symDifferenceBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-    Geometry *x = NULL;
+    Geometry *x = nullptr;
 
     if (!args.getWrapped(0, "geometry to use for symDifference", "Geometry", x)) return args.failed();
 
@@ -1527,7 +1527,7 @@ struct exportToWKTBody : node_gdal::AsyncMethodBody {
     uv_sem_t *async_lock = geom->lock();
     GDALAsyncableJob<char *> job(0);
     job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-      char *text = NULL;
+      char *text = nullptr;
       uv_sem_wait(async_lock);
       OGRErr err = gdal_geom->exportToWkt(&text);
       uv_sem_post(async_lock);
@@ -2076,18 +2076,18 @@ struct createFromWktBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     std::string *wkt_string = new std::string;
-    SpatialReference *srs = NULL;
+    SpatialReference *srs = nullptr;
 
     if (!args.get(0, "wkt", *wkt_string)) return args.failed();
     if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
 
-    OGRSpatialReference *ogr_srs = NULL;
+    OGRSpatialReference *ogr_srs = nullptr;
     if (srs) { ogr_srs = srs->get(); }
 
     GDALAsyncableJob<OGRGeometry *> job(0);
     job.main = [wkt_string, ogr_srs](const GDALExecutionProgress &) {
       std::unique_ptr<std::string> wkt_string_ptr(wkt_string);
-      OGRGeometry *geom = NULL;
+      OGRGeometry *geom = nullptr;
       OGRChar *wkt = (OGRChar *)wkt_string->c_str();
       OGRErr err = OGRGeometryFactory::createFromWkt(&wkt, ogr_srs, &geom);
       if (err) throw GDALError(getOGRErrMsg(err));
@@ -2137,7 +2137,7 @@ struct createFromWkbBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     std::string wkb_string;
-    SpatialReference *srs = NULL;
+    SpatialReference *srs = nullptr;
 
     Napi::Object wkb_obj;
     if (!args.get(0, "wkb", wkb_obj)) return args.failed();
@@ -2152,12 +2152,12 @@ struct createFromWkbBody : node_gdal::AsyncMethodBody {
     unsigned char *data = (unsigned char *)wkb_obj.As<Napi::Buffer<uint8_t>>().Data();
     size_t length = wkb_obj.As<Napi::Buffer<uint8_t>>().Length();
 
-    OGRSpatialReference *ogr_srs = NULL;
+    OGRSpatialReference *ogr_srs = nullptr;
     if (srs) { ogr_srs = srs->get(); }
 
     GDALAsyncableJob<OGRGeometry *> job(0);
     job.main = [data, length, ogr_srs](const GDALExecutionProgress &) {
-      OGRGeometry *geom = NULL;
+      OGRGeometry *geom = nullptr;
       OGRErr err = OGRGeometryFactory::createFromWkb(data, ogr_srs, &geom, length);
       if (err) throw GDALError(getOGRErrMsg(err));
       return geom;
@@ -2339,8 +2339,8 @@ NAPI_GETTER(Geometry::srsGetter) {
 NAPI_SETTER(Geometry::srsSetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  OGRSpatialReference *srs = NULL;
-  if (IS_WRAPPED(value, SpatialReference)) {
+  OGRSpatialReference *srs = nullptr;
+  if (node_gdal::IsInstanceOf<SpatialReference>(value)) {
     SpatialReference *srs_obj = node_gdal::UnwrapWrapped<SpatialReference>(value.As<Napi::Object>());
     srs = srs_obj->get();
   } else if (!value.IsNull() && !value.IsUndefined()) {

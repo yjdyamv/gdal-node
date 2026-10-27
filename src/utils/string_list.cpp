@@ -2,7 +2,7 @@
 
 namespace node_gdal {
 
-StringList::StringList() : list(NULL), strlist(NULL) {
+StringList::StringList() : list(nullptr), strlist(nullptr) {
 }
 
 StringList::~StringList() {
@@ -25,7 +25,7 @@ int StringList::parse(Napi::Value value) {
       strlist[i] = Stringify(array.As<Napi::Object>().Get(i));
       list[i] = (char *)strlist[i].c_str();
     }
-    list[i] = NULL;
+    list[i] = nullptr;
   } else if (value.IsObject()) {
     Napi::Object obj = value.As<Napi::Object>();
     Napi::Array keys = obj.GetPropertyNames();
@@ -39,7 +39,7 @@ int StringList::parse(Napi::Value value) {
       strlist[i] = key + "=" + val;
       list[i] = (char *)strlist[i].c_str();
     }
-    list[i] = NULL;
+    list[i] = nullptr;
   } else {
     Napi::TypeError::New(value.Env(), "String list must be an array or object").ThrowAsJavaScriptException();
     return 1;

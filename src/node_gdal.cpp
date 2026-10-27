@@ -72,7 +72,7 @@
 
 namespace node_gdal {
 
-FILE *log_file = NULL;
+FILE *log_file = nullptr;
 bool eventLoopWarn = true;
 
 static NAPI_GETTER(LastErrorGetter) {
@@ -153,7 +153,7 @@ struct gdal_openBody : node_gdal::AsyncMethodBody {
     GDALAsyncableJob<GDALDataset *> job(0);
     job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
     job.main = [path, flags](const GDALExecutionProgress &) {
-      GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), flags, NULL, NULL, NULL);
+      GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), flags, nullptr, nullptr, nullptr);
       if (!ds) throw GDALError::fromGDAL();
       return ds;
     };
@@ -203,7 +203,7 @@ static NAPI_METHOD(StopLogging) {
 #ifdef ENABLE_LOGGING
   if (log_file) {
     fclose(log_file);
-    log_file = NULL;
+    log_file = nullptr;
   }
 #endif
 
@@ -249,7 +249,7 @@ static NAPI_METHOD(setConfigOption) {
     std::string val = info[1].As<Napi::String>().Utf8Value();
     CPLSetConfigOption(name.c_str(), val.c_str());
   } else if (info[1].IsNull() || info[1].IsUndefined()) {
-    CPLSetConfigOption(name.c_str(), NULL);
+    CPLSetConfigOption(name.c_str(), nullptr);
   } else {
     Napi::Error::New(info.Env(), "value must be a string or null").ThrowAsJavaScriptException();
     return info.Env().Undefined();
@@ -264,7 +264,7 @@ static NAPI_METHOD(getConfigOption) {
   std::string name;
   if (!args.get(0, "name", name)) return args.failed();
 
-  return SafeString::New(CPLGetConfigOption(name.c_str(), NULL));
+  return SafeString::New(CPLGetConfigOption(name.c_str(), nullptr));
 }
 
 /**

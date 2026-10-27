@@ -65,13 +65,13 @@ CPLErr GDALReprojectImageMulti(
 
   hTransformArg = GDALCreateGenImgProjTransformer(hSrcDS, pszSrcWKT, hDstDS, pszDstWKT, TRUE, 1000.0, 0);
 
-  if (hTransformArg == NULL) return CE_Failure;
+  if (hTransformArg == nullptr) return CE_Failure;
 
   /* -------------------------------------------------------------------- */
   /*      Create a copy of the user provided options, or a defaulted      */
   /*      options structure.                                              */
   /* -------------------------------------------------------------------- */
-  if (psOptions == NULL)
+  if (psOptions == nullptr)
     psWOptions = GDALCreateWarpOptions();
   else
     psWOptions = GDALCloneWarpOptions(psOptions);
@@ -123,7 +123,7 @@ CPLErr GDALReprojectImageMulti(
 
     dfNoDataValue = GDALGetRasterNoDataValue(hBand, &bGotNoData);
     if (bGotNoData) {
-      if (psWOptions->padfSrcNoDataReal == NULL) {
+      if (psWOptions->padfSrcNoDataReal == nullptr) {
         int ii;
 
         psWOptions->padfSrcNoDataReal = (double *)CPLMalloc(sizeof(double) * psWOptions->nBandCount);
@@ -144,7 +144,7 @@ CPLErr GDALReprojectImageMulti(
 
     dfNoDataValue = GDALGetRasterNoDataValue(hBand, &bGotNoData);
     if (bGotNoData) {
-      if (psWOptions->padfDstNoDataReal == NULL) {
+      if (psWOptions->padfDstNoDataReal == nullptr) {
         int ii;
 
         psWOptions->padfDstNoDataReal = (double *)CPLMalloc(sizeof(double) * psWOptions->nBandCount);
@@ -468,7 +468,7 @@ struct suggestedWarpOutputBody : node_gdal::AsyncMethodBody {
 
       void *hTransformArg;
       void *hGenTransformArg =
-        GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), NULL, t_srs_str.c_str(), TRUE, 1000.0, 0);
+        GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), nullptr, t_srs_str.c_str(), TRUE, 1000.0, 0);
 
       if (!hGenTransformArg) { throw GDALError::fromGDAL(); }
 

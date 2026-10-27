@@ -36,7 +36,7 @@ DatasetBands::DatasetBands(const Napi::CallbackInfo &info) : GDALObject<DatasetB
     Napi::Error::New(info.Env(), "Cannot create DatasetBands directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 DatasetBands::~DatasetBands() {
@@ -95,7 +95,7 @@ struct getBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -157,7 +157,7 @@ struct createBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -235,7 +235,7 @@ struct countBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -270,7 +270,7 @@ GDAL_ASYNC_METHOD(DatasetBands::count, countBody)
  * @type {Dataset}
  */
 NAPI_GETTER(DatasetBands::dsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "parent_");
+  return node_gdal::get_private(info.This(), "parent_");
 }
 
 } // namespace node_gdal

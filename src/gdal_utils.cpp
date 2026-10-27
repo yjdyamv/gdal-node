@@ -92,8 +92,8 @@ struct translateBody : node_gdal::AsyncMethodBody {
           args.from(options, "abort_signal", abort_signal))) {
       return args.failed();
     }
-    NODE_UNWRAP_CHECK(Dataset, src, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src, "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     if (!cli_args.IsEmpty())
       for (unsigned i = 0; i < cli_args.Length(); ++i) {
@@ -186,7 +186,7 @@ struct vectorTranslateBody : node_gdal::AsyncMethodBody {
       if (!args.get(0, "dst", dst_filename)) return args.failed();
     } else if (info[0].IsObject()) {
       if (!args.getWrapped(0, "dst", "Dataset", dst_ds)) return args.failed();
-      GDAL_RAW_CHECK(GDALDataset *, dst_ds, _dst_raw);
+      GDALDataset * _dst_raw = node_gdal::raw_or_throw<GDALDataset *>(dst_ds, "GDALDataset");
       dst_raw = _dst_raw;
     } else {
       Napi::Error::New(node_gdal::napi_env(), "\"dst\" must be an object or a gdal.Dataset").ThrowAsJavaScriptException();
@@ -195,8 +195,8 @@ struct vectorTranslateBody : node_gdal::AsyncMethodBody {
 
     Napi::Object src;
     if (!args.get(1, "src", src)) return args.failed();
-    NODE_UNWRAP_CHECK(Dataset, src, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src, "Dataset");
+    GDALDataset * src_raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     Napi::Array cli_args;
     if (!args.optional(2, "args", cli_args)) return args.failed();
@@ -288,8 +288,8 @@ struct infoBody : node_gdal::AsyncMethodBody {
 
     Napi::Object src;
     if (!args.get(0, "src", src)) return args.failed();
-    NODE_UNWRAP_CHECK(Dataset, src, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src, "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     Napi::Array cli_args;
     if (!args.optional(1, "args", cli_args)) return args.failed();
@@ -377,8 +377,8 @@ struct warpBody : node_gdal::AsyncMethodBody {
     if (!args.optional(1, "dst_ds", dst_ds)) return args.failed();
     GDALDatasetH gdal_dst_ds = nullptr;
     if (!dst_ds.IsEmpty()) {
-      NODE_UNWRAP_CHECK(Dataset, dst_ds, ds);
-      GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+      Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(dst_ds, "Dataset");
+      GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
       gdal_dst_ds = GDALDatasetToHandle(raw);
       uids.push_back(ds->uid);
     }
@@ -396,8 +396,8 @@ struct warpBody : node_gdal::AsyncMethodBody {
     }
     auto gdal_src_ds = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
     for (unsigned i = 0; i < src_ds.Length(); ++i) {
-      NODE_UNWRAP_CHECK(Dataset, src_ds.As<Napi::Object>().Get(i).As<Napi::Object>(), ds);
-      GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+      Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src_ds.As<Napi::Object>().Get(i).As<Napi::Object>(), "Dataset");
+      GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
       gdal_src_ds.get()[i] = GDALDatasetToHandle(raw);
       uids.push_back(ds->uid);
     }
@@ -536,8 +536,8 @@ struct buildvrtBody : node_gdal::AsyncMethodBody {
       gdalSrcDs = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
       for (unsigned i = 0; i < src_ds.Length(); ++i) {
         Napi::Value v = src_ds.As<Napi::Object>().Get(i);
-        NODE_UNWRAP_CHECK(Dataset, v, ds);
-        GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+        Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(v, "Dataset");
+        GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
         gdalSrcDs.get()[i] = GDALDatasetToHandle(raw);
         uids.push_back(ds->uid);
       }
@@ -658,8 +658,8 @@ struct rasterizeBody : node_gdal::AsyncMethodBody {
       if (!args.get(0, "dst", dst_path)) return args.failed();
     } else if (info.Length() > 1 && info[0].IsObject()) {
       if (!args.get(0, "dst", dst_ds)) return args.failed();
-      NODE_UNWRAP_CHECK(Dataset, dst_ds, dst_obj);
-      GDAL_RAW_CHECK(GDALDataset *, dst_obj, _dst_raw);
+      Dataset *dst_obj = node_gdal::unwrap_or_throw<Dataset>(dst_ds, "Dataset");
+      GDALDataset * _dst_raw = node_gdal::raw_or_throw<GDALDataset *>(dst_obj, "GDALDataset");
       dst_raw = _dst_raw;
     } else {
       Napi::Error::New(node_gdal::napi_env(), "dst must be given").ThrowAsJavaScriptException();
@@ -668,8 +668,8 @@ struct rasterizeBody : node_gdal::AsyncMethodBody {
 
     Napi::Object src;
     if (!args.get(1, "src", src)) return args.failed();
-    NODE_UNWRAP_CHECK(Dataset, src, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src, "Dataset");
+    GDALDataset * src_raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     Napi::Array cli_args;
     if (!args.optional(2, "args", cli_args)) return args.failed();
@@ -774,8 +774,8 @@ struct demBody : node_gdal::AsyncMethodBody {
 
     Napi::Object src;
     if (!args.get(1, "src", src)) return args.failed();
-    NODE_UNWRAP_CHECK(Dataset, src, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(src, "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     std::string mode;
     if (!args.get(2, "mode", mode)) return args.failed();

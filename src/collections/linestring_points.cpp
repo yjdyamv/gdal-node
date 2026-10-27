@@ -37,7 +37,7 @@ LineStringPoints::LineStringPoints(const Napi::CallbackInfo &info) : GDALObject<
     Napi::Error::New(info.Env(), "Cannot create LineStringPoints directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 LineStringPoints::~LineStringPoints() {
@@ -72,7 +72,7 @@ NAPI_METHOD(LineStringPoints::toString) {
 NAPI_METHOD(LineStringPoints::count) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumPoints());
@@ -88,7 +88,7 @@ NAPI_METHOD(LineStringPoints::count) {
 NAPI_METHOD(LineStringPoints::reverse) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   geom->get()->reversePoints();
@@ -108,7 +108,7 @@ NAPI_METHOD(LineStringPoints::resize) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   int count;
@@ -132,7 +132,7 @@ NAPI_METHOD(LineStringPoints::get) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   OGRPoint pt;
@@ -179,7 +179,7 @@ NAPI_METHOD(LineStringPoints::set) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   int i;
@@ -199,7 +199,7 @@ NAPI_METHOD(LineStringPoints::set) {
       Napi::Error::New(node_gdal::napi_env(), "Point or object expected for second argument").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
-    if (IS_WRAPPED(info[1], Point)) {
+    if (node_gdal::IsInstanceOf<Point>(info[1])) {
       // set from Point object
       Point *pt = node_gdal::UnwrapWrapped<Point>(info[1].As<Napi::Object>());
       geom->get()->setPoint(i, pt->get());
@@ -284,7 +284,7 @@ NAPI_METHOD(LineStringPoints::add) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
 
   int n = info.Length();
@@ -297,7 +297,7 @@ NAPI_METHOD(LineStringPoints::add) {
       Napi::Error::New(node_gdal::napi_env(), "Point, object, or array of points expected").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
-    if (IS_WRAPPED(info[0], Point)) {
+    if (node_gdal::IsInstanceOf<Point>(info[0])) {
       // set from Point object
       Point *pt = node_gdal::UnwrapWrapped<Point>(info[0].As<Napi::Object>());
       geom->get()->addPoint(pt->get());
@@ -312,7 +312,7 @@ NAPI_METHOD(LineStringPoints::add) {
           return node_gdal::napi_env().Undefined();
         }
         Napi::Object element_obj = element.As<Napi::Object>();
-        if (IS_WRAPPED(element_obj, Point)) {
+        if (node_gdal::IsInstanceOf<Point>(element_obj)) {
           // set from Point object
           Point *pt = node_gdal::UnwrapWrapped<Point>(element_obj);
           geom->get()->addPoint(pt->get());

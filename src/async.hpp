@@ -59,7 +59,15 @@ template <class Impl> Napi::Value AsyncMethod(const Napi::CallbackInfo &info, st
   // Without a callback the method returns a promise, so the failures have to
   // reject it instead of being thrown at the caller
   Napi::Env env = info.Env();
-  Napi::Value result = Impl::run(info, std::true_type{});
+  Napi::Value result;
+  try {
+    result = Impl::run(info, std::true_type{});
+  } catch (const GDALError &error) {
+    Napi::Promise::Deferred deferred(env);
+    Napi::Value js_error = node_gdal::toJS(env, error).Value();
+    deferred.Reject(js_error);
+    return deferred.Promise();
+  }
   if (!env.IsExceptionPending()) { return result; }
 
   napi_value exception = nullptr;

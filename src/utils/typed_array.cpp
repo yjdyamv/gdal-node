@@ -194,12 +194,12 @@ template <typename T> static void *validate(Napi::Object obj, GDALDataType type,
   size_t byte_length = 0;
 
   bool is_dataview = false;
-  if (napi_is_dataview(napiEnv, value, &is_dataview) != napi_ok) return NULL;
+  if (napi_is_dataview(napiEnv, value, &is_dataview) != napi_ok) return nullptr;
 
   if (is_dataview) {
     napi_value arraybuffer = nullptr;
     size_t byte_offset = 0;
-    if (napi_get_dataview_info(napiEnv, value, &byte_length, &data, &arraybuffer, &byte_offset) != napi_ok) return NULL;
+    if (napi_get_dataview_info(napiEnv, value, &byte_length, &data, &arraybuffer, &byte_offset) != napi_ok) return nullptr;
   } else {
     napi_typedarray_type array_type;
     size_t element_length = 0;
@@ -207,11 +207,11 @@ template <typename T> static void *validate(Napi::Object obj, GDALDataType type,
     napi_value arraybuffer = nullptr;
     if (napi_get_typedarray_info(napiEnv, value, &array_type, &element_length, &data, &arraybuffer, &byte_offset) !=
       napi_ok)
-      return NULL;
+      return nullptr;
     byte_length = element_length * sizeof(T);
   }
 
-  if (TypedArray::ValidateLength(byte_length / sizeof(T), min_length)) return NULL;
+  if (TypedArray::ValidateLength(byte_length / sizeof(T), min_length)) return nullptr;
   return data;
 }
 
@@ -222,7 +222,7 @@ void *TypedArray::Validate(Napi::Object obj, GDALDataType type, int64_t min_leng
   if (src_type == GDT_Unknown) {
     Napi::TypeError::New(node_gdal::napi_env(), "Unable to identify GDAL datatype of passed array object")
       .ThrowAsJavaScriptException();
-    return NULL;
+    return nullptr;
   }
   if (src_type != type) {
     std::ostringstream ss;
@@ -230,7 +230,7 @@ void *TypedArray::Validate(Napi::Object obj, GDALDataType type, int64_t min_leng
        << "input: " << GDALGetDataTypeName(src_type) << ", target: " << GDALGetDataTypeName(type) << ")";
 
     Napi::TypeError::New(node_gdal::napi_env(), ss.str().c_str()).ThrowAsJavaScriptException();
-    return NULL;
+    return nullptr;
   }
   switch (type) {
     case GDT_Byte: return validate<GByte>(obj, type, min_length);
@@ -249,7 +249,7 @@ void *TypedArray::Validate(Napi::Object obj, GDALDataType type, int64_t min_leng
     case GDT_Float64: return validate<double>(obj, type, min_length);
     default:
       Napi::Error::New(node_gdal::napi_env(), "Unsupported array type").ThrowAsJavaScriptException();
-      return NULL;
+      return nullptr;
   }
 }
 

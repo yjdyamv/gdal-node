@@ -48,7 +48,6 @@ deps/libnetcdf/netcdf*.tar.gz
 deps/libaec/libaec*.tar.gz
 deps/muparser/muparser*.tar.gz
 lib/binding
-lib/index.d.ts
 doc
 /coverage
 yarn.lock
@@ -229,3 +228,6 @@ deps/libsqlite/sqlite/*.1
 deps/libsqlite/sqlite/*.rc
 deps/libsqlite/sqlite/*.cs
 deps/libsqlite/sqlite/tea
+
+# a bare `npx yatag` writes here, the real typings are built by scripts/generate-typings.js
+lib/index.generated.d.ts

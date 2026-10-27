@@ -67,7 +67,7 @@ Dataset::Dataset(const Napi::CallbackInfo &info) : GDALObject<Dataset>(info), ui
 
   // Every Dataset carries its collections and, when it is a dependent dataset,
   // a reference on its parent so that the GC cannot collect it
-  GDAL_SET_PRIVATE(info.This(), "layers_", DatasetLayers::New(info.This()));
+  node_gdal::set_private(info.This(), "layers_", DatasetLayers::New(info.This()));
 
   Napi::Value bandsObj;
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
@@ -81,8 +81,8 @@ Dataset::Dataset(const Napi::CallbackInfo &info) : GDALObject<Dataset>(info), ui
     bandsObj = info.Env().Null();
   }
 #endif
-  GDAL_SET_PRIVATE(info.This(), "bands_", bandsObj);
-  if (parent_ds) GDAL_SET_PRIVATE(info.This(), "parent_", object_store().get(parent_ds));
+  node_gdal::set_private(info.This(), "bands_", bandsObj);
+  if (parent_ds) node_gdal::set_private(info.This(), "parent_", object_store().get(parent_ds));
 }
 Dataset::~Dataset() {
   // Destroy at garbage collection time if not already explicitly destroyed
@@ -138,7 +138,7 @@ void Dataset::dispose(bool manual) {
 
     LOG("Disposed Dataset [%p]", this_dataset);
 
-    this_dataset = NULL;
+    this_dataset = nullptr;
   }
 }
 
@@ -213,8 +213,8 @@ namespace {
 struct getMetadataBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
     Args args(info);
-    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(info.This(), "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     std::string domain("");
     if (!args.optional(0, "domain", domain)) return args.failed();
@@ -260,8 +260,8 @@ namespace {
 struct setMetadataBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
     Args args(info);
-    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(info.This(), "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     auto options = make_shared<StringList>();
     if (info.Length() == 0 || options->parse(info[0])) {
@@ -393,8 +393,8 @@ namespace {
 
 struct flushBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
-    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(info.This(), "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
     GDALAsyncableJob<int> job(ds->uid);
     job.main = [raw](const GDALExecutionProgress &) {
       raw->FlushCache();
@@ -464,17 +464,17 @@ struct executeSQLBody : node_gdal::AsyncMethodBody {
 
     std::string sql;
     std::string sql_dialect;
-    Geometry *spatial_filter = NULL;
+    Geometry *spatial_filter = nullptr;
 
     if (!args.get(0, "sql text", sql)) return args.failed();
     if (!args.optionalWrapped(1, "spatial filter geometry", "Geometry", spatial_filter)) return args.failed();
     if (!args.optional(2, "sql dialect", sql_dialect)) return args.failed();
 
     GDALAsyncableJob<OGRLayer *> job(ds->uid);
-    OGRGeometry *geom_filter = spatial_filter ? spatial_filter->get() : NULL;
+    OGRGeometry *geom_filter = spatial_filter ? spatial_filter->get() : nullptr;
     job.main = [raw, sql, sql_dialect, geom_filter](const GDALExecutionProgress &) {
       CPLErrorReset();
-      OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? NULL : sql_dialect.c_str());
+      OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? nullptr : sql_dialect.c_str());
       if (layer == nullptr) throw GDALError::fromGDAL();
       return layer;
     };
@@ -692,8 +692,8 @@ struct buildOverviewsBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
     Args args(info);
 
-    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(info.This(), "Dataset");
+    GDALDataset * raw = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
 
     std::string resampling = "";
     Napi::Array overviews;
@@ -1049,7 +1049,7 @@ NAPI_SETTER(Dataset::srsSetter) {
 
   GDALDataset *raw = ds->get();
   std::string wkt("");
-  if (IS_WRAPPED(value, SpatialReference)) {
+  if (node_gdal::IsInstanceOf<SpatialReference>(value)) {
 
     SpatialReference *srs_obj = node_gdal::UnwrapWrapped<SpatialReference>(value.As<Napi::Object>());
     OGRSpatialReference *srs = srs_obj->get();
@@ -1119,7 +1119,7 @@ NAPI_SETTER(Dataset::geoTransformSetter) {
  * @type {DatasetBands}
  */
 NAPI_GETTER(Dataset::bandsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "bands_");
+  return node_gdal::get_private(info.This(), "bands_");
 }
 
 /**
@@ -1131,7 +1131,7 @@ NAPI_GETTER(Dataset::bandsGetter) {
  * @type {DatasetLayers}
  */
 NAPI_GETTER(Dataset::layersGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "layers_");
+  return node_gdal::get_private(info.This(), "layers_");
 }
 
 /**
@@ -1143,11 +1143,11 @@ NAPI_GETTER(Dataset::layersGetter) {
  * @type {Group}
  */
 NAPI_GETTER(Dataset::rootGetter) {
-  Napi::Value rootObj = GDAL_GET_PRIVATE(info.This(), "root_");
+  Napi::Value rootObj = node_gdal::get_private(info.This(), "root_");
   if (rootObj.IsUndefined()) {
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
-    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, gdal_ds);
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(info.This(), "Dataset");
+    GDALDataset * gdal_ds = node_gdal::raw_or_throw<GDALDataset *>(ds, "GDALDataset");
     AsyncGuard lock({ds->uid}, eventLoopWarn);
     std::shared_ptr<GDALGroup> root = gdal_ds->GetRootGroup();
     if (root == nullptr) {
@@ -1158,7 +1158,7 @@ NAPI_GETTER(Dataset::rootGetter) {
       rootObj = Group::New(root, info.This().As<Napi::Object>());
     }
 #endif
-    GDAL_SET_PRIVATE(info.This(), "root_", rootObj);
+    node_gdal::set_private(info.This(), "root_", rootObj);
   }
   return rootObj;
 }

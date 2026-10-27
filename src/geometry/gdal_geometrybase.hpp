@@ -57,20 +57,15 @@ template <typename OGRT> inline void free_geometry(void *ptr) {
  * Napi::ObjectWrap needs, so the CRTP maps onto it one to one.
  */
 
-#define UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(geom)                                                                         \
-  {                                                                                                                    \
-    if (geom->this_.owned()) geom->setExternalMemory(geom->this_->WkbSize());                                          \
-  }
-
 // OGRSimpleCurve and OGRGeometry are abstract (Geometry/SimpleCurve only exist
 // so that the concrete classes can be `instanceof` them) - nothing to construct
-template <typename OGRT> inline OGRT *MakeGeometry() {
+template <typename OGRT> [[nodiscard]] inline OGRT *MakeGeometry() {
   return new OGRT();
 }
-template <> inline OGRSimpleCurve *MakeGeometry<OGRSimpleCurve>() {
+template <> [[nodiscard]] inline OGRSimpleCurve *MakeGeometry<OGRSimpleCurve>() {
   return nullptr;
 }
-template <> inline OGRGeometry *MakeGeometry<OGRGeometry>() {
+template <> [[nodiscard]] inline OGRGeometry *MakeGeometry<OGRGeometry>() {
   return nullptr;
 }
 
@@ -90,6 +85,14 @@ template <class T, class OGRT> class GeometryBase : public GDALObject<T> {
   }
   inline bool isAlive() {
     return this_;
+  }
+
+  //
+  // A geometry which the binding owns reports its size to V8; a copy reports
+  // the size of the buffer it was copied into, not the size of the geometry
+  //
+  inline void updateAmountOfGeometryMemory() {
+    if (this_.owned()) this->setExternalMemory(this_->WkbSize());
   }
 
     protected:
@@ -126,7 +129,7 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
   T *wrapped = node_gdal::UnwrapWrapped<T>(obj);
 
-  UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(wrapped);
+  wrapped->updateAmountOfGeometryMemory();
 
   return obj;
 }

@@ -38,7 +38,7 @@ FeatureFields::FeatureFields(const Napi::CallbackInfo &info) : GDALObject<Featur
     Napi::Error::New(info.Env(), "Cannot create FeatureFields directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 FeatureFields::~FeatureFields() {
@@ -118,7 +118,7 @@ NAPI_METHOD(FeatureFields::set) {
   unsigned int i, n, n_fields_set;
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -184,7 +184,7 @@ NAPI_METHOD(FeatureFields::set) {
 
   } else if (info.Length() == 2) {
     // set(name|index, value)
-    ARG_FIELD_ID(0, f->get(), field_index);
+    field_index = node_gdal::parse_field_index(info[0], f->get());
 
     // set field value
     if (setField(f->get(), field_index, info[1])) {
@@ -219,7 +219,7 @@ NAPI_METHOD(FeatureFields::reset) {
   unsigned int i, n;
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -277,7 +277,7 @@ NAPI_METHOD(FeatureFields::reset) {
 NAPI_METHOD(FeatureFields::count) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -304,7 +304,7 @@ NAPI_METHOD(FeatureFields::indexOf) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -329,7 +329,7 @@ NAPI_METHOD(FeatureFields::indexOf) {
 NAPI_METHOD(FeatureFields::toObject) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -373,7 +373,7 @@ NAPI_METHOD(FeatureFields::toObject) {
 NAPI_METHOD(FeatureFields::toArray) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -439,7 +439,7 @@ Napi::Value FeatureFields::get(OGRFeature *f, int field_index) {
 NAPI_METHOD(FeatureFields::get) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -451,8 +451,7 @@ NAPI_METHOD(FeatureFields::get) {
     return node_gdal::napi_env().Undefined();
   }
 
-  int field_index;
-  ARG_FIELD_ID(0, f->get(), field_index);
+  int field_index = node_gdal::parse_field_index(info[0], f->get());
 
   try {
     Napi::Value result = FeatureFields::get(f->get(), field_index);
@@ -473,7 +472,7 @@ NAPI_METHOD(FeatureFields::get) {
 NAPI_METHOD(FeatureFields::getNames) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
   if (!f->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
@@ -611,7 +610,7 @@ Napi::Value FeatureFields::getFieldAsDateTime(OGRFeature *feature, int field_ind
  * @type {Feature}
  */
 NAPI_GETTER(FeatureFields::featureGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "parent_");
+  return node_gdal::get_private(info.This(), "parent_");
 }
 
 } // namespace node_gdal

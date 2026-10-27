@@ -68,7 +68,7 @@ struct fillNodataBody : node_gdal::AsyncMethodBody {
     Args args(info);
     Napi::Object obj;
     RasterBand *src;
-    RasterBand *mask = NULL;
+    RasterBand *mask = nullptr;
     double search_dist;
     int smooth_iterations = 0;
 
@@ -90,7 +90,7 @@ struct fillNodataBody : node_gdal::AsyncMethodBody {
     if (mask) job.persist(mask->Value());
     job.main = [gdal_src, gdal_mask, search_dist, smooth_iterations](const GDALExecutionProgress &) {
       CPLErrorReset();
-      CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, NULL, NULL, NULL);
+      CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, nullptr, nullptr, nullptr);
       if (err) { throw GDALError::fromGDAL(); }
       return err;
     };
@@ -177,7 +177,7 @@ struct contourGenerateBody : node_gdal::AsyncMethodBody {
     RasterBand *src;
     Layer *dst;
     double interval = 100, base = 0;
-    double *fixed_levels = NULL;
+    double *fixed_levels = nullptr;
     DoubleList fixed_level_array;
     int n_fixed_levels = 0;
     int use_nodata = 0;
@@ -317,7 +317,7 @@ struct sieveFilterBody : node_gdal::AsyncMethodBody {
     Napi::Object obj;
     RasterBand *src;
     RasterBand *dst;
-    RasterBand *mask = NULL;
+    RasterBand *mask = nullptr;
     int threshold;
     int connectedness = 4;
     Napi::FunctionReference *progress_cb = nullptr;
@@ -361,7 +361,7 @@ struct sieveFilterBody : node_gdal::AsyncMethodBody {
           gdal_dst,
           threshold,
           connectedness,
-          NULL,
+          nullptr,
           interruptible ? ProgressTrampoline : nullptr,
           interruptible ? (void *)&progress : nullptr);
         if (err) { throw GDALError::fromGDAL(); }
@@ -415,7 +415,7 @@ struct checksumImageBody : node_gdal::AsyncMethodBody {
     int x = 0, y = 0, w, h, bandw, bandh;
 
     if (!args.getWrapped(0, "src", "RasterBand", src)) return args.failed();
-    GDAL_RAW_CHECK(GDALRasterBand *, src, gdal_src);
+    GDALRasterBand * gdal_src = node_gdal::raw_or_throw<GDALRasterBand *>(src, "GDALRasterBand");
 
     w = bandw = src->get()->GetXSize();
     h = bandh = src->get()->GetYSize();
@@ -522,11 +522,11 @@ struct polygonizeBody : node_gdal::AsyncMethodBody {
     Args args(info);
     Napi::Object obj;
     RasterBand *src;
-    RasterBand *mask = NULL;
+    RasterBand *mask = nullptr;
     Layer *dst;
     int connectedness = 4;
     int pix_val_field = 0;
-    char **papszOptions = NULL;
+    char **papszOptions = nullptr;
     Napi::FunctionReference *progress_cb = nullptr;
     Napi::Value abort_signal;
 

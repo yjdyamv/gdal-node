@@ -14,7 +14,10 @@
 // They are written by hand in lib/types-extra.d.ts and appended here, so that
 // lib/index.d.ts stays a single generated file which typedoc can read.
 //
-// Usage: node scripts/generate-typings.js
+// The result is committed, so `--check` compares it with what the sources say
+// without writing anything: that is what the tests and the CI run.
+//
+// Usage: node scripts/generate-typings.js [--check]
 
 const fs = require('fs')
 const path = require('path')
@@ -32,10 +35,24 @@ execFileSync(process.execPath, [require.resolve('yatag/yatag.js')], {
   stdio: 'inherit'
 })
 
+// the line endings are not a part of the comparison: the file is committed with
+// `eol=crlf` (see .gitattributes) and written with CRLF, but a checkout or an
+// editor which disagrees is not a drift of the declarations
 const read = (file) => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n').replace(/\s*$/, '')
-const declarations = `${read(generated)}\n\n${read(extra)}\n`
-
-fs.writeFileSync(target, declarations.replace(/\n/g, '\r\n'))
+const declarations = read(generated) + '\n\n' + read(extra) + '\n'
 fs.rmSync(generated)
 
-console.log(`${path.relative(root, target)} updated`)
+if (process.argv.includes('--check')) {
+  const current = fs.existsSync(target) ? read(target) : ''
+  if (current !== declarations.replace(/\s*$/, '')) {
+    console.error(
+      path.relative(root, target) + ' is not up to date: run "npm run yatag" and commit the result'
+    )
+    process.exitCode = 1
+  } else {
+    console.log(path.relative(root, target) + ' is up to date')
+  }
+} else {
+  fs.writeFileSync(target, declarations.replace(/\n/g, '\r\n'))
+  console.log(path.relative(root, target) + ' updated')
+}

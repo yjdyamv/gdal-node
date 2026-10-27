@@ -55,7 +55,7 @@ FeatureDefn::FeatureDefn(const Napi::CallbackInfo &info) : GDALObject<FeatureDef
 
   // the fields collection is kept as a private (JS-invisible) property
   Napi::Value fields = FeatureDefnFields::New(info.This());
-  GDAL_SET_PRIVATE(info.This(), "fields_", fields);
+  node_gdal::set_private(info.This(), "fields_", fields);
 }
 
 FeatureDefn::~FeatureDefn() {
@@ -161,7 +161,7 @@ NAPI_GETTER(FeatureDefn::styleIgnoredGetter) {
  * @type {FeatureDefnFields}
  */
 NAPI_GETTER(FeatureDefn::fieldsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "fields_");
+  return node_gdal::get_private(info.This(), "fields_");
 }
 
 NAPI_SETTER(FeatureDefn::geomTypeSetter) {

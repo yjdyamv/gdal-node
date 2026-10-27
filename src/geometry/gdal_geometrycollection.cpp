@@ -96,7 +96,7 @@ GDAL_SYNC_METHOD(GeometryCollection::getLength, getLengthBody)
  * @type {GeometryCollectionChildren}
  */
 NAPI_GETTER(GeometryCollection::childrenGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "children_");
+  return node_gdal::get_private(info.This(), "children_");
 }
 
 } // namespace node_gdal

@@ -60,7 +60,7 @@
     }
   ],
   "scripts": {
-    "test": "npm run lint:js && tsc --noEmit && npm run iterators -- --check && npm run test:parallel && npm run test:stress 20",
+    "test": "npm run lint:js && tsc --noEmit && npm run iterators -- --check && npm run yatag -- --check && npm run test:parallel && npm run test:stress 20",
     "bench": "node bench/streams.js",
     "build": "node scripts/build.mjs",
     "clean": "cmake-js clean",
@@ -92,6 +92,7 @@
     "test:clean": "npx rimraf test/data/*.tmp* test/data/temp/*",
     "test:stress": "node test/stress",
     "test:parallel": "mocha --parallel --jobs 4",
+    "test:coverage": "c8 npm run test:parallel",
     "postpublish": "gh workflow run test-npm.yml -F version=$npm_package_version"
   },
   "dependencies": {

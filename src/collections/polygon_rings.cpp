@@ -34,7 +34,7 @@ PolygonRings::PolygonRings(const Napi::CallbackInfo &info) : GDALObject<PolygonR
     Napi::Error::New(info.Env(), "Cannot create PolygonRings directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 PolygonRings::~PolygonRings() {
@@ -69,7 +69,7 @@ NAPI_METHOD(PolygonRings::toString) {
 NAPI_METHOD(PolygonRings::count) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
 
   int i = geom->get()->getExteriorRing() ? 1 : 0;
@@ -98,7 +98,7 @@ NAPI_METHOD(PolygonRings::get) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
 
   int i;
@@ -143,7 +143,7 @@ NAPI_METHOD(PolygonRings::get) {
 NAPI_METHOD(PolygonRings::add) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
 
   LinearRing *ring;
@@ -158,7 +158,7 @@ NAPI_METHOD(PolygonRings::add) {
     int length = array.Length();
     for (int i = 0; i < length; i++) {
       Napi::Value element = array.As<Napi::Object>().Get(i);
-      if (IS_WRAPPED(element, LinearRing)) {
+      if (node_gdal::IsInstanceOf<LinearRing>(element)) {
         ring = node_gdal::UnwrapWrapped<LinearRing>(element.As<Napi::Object>());
         OGRErr err = geom->get()->addRing(ring->get());
         if (err) {
@@ -170,7 +170,7 @@ NAPI_METHOD(PolygonRings::add) {
         return node_gdal::napi_env().Undefined();
       }
     }
-  } else if (IS_WRAPPED(info[0], LinearRing)) {
+  } else if (node_gdal::IsInstanceOf<LinearRing>(info[0])) {
     ring = node_gdal::UnwrapWrapped<LinearRing>(info[0].As<Napi::Object>());
     OGRErr err = geom->get()->addRing(ring->get());
     if (err) {

@@ -63,7 +63,7 @@ void Driver::dispose() {
     LOG("Disposing GDAL Driver [%p]", this_gdaldriver);
     object_store().dispose(uid);
     LOG("Disposed GDAL Driver [%p]", this_gdaldriver);
-    this_gdaldriver = NULL;
+    this_gdaldriver = nullptr;
   }
 }
 
@@ -301,7 +301,7 @@ struct createCopyBody : node_gdal::AsyncMethodBody {
       Napi::Error::New(info.Env(), "source dataset must be provided").ThrowAsJavaScriptException();
       return info.Env().Undefined();
     }
-    if (IS_WRAPPED(info[1], Dataset)) {
+    if (node_gdal::IsInstanceOf<Dataset>(info[1])) {
       src_dataset = node_gdal::UnwrapWrapped<Dataset>(info[1].As<Napi::Object>());
     } else {
       Napi::Error::New(info.Env(), "source dataset must be a Dataset object").ThrowAsJavaScriptException();
@@ -428,7 +428,7 @@ NAPI_METHOD(Driver::getMetadata) {
   if (!args.optional(0, "domain", domain)) return args.failed();
 
   GDALDriver *raw = driver->getGDALDriver();
-  CSLConstList md = raw->GetMetadata(domain.empty() ? NULL : domain.c_str());
+  CSLConstList md = raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
   result = MajorObject::getMetadata(md);
   return result;
 }
@@ -496,7 +496,7 @@ struct openBody : node_gdal::AsyncMethodBody {
       std::unique_ptr<StringList> options_ptr(options);
       const char *driver_list[2] = {raw->GetDescription(), nullptr};
       CPLErrorReset();
-      GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), NULL);
+      GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), nullptr);
       if (!ds) throw GDALError::fromGDAL();
       return ds;
     };

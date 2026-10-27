@@ -61,8 +61,8 @@ Layer::Layer(const Napi::CallbackInfo &info) : GDALObject<Layer>(info), uid(0), 
     return;
   }
 
-  GDAL_SET_PRIVATE(info.This(), "features_", LayerFeatures::New(info.This()));
-  GDAL_SET_PRIVATE(info.This(), "fields_", LayerFields::New(info.This()));
+  node_gdal::set_private(info.This(), "features_", LayerFeatures::New(info.This()));
+  node_gdal::set_private(info.This(), "fields_", LayerFields::New(info.This()));
 }
 
 Layer::~Layer() {
@@ -77,7 +77,7 @@ void Layer::dispose() {
     object_store().dispose(uid);
 
     LOG("Disposed layer [%p]", this_);
-    this_ = NULL;
+    this_ = nullptr;
   }
 };
 
@@ -121,7 +121,7 @@ Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set) 
   wrapped->parent_uid = parent_uid;
 
   // the layer reads it back in dsGetter, and it also keeps the dataset alive
-  GDAL_SET_PRIVATE(obj, "ds_", ds);
+  node_gdal::set_private(obj, "ds_", ds);
 
   return obj;
 }
@@ -320,14 +320,14 @@ NAPI_METHOD(Layer::setSpatialFilter) {
   }
 
   if (info.Length() == 1) {
-    Geometry *filter = NULL;
+    Geometry *filter = nullptr;
     if (!args.optionalWrapped(0, "filter", "Geometry", filter)) return args.failed();
 
     GDAL_LOCK_PARENT(layer);
     if (filter) {
       layer->this_->SetSpatialFilter(filter->get());
     } else {
-      layer->this_->SetSpatialFilter(NULL);
+      layer->this_->SetSpatialFilter(nullptr);
     }
   } else if (info.Length() == 4) {
     double minX, minY, maxX, maxY;
@@ -385,7 +385,7 @@ NAPI_METHOD(Layer::setAttributeFilter) {
   OGRErr err;
   GDAL_LOCK_PARENT(layer);
   if (filter.empty()) {
-    err = layer->this_->SetAttributeFilter(NULL);
+    err = layer->this_->SetAttributeFilter(nullptr);
   } else {
     err = layer->this_->SetAttributeFilter(filter.c_str());
   }
@@ -421,7 +421,7 @@ false));
  * @type {Dataset}
  */
 NAPI_GETTER(Layer::dsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "ds_");
+  return node_gdal::get_private(info.This(), "ds_");
 }
 
 /**
@@ -528,7 +528,7 @@ NAPI_GETTER(Layer::geomTypeGetter) {
  * @type {LayerFeatures}
  */
 NAPI_GETTER(Layer::featuresGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "features_");
+  return node_gdal::get_private(info.This(), "features_");
 }
 
 /**
@@ -540,7 +540,7 @@ NAPI_GETTER(Layer::featuresGetter) {
  * @type {LayerFields}
  */
 NAPI_GETTER(Layer::fieldsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "fields_");
+  return node_gdal::get_private(info.This(), "fields_");
 }
 
 NAPI_GETTER(Layer::uidGetter) {

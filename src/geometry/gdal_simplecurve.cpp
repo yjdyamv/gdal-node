@@ -110,7 +110,7 @@ GDAL_SYNC_METHOD(SimpleCurve::getLength, getLengthBody)
  * @type {LineStringPoints}
  */
 NAPI_GETTER(SimpleCurve::pointsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "points_");
+  return node_gdal::get_private(info.This(), "points_");
 }
 
 /**
@@ -151,7 +151,7 @@ NAPI_METHOD(SimpleCurve::addSubLineString) {
 
   geom->this_->addSubLineString(other->get(), start, end);
 
-  UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(geom);
+  geom->updateAmountOfGeometryMemory();
 
   return node_gdal::napi_env().Undefined();
 }

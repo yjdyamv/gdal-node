@@ -3,6 +3,7 @@
 
 #include <cpl_error.h>
 #include <gdal_version.h>
+#include <ogr_feature.h>
 #include <functional>
 #include <thread>
 #include <stdio.h>
@@ -438,6 +439,31 @@ template <typename T> inline bool IsInstanceOf(const Napi::Value &obj) {
   return obj.IsObject() && obj.As<Napi::Object>().InstanceOf(T::constructor().Value());
 }
 
+//
+// The wrapped object behind `value`, which must be a `type`: this is what the
+// bodies of the methods start with. It throws instead of returning a value on
+// failure, which the asynchronous path turns into a rejection.
+//
+// `name` is the name of the class as it appears in the message, because a
+// template cannot stringify its own type argument the way the old macro did.
+//
+template <typename T> inline T *unwrap_or_throw(Napi::Value value, const char *name) {
+  if (!IsInstanceOf<T>(value)) throw GDALError(std::string("Object must be a ") + name + " object", "TypeError");
+  T *obj = UnwrapWrapped<T>(value.As<Napi::Object>());
+  if (!obj->isAlive()) throw GDALError(std::string(name) + " object has already been destroyed");
+  return obj;
+}
+
+//
+// The GDAL object behind the handle which `obj->get()` returns, which throws
+// when the object of the parent has been destroyed in the meantime
+//
+template <typename T, typename O> inline T raw_or_throw(const O &obj, const char *name) {
+  T raw = obj->get();
+  if (!obj) throw GDALError(std::string(name) + " object has already been destroyed");
+  return raw;
+}
+
 } // namespace node_gdal
 
 // ----- object base class -------
@@ -531,6 +557,20 @@ inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
 }
 
 //
+// The private property of `obj` which is registered as `name`: this is how the
+// wrapped objects keep their internal state out of sight. `obj` is taken as a
+// `Napi::Value`, because the call sites pass `info.This()` and plain locals
+// alike.
+//
+inline Napi::Value get_private(Napi::Value obj, const char *name) {
+  return obj.As<Napi::Object>().Get(PrivateKey(obj.Env(), name));
+}
+
+inline void set_private(Napi::Value obj, const char *name, Napi::Value value) {
+  obj.As<Napi::Object>().Set(PrivateKey(obj.Env(), name), value);
+}
+
+//
 // Every wrapped class keeps a persistent reference to its constructor, because
 // every object of that class needs it to create a new wrapper. The reference has
 // to outlive the objects, but not the environment: a worker_thread destroys its
@@ -540,12 +580,6 @@ inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
 // EnvContext::constructor().
 //
 } // namespace node_gdal
-
-// `.As<Napi::Object>()` keeps these usable with either an Object or a Value
-// (call sites pass info.This() and plain locals alike)
-#define GDAL_SET_PRIVATE(obj, name, value)                                                                             \
-  (obj).As<Napi::Object>().Set(node_gdal::PrivateKey((obj).Env(), name), value)
-#define GDAL_GET_PRIVATE(obj, name) (obj).As<Napi::Object>().Get(node_gdal::PrivateKey((obj).Env(), name))
 
 namespace node_gdal {
 
@@ -557,11 +591,11 @@ namespace node_gdal {
 // write did not do what it looked like it did.
 //
 inline void set_read_only(Napi::Value obj) {
-  GDAL_SET_PRIVATE(obj, "read_only_", Napi::Boolean::New(obj.Env(), true));
+  set_private(obj, "read_only_", Napi::Boolean::New(obj.Env(), true));
 }
 
 inline bool is_read_only(Napi::Value obj) {
-  Napi::Value flag = GDAL_GET_PRIVATE(obj, "read_only_");
+  Napi::Value flag = get_private(obj, "read_only_");
   return flag.IsBoolean() && flag.As<Napi::Boolean>().Value();
 }
 
@@ -635,7 +669,7 @@ template <typename T> inline Handle<T> TakePendingHandle() {
 
 // Allocates the owning copy of a shared_ptr that a factory hands over; taken
 // back and freed by TakePendingShared().
-template <typename T> inline void *ExportShared(const std::shared_ptr<T> &p) {
+template <typename T> [[nodiscard]] inline void *ExportShared(const std::shared_ptr<T> &p) {
   return new std::shared_ptr<T>(p);
 }
 
@@ -680,8 +714,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 // ----- object property conversion -------
 
-#define GDAL_HAS_PROP(obj, key) obj.HasOwnProperty(Napi::String::New(info.Env(), key))
-
 #define NODE_INT64_FROM_OBJ_OPT(obj, key, var)                                                                         \
   {                                                                                                                    \
     if (obj.HasOwnProperty(Napi::String::New(info.Env(), key))) {                                                       \
@@ -696,26 +728,31 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
 
 // ----- argument conversion -------
 
-#define ARG_FIELD_ID(num, f, var)                                                                                      \
-  {                                                                                                                    \
-    if (info[num].IsString()) {                                                                                        \
-      std::string field_name = info[num].As<Napi::String>().Utf8Value();                                               \
-      var = f->GetFieldIndex(field_name.c_str());                                                                      \
-      if (var == -1) {                                                                                                 \
-        Napi::Error::New(info.Env(), "Specified field name does not exist").ThrowAsJavaScriptException();              \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-    } else if (info[num].IsNumber()) {                                                                                 \
-      var = info[num].As<Napi::Number>().Int32Value();                                                                 \
-      if (var < 0 || var >= f->GetFieldCount()) {                                                                      \
-        Napi::RangeError::New(info.Env(), "Invalid field index").ThrowAsJavaScriptException();                         \
-        return info.Env().Undefined();                                                                                  \
-      }                                                                                                                \
-    } else {                                                                                                           \
-      Napi::TypeError::New(info.Env(), "Field index must be integer or string").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
+namespace node_gdal {
+
+//
+// The index of the field which `value` names, either by name or by position;
+// like the rest of the argument checking, a wrong argument is a `TypeError` or
+// a `RangeError` and not a `GDALError`
+//
+template <typename OGRFT> inline int parse_field_index(Napi::Value value, const OGRFT *defn) {
+  if (value.IsString()) {
+    std::string name = value.As<Napi::String>().Utf8Value();
+    int index = defn->GetFieldIndex(name.c_str());
+    if (index == -1) throw GDALError("Specified field name does not exist");
+    return index;
   }
+
+  if (value.IsNumber()) {
+    int index = value.As<Napi::Number>().Int32Value();
+    if (index < 0 || index >= defn->GetFieldCount()) throw GDALError("Invalid field index", "RangeError");
+    return index;
+  }
+
+  throw GDALError("Field index must be integer or string", "TypeError");
+}
+
+} // namespace node_gdal
 
 // ----- optional argument conversion -------
 
@@ -802,55 +839,6 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
   return NumberArrayToSharedPtr<INPUT, RETURN>(node_gdal::napi_env(), array, count);
 }
 
-// ----- throwing / rejecting -------
-
-#define THROW_OR_REJECT(msg)                                                                                           \
-  if (async) {                                                                                                         \
-    return node_gdal::RejectPromise(info, msg);                                                                        \
-  } else {                                                                                                             \
-    Napi::Error::New(info.Env(), msg).ThrowAsJavaScriptException();                                                    \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define IS_WRAPPED(obj, type) node_gdal::IsInstanceOf<type>(obj)
-
-// NODE_UNWRAP_CHECK returns a value on error, so a setter (which returns void)
-// needs the _VOID spelling
-#define NODE_UNWRAP_CHECK_VOID(type, obj, var)                                                                         \
-  if (!node_gdal::IsInstanceOf<type>(obj)) {                                                                           \
-    Napi::TypeError::New(info.Env(), "Object must be a " #type " object").ThrowAsJavaScriptException();                \
-    return;                                                                                                            \
-  }                                                                                                                    \
-  type *var = node_gdal::UnwrapWrapped<type>(obj.As<Napi::Object>());                                                  \
-  if (!var->isAlive()) {                                                                                               \
-    Napi::Error::New(info.Env(), #type " object has already been destroyed").ThrowAsJavaScriptException();             \
-    return;                                                                                                            \
-  }
-
-#define NODE_UNWRAP_CHECK(type, obj, var)                                                                              \
-  if (!node_gdal::IsInstanceOf<type>(obj)) {                                                                           \
-    Napi::TypeError::New(info.Env(), "Object must be a " #type " object").ThrowAsJavaScriptException();                \
-    return info.Env().Undefined();                                                                                     \
-  }                                                                                                                    \
-  type *var = node_gdal::UnwrapWrapped<type>(obj.As<Napi::Object>());                                                  \
-  if (!var->isAlive()) {                                                                                               \
-    Napi::Error::New(info.Env(), #type " object has already been destroyed").ThrowAsJavaScriptException();             \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_UNWRAP_CHECK_ASYNC(type, obj, var)                                                                        \
-  if (!node_gdal::IsInstanceOf<type>(obj)) {                                                                           \
-    THROW_OR_REJECT("Object must be a " #type " object");                                                              \
-  }                                                                                                                    \
-  type *var = node_gdal::UnwrapWrapped<type>(obj.As<Napi::Object>());                                                  \
-  if (!var->isAlive()) { THROW_OR_REJECT(#type " object has already been destroyed"); }
-
-#define GDAL_RAW_CHECK(type, obj, var)                                                                                 \
-  type var = obj->get();                                                                                               \
-  if (!obj) {                                                                                                          \
-    Napi::Error::New(info.Env(), #type " object has already been destroyed").ThrowAsJavaScriptException();             \
-    return info.Env().Undefined();                                                                                     \
-  }
 
 // Module-level accessor. `PropertyDescriptor::Accessor(name, getter, setter)`
 // is not usable: node-addon-api 8.5's own trampoline calls the setter with a
@@ -865,23 +853,10 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
     (target).DefineProperty(Napi::PropertyDescriptor(d));                                                              \
   }
 
-// GDAL_RAW_CHECK returns a value on error, so a setter (void) needs this
-#define GDAL_RAW_CHECK_VOID(type, obj, var)                                                                            \
-  type var = obj->get();                                                                                               \
-  if (!obj) {                                                                                                          \
-    Napi::Error::New(info.Env(), #type " object has already been destroyed").ThrowAsJavaScriptException();             \
-    return;                                                                                                            \
-  }
-
-#define GDAL_RAW_CHECK_ASYNC(type, obj, var)                                                                           \
-  type var = obj->get();                                                                                               \
-  if (!obj) { THROW_OR_REJECT(#type " object has already been destroyed"); }
 
 // ----- constants -------
 
 #define NODE_DEFINE_CONSTANT(target, constant) target.Set(#constant, Napi::Number::New(target.Env(), constant))
-#define NODE_DEFINE_CONSTANT_HEX(target, constant)                                                                     \
-  target.Set(#constant, Napi::Number::New(target.Env(), constant))
 
 // ----- class registration helpers -------
 //
@@ -896,7 +871,6 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define METHOD(name) GDALInstanceMethodT<SELF, &SELF::name>(#name),
 #define METHOD_ASYNCABLE(name)                                                                                         \
   GDALInstanceMethodT<SELF, &SELF::name>(#name), GDALInstanceMethodT<SELF, &SELF::name##Async>(#name "Async"),
-#define METHOD_HIDDEN(name) GDALInstanceMethodHiddenT<SELF, &SELF::name>(#name),
 
 // Same, but for the ~20 members whose JS name differs from the C++ name
 // (eg. the JS "toWKT" is Geometry::exportToWKT, and "isVectical" really is

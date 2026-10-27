@@ -60,8 +60,8 @@ MDArray::MDArray(const Napi::CallbackInfo &info) : GDALObject<MDArray>(info), ui
   }
 
   Napi::Value parent_ds = info.Length() > 0 ? info[0] : info.Env().Undefined();
-  GDAL_SET_PRIVATE(info.This(), "dims_", ArrayDimensions::New(info.This(), parent_ds));
-  GDAL_SET_PRIVATE(info.This(), "attrs_", ArrayAttributes::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "dims_", ArrayDimensions::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "attrs_", ArrayAttributes::New(info.This(), parent_ds));
 }
 
 MDArray::~MDArray() {
@@ -242,7 +242,7 @@ struct readBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
     Args args(info);
 
-    NODE_UNWRAP_CHECK(MDArray, info.This(), self);
+    MDArray *self = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
 
     Napi::Object options;
     Napi::Array origin, span, stride;
@@ -288,7 +288,7 @@ struct readBody : node_gdal::AsyncMethodBody {
       }
     }
 
-    GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, self, gdal_mdarray);
+    std::shared_ptr<GDALMDArray> gdal_mdarray = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(self, "std::shared_ptr<GDALMDArray>");
 
     // create array if no array was passed
     if (data.IsEmpty()) {
@@ -368,8 +368,8 @@ GDAL_ASYNC_METHOD(MDArray::read, readBody)
  */
 NAPI_METHOD(MDArray::getView) {
   Args args(info);
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
 
   std::string viewExpr;
   if (!args.get(0, "view", viewExpr)) return args.failed();
@@ -398,12 +398,12 @@ NAPI_METHOD(MDArray::getView) {
  * @return {MDArray}
  */
 NAPI_METHOD(MDArray::getMask) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
 
   GDAL_LOCK_PARENT(array);
   CPLErrorReset();
-  std::shared_ptr<GDALMDArray> mask = raw->GetMask(NULL);
+  std::shared_ptr<GDALMDArray> mask = raw->GetMask(nullptr);
   if (mask == nullptr) {
     Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
@@ -427,8 +427,8 @@ NAPI_METHOD(MDArray::getMask) {
  */
 NAPI_METHOD(MDArray::asDataset) {
   Args args(info);
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
 
   int x = -1, y = -1;
   std::string dim;
@@ -461,8 +461,8 @@ NAPI_METHOD(MDArray::asDataset) {
  * @type {SpatialReference|null}
  */
 NAPI_GETTER(MDArray::srsGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
   GDAL_LOCK_PARENT(array);
   std::shared_ptr<OGRSpatialReference> srs = raw->GetSpatialRef();
   if (srs == nullptr) {
@@ -483,7 +483,7 @@ NAPI_GETTER(MDArray::srsGetter) {
  * @type {number}
  */
 NAPI_GETTER(MDArray::offsetGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
   bool hasOffset = false;
   GDAL_LOCK_PARENT(array);
   double result = array->this_->GetOffset(&hasOffset);
@@ -503,7 +503,7 @@ NAPI_GETTER(MDArray::offsetGetter) {
  * @type {number}
  */
 NAPI_GETTER(MDArray::scaleGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
   bool hasScale = false;
   GDAL_LOCK_PARENT(array);
   double result = array->this_->GetScale(&hasScale);
@@ -523,7 +523,7 @@ NAPI_GETTER(MDArray::scaleGetter) {
  * @type {number|null}
  */
 NAPI_GETTER(MDArray::noDataValueGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
   bool hasNoData = false;
   GDAL_LOCK_PARENT(array);
   double result = array->this_->GetNoDataValueAsDouble(&hasNoData);
@@ -550,7 +550,7 @@ NAPI_GETTER(MDArray::noDataValueGetter) {
  * @type {string}
  */
 NAPI_GETTER(MDArray::unitTypeGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
   GDAL_LOCK_PARENT(array);
   std::string unit = array->this_->GetUnit();
   return SafeString::New(unit.c_str());
@@ -565,8 +565,8 @@ NAPI_GETTER(MDArray::unitTypeGetter) {
  * @type {string}
  */
 NAPI_GETTER(MDArray::typeGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
   GDAL_LOCK_PARENT(array);
   GDALExtendedDataType type = raw->GetDataType();
   const char *r;
@@ -588,7 +588,7 @@ NAPI_GETTER(MDArray::typeGetter) {
  * @type {GroupDimensions}
  */
 NAPI_GETTER(MDArray::dimensionsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "dims_");
+  return node_gdal::get_private(info.This(), "dims_");
 }
 
 /**
@@ -600,7 +600,7 @@ NAPI_GETTER(MDArray::dimensionsGetter) {
  * @type {ArrayAttributes}
  */
 NAPI_GETTER(MDArray::attributesGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "attrs_");
+  return node_gdal::get_private(info.This(), "attrs_");
 }
 
 /**
@@ -612,8 +612,8 @@ NAPI_GETTER(MDArray::attributesGetter) {
  * @type {string}
  */
 NAPI_GETTER(MDArray::descriptionGetter) {
-  NODE_UNWRAP_CHECK(MDArray, info.This(), array);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, array, raw);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
   GDAL_LOCK_PARENT(array);
   std::string description = raw->GetFullName();
   return SafeString::New(description.c_str());

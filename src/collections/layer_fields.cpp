@@ -40,7 +40,7 @@ LayerFields::LayerFields(const Napi::CallbackInfo &info) : GDALObject<LayerField
     Napi::Error::New(info.Env(), "Cannot create LayerFields directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 LayerFields::~LayerFields() {
@@ -73,7 +73,7 @@ NAPI_METHOD(LayerFields::toString) {
 NAPI_METHOD(LayerFields::count) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -102,7 +102,7 @@ NAPI_METHOD(LayerFields::indexOf) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -134,7 +134,7 @@ NAPI_METHOD(LayerFields::indexOf) {
 NAPI_METHOD(LayerFields::get) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -152,8 +152,7 @@ NAPI_METHOD(LayerFields::get) {
     return node_gdal::napi_env().Undefined();
   }
 
-  int field_index;
-  ARG_FIELD_ID(0, def, field_index);
+  int field_index = node_gdal::parse_field_index(info[0], def);
 
   auto r = def->GetFieldDefn(field_index);
   if (r == nullptr) {
@@ -175,7 +174,7 @@ NAPI_METHOD(LayerFields::get) {
 NAPI_METHOD(LayerFields::getNames) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -211,7 +210,7 @@ NAPI_METHOD(LayerFields::getNames) {
 NAPI_METHOD(LayerFields::remove) {
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -229,8 +228,7 @@ NAPI_METHOD(LayerFields::remove) {
     return node_gdal::napi_env().Undefined();
   }
 
-  int field_index;
-  ARG_FIELD_ID(0, def, field_index);
+  int field_index = node_gdal::parse_field_index(info[0], def);
 
   int err = layer->get()->DeleteField(field_index);
   if (err) {
@@ -256,7 +254,7 @@ NAPI_METHOD(LayerFields::add) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -277,7 +275,7 @@ NAPI_METHOD(LayerFields::add) {
     int n = array.Length();
     for (int i = 0; i < n; i++) {
       Napi::Value element = array.As<Napi::Object>().Get(i);
-      if (IS_WRAPPED(element, FieldDefn)) {
+      if (node_gdal::IsInstanceOf<FieldDefn>(element)) {
         field_def = node_gdal::UnwrapWrapped<FieldDefn>(element.As<Napi::Object>());
         err = layer->get()->CreateField(field_def->get(), approx);
         if (err) {
@@ -289,7 +287,7 @@ NAPI_METHOD(LayerFields::add) {
         return node_gdal::napi_env().Undefined();
       }
     }
-  } else if (IS_WRAPPED(info[0], FieldDefn)) {
+  } else if (node_gdal::IsInstanceOf<FieldDefn>(info[0])) {
     field_def = node_gdal::UnwrapWrapped<FieldDefn>(info[0].As<Napi::Object>());
     err = layer->get()->CreateField(field_def->get(), approx);
     if (err) {
@@ -322,7 +320,7 @@ NAPI_METHOD(LayerFields::reorder) {
   Args args(info);
 
   Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
   if (!layer->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
@@ -388,7 +386,7 @@ NAPI_METHOD(LayerFields::reorder) {
  * @type {Layer}
  */
 NAPI_GETTER(LayerFields::layerGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "parent_");
+  return node_gdal::get_private(info.This(), "parent_");
 }
 
 } // namespace node_gdal

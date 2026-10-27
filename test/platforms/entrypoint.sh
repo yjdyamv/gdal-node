@@ -63,7 +63,7 @@ case ${1} in
     echo -e "${SEP}Testing pre-built binary${SEP}"
     npm install --ignore-scripts
     node scripts/install.mjs
-    npx yatag
+    node scripts/generate-typings.js
     npm test
     R=0
     ;;

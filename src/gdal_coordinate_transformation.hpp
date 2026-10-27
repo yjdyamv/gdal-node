@@ -62,12 +62,12 @@ class GeoTransformTransformer : public OGRCoordinateTransformation {
 #endif
 
 #if GDAL_VERSION_MAJOR < 3
-  virtual int TransformEx(int nCount, double *x, double *y, double *z = NULL, int *pabSuccess = NULL) {
+  virtual int TransformEx(int nCount, double *x, double *y, double *z = nullptr, int *pabSuccess = nullptr) {
     return GDALGenImgProjTransform(hSrcImageTransformer, TRUE, nCount, x, y, z, pabSuccess);
   }
 #endif
 
-  virtual int Transform(int nCount, double *x, double *y, double *z = NULL) {
+  virtual int Transform(int nCount, double *x, double *y, double *z = nullptr) {
     int nResult;
 
     int *pabSuccess = (int *)CPLCalloc(sizeof(int), nCount);

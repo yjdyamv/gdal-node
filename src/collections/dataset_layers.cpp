@@ -39,7 +39,7 @@ DatasetLayers::DatasetLayers(const Napi::CallbackInfo &info) : GDALObject<Datase
     Napi::Error::New(info.Env(), "Cannot create DatasetLayers directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 DatasetLayers::~DatasetLayers() {
@@ -98,7 +98,7 @@ struct getBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -196,7 +196,7 @@ struct createBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -207,7 +207,7 @@ struct createBody : node_gdal::AsyncMethodBody {
     GDALDataset *raw = ds->get();
 
     std::string *layer_name = new std::string;
-    SpatialReference *spatial_ref = NULL;
+    SpatialReference *spatial_ref = nullptr;
     OGRwkbGeometryType geom_type = wkbUnknown;
     StringList *options = new StringList;
 
@@ -218,7 +218,7 @@ struct createBody : node_gdal::AsyncMethodBody {
       return node_gdal::napi_env().Undefined(); // error parsing string list
     }
 
-    OGRSpatialReference *srs = NULL;
+    OGRSpatialReference *srs = nullptr;
     if (spatial_ref) srs = spatial_ref->get();
 
     GDALAsyncableJob<OGRLayer *> job(ds->uid);
@@ -268,7 +268,7 @@ struct countBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -327,7 +327,7 @@ struct copyBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -397,7 +397,7 @@ struct removeBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
     Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
 
     if (!ds->isAlive()) {
@@ -437,7 +437,7 @@ GDAL_ASYNC_METHOD(DatasetLayers::remove, removeBody)
  * @type {Dataset}
  */
 NAPI_GETTER(DatasetLayers::dsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "parent_");
+  return node_gdal::get_private(info.This(), "parent_");
 }
 
 } // namespace node_gdal

@@ -598,7 +598,7 @@ NAPI_METHOD(SpatialReference::getAuthorityName) {
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
 
-  return SafeString::New(srs->this_->GetAuthorityName(key.length() ? key.c_str() : NULL));
+  return SafeString::New(srs->this_->GetAuthorityName(key.length() ? key.c_str() : nullptr));
 }
 
 /**
@@ -618,7 +618,7 @@ NAPI_METHOD(SpatialReference::getAuthorityCode) {
 
   SpatialReference *srs = node_gdal::UnwrapWrapped<SpatialReference>(info.This().As<Napi::Object>());
 
-  return SafeString::New(srs->this_->GetAuthorityCode(key.length() ? key.c_str() : NULL));
+  return SafeString::New(srs->this_->GetAuthorityCode(key.length() ? key.c_str() : nullptr));
 }
 
 /**

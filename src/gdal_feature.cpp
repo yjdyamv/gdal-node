@@ -91,14 +91,14 @@ Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info) {
 
     OGRFeatureDefn *def;
 
-    if (IS_WRAPPED(info[0], Layer)) {
+    if (node_gdal::IsInstanceOf<Layer>(info[0])) {
       Layer *layer = node_gdal::UnwrapWrapped<Layer>(info[0].As<Napi::Object>());
       if (!layer->isAlive()) {
         Napi::Error::New(info.Env(), "Layer object already destroyed").ThrowAsJavaScriptException();
         return;
       }
       def = layer->get()->GetLayerDefn();
-    } else if (IS_WRAPPED(info[0], FeatureDefn)) {
+    } else if (node_gdal::IsInstanceOf<FeatureDefn>(info[0])) {
       FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(info[0].As<Napi::Object>());
       if (!feature_def->isAlive()) {
         Napi::Error::New(info.Env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
@@ -117,7 +117,7 @@ Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info) {
   setExternalMemory(feature_memory(this_));
 
   Napi::Value fields = FeatureFields::New(info.This());
-  GDAL_SET_PRIVATE(info.This(), "fields_", fields);
+  node_gdal::set_private(info.This(), "fields_", fields);
 }
 
 Feature::~Feature() {
@@ -224,7 +224,7 @@ NAPI_METHOD(Feature::getFieldDefn) {
 NAPI_METHOD(Feature::setGeometry) {
   Args args(info);
 
-  Geometry *geom = NULL;
+  Geometry *geom = nullptr;
   if (!args.optionalWrapped(0, "geometry", "Geometry", geom)) return args.failed();
 
   Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
@@ -233,7 +233,7 @@ NAPI_METHOD(Feature::setGeometry) {
     return node_gdal::napi_env().Undefined();
   }
 
-  OGRErr err = feature->this_->SetGeometry(geom ? geom->get() : NULL);
+  OGRErr err = feature->this_->SetGeometry(geom ? geom->get() : nullptr);
   if (err) { throw GDALError(getOGRErrMsg(err)); }
 
   feature->updateMemory();
@@ -367,7 +367,7 @@ NAPI_METHOD(Feature::setFrom) {
  * @type {FeatureFields}
  */
 NAPI_GETTER(Feature::fieldsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "fields_");
+  return node_gdal::get_private(info.This(), "fields_");
 }
 
 /**

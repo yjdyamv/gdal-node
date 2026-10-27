@@ -5,14 +5,14 @@
 namespace node_gdal {
 
 WarpOptions::WarpOptions()
-  : options(NULL),
+  : options(nullptr),
     src(nullptr),
     dst(nullptr),
     additional_options(),
     src_bands("src band ids"),
     dst_bands("dst band ids"),
-    src_nodata(NULL),
-    dst_nodata(NULL),
+    src_nodata(nullptr),
+    dst_nodata(nullptr),
     multi(false) {
   options = GDALCreateWarpOptions();
 }

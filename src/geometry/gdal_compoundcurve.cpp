@@ -33,7 +33,7 @@ void CompoundCurve::Initialize(Napi::Object target) {
 }
 
 void CompoundCurve::SetPrivate(Napi::Object _this, Napi::Value value) {
-  GDAL_SET_PRIVATE(_this, "curves_", value);
+  node_gdal::set_private(_this, "curves_", value);
 };
 
 /**
@@ -64,7 +64,7 @@ NAPI_METHOD(CompoundCurve::toString) {
  * @type {CompoundCurveCurves}
  */
 NAPI_GETTER(CompoundCurve::curvesGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "curves_");
+  return node_gdal::get_private(info.This(), "curves_");
 }
 
 } // namespace node_gdal

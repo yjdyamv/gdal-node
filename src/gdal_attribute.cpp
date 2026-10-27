@@ -103,8 +103,8 @@ NAPI_METHOD(Attribute::toString) {
  * @type {string|number}
  */
 NAPI_GETTER(Attribute::valueGetter) {
-  NODE_UNWRAP_CHECK(Attribute, info.This(), attribute);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALAttribute>, attribute, raw);
+  Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
+  std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
   GDAL_LOCK_PARENT(attribute);
   GDALExtendedDataType type = raw->GetDataType();
   Napi::Value r;
@@ -126,8 +126,8 @@ NAPI_GETTER(Attribute::valueGetter) {
  * @type {string}
  */
 NAPI_GETTER(Attribute::typeGetter) {
-  NODE_UNWRAP_CHECK(Attribute, info.This(), attribute);
-  GDAL_RAW_CHECK(std::shared_ptr<GDALAttribute>, attribute, raw);
+  Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
+  std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
   GDAL_LOCK_PARENT(attribute);
   GDALExtendedDataType type = raw->GetDataType();
   const char *r;

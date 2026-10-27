@@ -32,7 +32,7 @@ RasterBandOverviews::RasterBandOverviews(const Napi::CallbackInfo &info) : GDALO
     Napi::Error::New(info.Env(), "Cannot create RasterBandOverviews directly").ThrowAsJavaScriptException();
     return;
   }
-  GDAL_SET_PRIVATE(info.This(), "parent_", info[0]);
+  node_gdal::set_private(info.This(), "parent_", info[0]);
 }
 
 RasterBandOverviews::~RasterBandOverviews() {
@@ -86,9 +86,9 @@ struct getBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
 
-    NODE_UNWRAP_CHECK(RasterBand, parent, band);
+    RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(parent, "RasterBand");
 
     int id;
     if (!args.get(0, "id", id)) return args.failed();
@@ -152,8 +152,8 @@ struct getBySampleCountBody : node_gdal::AsyncMethodBody {
     Args args(info);
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-    NODE_UNWRAP_CHECK(RasterBand, parent, band);
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+    RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(parent, "RasterBand");
 
     int n_samples;
     if (!args.get(0, "minimum number of samples", n_samples)) return args.failed();
@@ -202,8 +202,8 @@ struct countBody : node_gdal::AsyncMethodBody {
   template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
     Napi::Object parent =
-      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-    NODE_UNWRAP_CHECK(RasterBand, parent, band);
+      node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+    RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(parent, "RasterBand");
 
     GDALAsyncableJob<int> job(band->parent_uid);
     job.persist(parent);

@@ -52,10 +52,10 @@ Group::Group(const Napi::CallbackInfo &info) : GDALObject<Group>(info), uid(0), 
 
   // the parent dataset travels as the second argument, for the sub-collections
   Napi::Value parent_ds = info.Length() > 0 ? info[0] : info.Env().Undefined();
-  GDAL_SET_PRIVATE(info.This(), "groups_", GroupGroups::New(info.This(), parent_ds));
-  GDAL_SET_PRIVATE(info.This(), "arrays_", GroupArrays::New(info.This(), parent_ds));
-  GDAL_SET_PRIVATE(info.This(), "dims_", GroupDimensions::New(info.This(), parent_ds));
-  GDAL_SET_PRIVATE(info.This(), "attrs_", GroupAttributes::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "groups_", GroupGroups::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "arrays_", GroupArrays::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "dims_", GroupDimensions::New(info.This(), parent_ds));
+  node_gdal::set_private(info.This(), "attrs_", GroupAttributes::New(info.This(), parent_ds));
 }
 
 Group::~Group() {
@@ -110,7 +110,7 @@ Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, Napi::Object parent_ds) {
   wrapped->uid = object_store().add(raw, *wrapped, parent_uid);
   wrapped->parent_ds = unwrapped_ds->get();
   wrapped->parent_uid = parent_uid;
-  if (parent_group_uid != 0) GDAL_SET_PRIVATE(obj, "parent_", parent);
+  if (parent_group_uid != 0) node_gdal::set_private(obj, "parent_", parent);
 
   return obj;
 }
@@ -151,7 +151,7 @@ GDAL_SYNC_GETTER(Group::descriptionGetter, descriptionGetterBody)
  * @type {GroupGroups}
  */
 NAPI_GETTER(Group::groupsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "groups_");
+  return node_gdal::get_private(info.This(), "groups_");
 }
 
 /**
@@ -163,7 +163,7 @@ NAPI_GETTER(Group::groupsGetter) {
  * @type {GroupArrays}
  */
 NAPI_GETTER(Group::arraysGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "arrays_");
+  return node_gdal::get_private(info.This(), "arrays_");
 }
 
 /**
@@ -175,7 +175,7 @@ NAPI_GETTER(Group::arraysGetter) {
  * @type {GroupDimensions}
  */
 NAPI_GETTER(Group::dimensionsGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "dims_");
+  return node_gdal::get_private(info.This(), "dims_");
 }
 
 /**
@@ -187,7 +187,7 @@ NAPI_GETTER(Group::dimensionsGetter) {
  * @type {GroupAttributes}
  */
 NAPI_GETTER(Group::attributesGetter) {
-  return GDAL_GET_PRIVATE(info.This(), "attrs_");
+  return node_gdal::get_private(info.This(), "attrs_");
 }
 
 NAPI_GETTER(Group::uidGetter) {

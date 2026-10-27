@@ -22,7 +22,7 @@ GeometryCollectionBase<T, OGRT>::GeometryCollectionBase(const Napi::CallbackInfo
   // geometry object
   Napi::Object this_obj = info.This().As<Napi::Object>();
   Napi::Value children = GeometryCollectionChildren::New(this_obj);
-  GDAL_SET_PRIVATE(this_obj, "children_", children);
+  node_gdal::set_private(this_obj, "children_", children);
 }
 
 } // namespace node_gdal
