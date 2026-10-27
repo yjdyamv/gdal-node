@@ -88,7 +88,7 @@ const layer = dataset.layers.get(0)
 
 console.log("number of features: " + layer.features.count())
 console.log("fields: " + layer.fields.getNames())
-console.log("extent: " + JSON.stringify(layer.extent))
+console.log("extent: " + JSON.stringify(layer.getExtent()))
 console.log("srs: " + (layer.srs ? layer.srs.toWKT() : 'null'))
 ```
 
@@ -184,7 +184,9 @@ try {
     const band = await ds.bands.getAsync(1);
     const rasterSize = await ds.rasterSizeAsync;    // starting with 3.3.2
     const data = await band.pixels.readAsync(0, 0, rasterSize.x, rasterSize.y);
-} catch (e => console.error(e));
+} catch (e) {
+    console.error(e);
+}
 ```
 
 ### Explicit resource management (unreleased)
