@@ -13,7 +13,6 @@
 
 #include <cpl_port.h>
 #include <limits>
-#include <mutex>
 
 namespace node_gdal {
 
@@ -335,20 +334,32 @@ GDAL_ASYNC_METHOD(RasterBand::fill, fillBody)
 
 // --- Custom error handling to handle VRT errors ---
 // see: https://github.com/mapbox/mapnik-omnivore/issues/10
+//
+// The handler goes on the thread-local stack of GDAL instead of replacing the
+// global one, so two statistics which run at the same time in two threads do
+// not read each other's message and neither of them has to wait for the other
+// one to be done with the raster
 
-std::mutex stats_lock;
-std::string stats_file_err = "";
-CPLErrorHandler last_err_handler;
+thread_local std::string stats_file_err;
+thread_local CPLErrorHandler previous_error_handler = nullptr;
+
 void CPL_STDCALL statisticsErrorHandler(CPLErr eErrClass, int err_no, const char *msg) {
-  if (err_no == CPLE_OpenFailed) { stats_file_err = msg; }
-  if (last_err_handler) { last_err_handler(eErrClass, err_no, msg); }
+  // the first error is the most specific one: the ones which follow it
+  // only say that reading a block of the failed source has failed
+  if (err_no == CPLE_OpenFailed && stats_file_err.empty()) { stats_file_err = msg; }
+  if (previous_error_handler) { previous_error_handler(eErrClass, err_no, msg); }
 }
 void pushStatsErrorHandler() {
-  last_err_handler = CPLSetErrorHandler(statisticsErrorHandler);
+  // The computation which ran before this one on this thread may have left its
+  // own message behind and it has nothing to do with this one
+  stats_file_err.clear();
+  previous_error_handler = CPLGetErrorHandler(nullptr);
+  CPLPushErrorHandler(statisticsErrorHandler);
 }
 void popStatsErrorHandler() {
-  if (!last_err_handler) return;
-  CPLSetErrorHandler(last_err_handler);
+  if (!previous_error_handler) return;
+  CPLPopErrorHandler();
+  previous_error_handler = nullptr;
 }
 
 /**
@@ -455,6 +466,11 @@ NAPI_METHOD(RasterBand::getStatistics) {
 
  * @param {boolean} allow_approximation If `true` statistics may be computed
  * based on overviews or a subset of all tiles.
+ * @param {object} [options]
+ * @param {ProgressCb} [options.progress_cb] Called with the progress of the
+ * computation
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the
+ * computation
  * @return {stats} Statistics containing `"min"`, `"max"`, `"mean"`,
  * `"std_dev"` properties.
  */
@@ -474,6 +490,11 @@ NAPI_METHOD(RasterBand::getStatistics) {
  * @memberof RasterBand
  * @param {boolean} allow_approximation If `true` statistics may be computed
  * based on overviews or a subset of all tiles.
+ * @param {object} [options]
+ * @param {ProgressCb} [options.progress_cb] Called with the progress of the
+ * computation
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the
+ * computation
  * @param {callback<stats>} [callback=undefined]
  * @return {Promise<stats>} Statistics containing `"min"`, `"max"`, `"mean"`,
  * `"std_dev"` properties.
@@ -494,13 +515,26 @@ struct computeStatisticsBody : node_gdal::AsyncMethodBody {
     GDALAsyncableJob<stats_t> job(band->parent_uid);
     GDALRasterBand *gdal_obj = band->get();
 
-    job.main = [gdal_obj, approx](const GDALExecutionProgress &) {
+    Napi::FunctionReference *progress_cb;
+    NODE_PROGRESS_CB_OPT(1, progress_cb, job);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible, the
+    // trampoline has to be installed even without a progress callback
+    const bool interruptible = job.interruptible();
+
+    job.main = [gdal_obj, approx, interruptible](const GDALExecutionProgress &progress) {
       struct stats_t stats;
-      std::lock_guard<std::mutex> guard(stats_lock);
 
       CPLErrorReset();
       pushStatsErrorHandler();
-      CPLErr err = gdal_obj->ComputeStatistics(approx, &stats.min, &stats.max, &stats.mean, &stats.std_dev, NULL, NULL);
+      CPLErr err = gdal_obj->ComputeStatistics(
+        approx,
+        &stats.min,
+        &stats.max,
+        &stats.mean,
+        &stats.std_dev,
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr);
       popStatsErrorHandler();
       if (!stats_file_err.empty()) {
         throw GDALError(stats_file_err);
@@ -520,7 +554,7 @@ struct computeStatisticsBody : node_gdal::AsyncMethodBody {
       return result;
     };
 
-    return job.run(info, node_gdal::is_async<Async>, 1);
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
 };
 

@@ -713,6 +713,10 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
   if (!(obj).IsEmpty() && (obj).Has("abort_signal")) var = (obj).Get("abort_signal");
 
 // ----- special case: progress callback in [options] argument -------
+//
+// A function in the place of the options object is the callback of a method
+// whose options are optional, so it is not an error: the progress callback is
+// then simply missing
 
 // The progress callback is released by hand when the AbortSignal turns out to
 // be invalid: the operation returns at once with the pending TypeError and
@@ -721,7 +725,7 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
   {                                                                                                                    \
     Napi::Object progress_obj;                                                                                         \
     progress_cb = nullptr;                                                                                             \
-    if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined()) {                                      \
+    if (info.Length() > num && !info[num].IsNull() && !info[num].IsUndefined() && !info[num].IsFunction()) {           \
       if (!info[num].IsObject()) {                                                                                     \
         Napi::TypeError::New(info.Env(), "options must be an object").ThrowAsJavaScriptException();                    \
         return info.Env().Undefined();                                                                                  \

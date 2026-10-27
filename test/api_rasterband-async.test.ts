@@ -1,5 +1,6 @@
 import { assert } from 'chai'
 import gdal from 'gdal-async'
+import * as path from 'path'
 import * as semver from 'semver'
 
 describe('gdal.RasterBandAsync', () => {
@@ -818,6 +819,29 @@ describe('gdal.RasterBandAsync', () => {
         band.pixels.set(0, 0, 0)
         return band
       }
+      // A VRT whose source cannot be opened: the statistics of its band fail
+      // with the error of the source, which GDAL reports through the error
+      // handler and not through the return value
+      const brokenVRT = () => {
+        // every call gets its own name, so a source which GDAL has already
+        // tried to open cannot be answered from its cache of failed opens
+        const unique = Math.random().toString(36).slice(2)
+        const source = path.join(__dirname, 'data', `does_not_exist_${unique}.tif`)
+        gdal.vsimem.set(Buffer.from(`<VRTDataset rasterXSize="20" rasterYSize="20">
+  <VRTRasterBand dataType="Byte" band="1">
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">${source}</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SrcRect xOff="0" yOff="0" xSize="20" ySize="20"/>
+      <DstRect xOff="0" yOff="0" xSize="20" ySize="20"/>
+    </SimpleSource>
+  </VRTRasterBand>
+</VRTDataset>`), '/vsimem/stats_broken.vrt')
+        return gdal.open('/vsimem/stats_broken.vrt')
+      }
+      const releaseVRT = () => {
+        gdal.vsimem.release('/vsimem/stats_broken.vrt')
+      }
       describe('computeStatisticsAsync()', () => {
         it('should compute statistics', () => {
           const band = statsBand()
@@ -834,6 +858,62 @@ describe('gdal.RasterBandAsync', () => {
           const band = ds.bands.get(1)
           ds.close()
           return assert.isRejected(band.computeStatisticsAsync(false))
+        })
+        it('should reject when the signal is already aborted', () => {
+          const band = statsBand()
+          const controller = new AbortController()
+          controller.abort()
+          return assert.isRejected(band.computeStatisticsAsync(false, { abort_signal: controller.signal }),
+            'The operation was aborted')
+        })
+        it('should call the progress callback', () =>
+          assert.isFulfilled(statsBand().computeStatisticsAsync(false, { progress_cb: () => undefined })))
+        it('should still take the callback as the second argument', (done) => {
+          statsBand().computeStatisticsAsync(false, (err: Error | null, stats: gdal.stats) => {
+            assert.isNull(err)
+            assert.equal(stats.max, 20)
+            done()
+          })
+        })
+        it('should reject with the error of a source which cannot be opened', async () => {
+          const ds = brokenVRT()
+          try {
+            await assert.isRejected(ds.bands.get(1).computeStatisticsAsync(false), /No such file or directory|IReadBlock failed/)
+          } finally {
+            ds.close()
+            releaseVRT()
+          }
+        })
+        it('should not mix up the errors of concurrent computations', async () => {
+          const broken = brokenVRT()
+          try {
+            const results = await Promise.allSettled([
+              broken.bands.get(1).computeStatisticsAsync(false),
+              statsBand().computeStatisticsAsync(false),
+              statsBand().computeStatisticsAsync(false)
+            ])
+            assert.equal(results[0].status, 'rejected')
+            assert.match((results[0] as PromiseRejectedResult).reason.message as string,
+              /No such file or directory|IReadBlock failed/)
+            assert.equal(results[1].status, 'fulfilled')
+            assert.equal((results[1] as PromiseFulfilledResult<gdal.stats>).value.max, 20)
+            assert.equal(results[2].status, 'fulfilled')
+            assert.equal((results[2] as PromiseFulfilledResult<gdal.stats>).value.max, 20)
+          } finally {
+            broken.close()
+            releaseVRT()
+          }
+        })
+        it('should not reuse the error of a previous computation', async () => {
+          const ds = brokenVRT()
+          try {
+            await assert.isRejected(ds.bands.get(1).computeStatisticsAsync(false), /No such file or directory|IReadBlock failed/)
+          } finally {
+            ds.close()
+            releaseVRT()
+          }
+          const stats = await statsBand().computeStatisticsAsync(false)
+          assert.equal(stats.max, 20)
         })
       })
     })

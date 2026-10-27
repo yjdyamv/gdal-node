@@ -1,4 +1,5 @@
 import { assert } from 'chai'
+import * as path from 'path'
 import * as semver from 'semver'
 import * as gdal from 'gdal-async'
 import * as fileUtils from './utils/file'
@@ -1768,6 +1769,29 @@ describe('gdal.RasterBand', () => {
         band.pixels.set(0, 0, 0)
         return band
       }
+      // A VRT whose source cannot be opened: the statistics of its band fail
+      // with the error of the source, which GDAL reports through the error
+      // handler and not through the return value
+      const brokenVRT = () => {
+        // every call gets its own name, so a source which GDAL has already
+        // tried to open cannot be answered from its cache of failed opens
+        const unique = Math.random().toString(36).slice(2)
+        const source = path.join(__dirname, 'data', `does_not_exist_${unique}.tif`)
+        gdal.vsimem.set(Buffer.from(`<VRTDataset rasterXSize="20" rasterYSize="20">
+  <VRTRasterBand dataType="Byte" band="1">
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">${source}</SourceFilename>
+      <SourceBand>1</SourceBand>
+      <SrcRect xOff="0" yOff="0" xSize="20" ySize="20"/>
+      <DstRect xOff="0" yOff="0" xSize="20" ySize="20"/>
+    </SimpleSource>
+  </VRTRasterBand>
+</VRTDataset>`), '/vsimem/stats_broken.vrt')
+        return gdal.open('/vsimem/stats_broken.vrt')
+      }
+      const releaseVRT = () => {
+        gdal.vsimem.release('/vsimem/stats_broken.vrt')
+      }
       describe('computeStatistics()', () => {
         it('should compute statistics', () => {
           const band = statsBand()
@@ -1784,6 +1808,65 @@ describe('gdal.RasterBand', () => {
           assert.throws(() => {
             band.computeStatistics(false)
           })
+        })
+        it('should throw when the signal is already aborted', () => {
+          const band = statsBand()
+          const controller = new AbortController()
+          controller.abort()
+          assert.throws(() => band.computeStatistics(false, { abort_signal: controller.signal }),
+            'The operation was aborted')
+        })
+        it('should throw an AbortError when aborted from its progress callback', () => {
+          const ds = gdal.open('/vsimem/stats_abort.tif', 'w', 'GTiff', 1024, 1024, 1)
+          const band = ds.bands.get(1)
+          band.pixels.write(0, 0, 1024, 1024, new Float32Array(1024 * 1024))
+          const controller = new AbortController()
+          let calls = 0
+          try {
+            band.computeStatistics(true, {
+              abort_signal: controller.signal,
+              progress_cb: () => {
+                if (calls++ === 0) controller.abort()
+              }
+            })
+            assert.fail('should have thrown')
+          } catch (e) {
+            assert.equal((e as Error).name, 'AbortError')
+            assert.isAbove(calls, 0, 'should have received progress before being aborted')
+          } finally {
+            ds.close()
+            gdal.vsimem.release('/vsimem/stats_abort.tif')
+          }
+        })
+        it('should call the progress callback', () => {
+          const band = statsBand()
+          let calls = 0
+          band.computeStatistics(false, {
+            progress_cb: () => {
+              calls++
+            }
+          })
+          assert.isAbove(calls, 0)
+        })
+        it('should report the error of a source which cannot be opened', () => {
+          const ds = brokenVRT()
+          try {
+            assert.throws(() => ds.bands.get(1).computeStatistics(false), /No such file or directory|IReadBlock failed/)
+          } finally {
+            ds.close()
+            releaseVRT()
+          }
+        })
+        it('should not reuse the error of a previous computation', () => {
+          const ds = brokenVRT()
+          try {
+            assert.throws(() => ds.bands.get(1).computeStatistics(false), /No such file or directory|IReadBlock failed/)
+          } finally {
+            ds.close()
+            releaseVRT()
+          }
+          const stats = statsBand().computeStatistics(false)
+          assert.equal(stats.max, 20)
         })
       })
       describe('setStatistics()', () => {
