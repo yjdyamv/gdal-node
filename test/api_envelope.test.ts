@@ -97,6 +97,30 @@ describe('gdal.Envelope', () => {
           assert.equal(envelopeA.maxY, 2)
         })
       })
+      describe('w/an empty envelope', () => {
+        it('should be initialized by the coordinates', () => {
+          const envelope = new gdal.Envelope()
+          assert.isUndefined(envelope.merge(2, 3))
+          assert.equal(envelope.minX, 2)
+          assert.equal(envelope.minY, 3)
+          assert.equal(envelope.maxX, 2)
+          assert.equal(envelope.maxY, 3)
+        })
+        it('should be initialized by the envelope', () => {
+          const envelopeA = new gdal.Envelope()
+          const envelopeB = new gdal.Envelope({
+            minX: -2,
+            maxX: 10,
+            minY: -1,
+            maxY: 1
+          })
+          envelopeA.merge(envelopeB)
+          assert.equal(envelopeA.minX, -2)
+          assert.equal(envelopeA.minY, -1)
+          assert.equal(envelopeA.maxX, 10)
+          assert.equal(envelopeA.maxY, 1)
+        })
+      })
     })
     describe('intersects()', () => {
       it('should determine if envelopes touch', () => {

@@ -163,12 +163,78 @@ describe('gdal', () => {
       const band = ds.bands.get(1)
       assert.equal(gdal.fromDataType(band.dataType as string), Float64Array)
     })
+
+    it('should return the constructor of the array of every data type', () => {
+      const types: [string, unknown][] = [
+        [ gdal.GDT_Byte, Uint8Array ],
+        [ gdal.GDT_Int16, Int16Array ],
+        [ gdal.GDT_UInt16, Uint16Array ],
+        [ gdal.GDT_Int32, Int32Array ],
+        [ gdal.GDT_UInt32, Uint32Array ],
+        [ gdal.GDT_Int64, BigInt64Array ],
+        [ gdal.GDT_UInt64, BigUint64Array ],
+        [ gdal.GDT_Float16, gdal.Float16Array ],
+        [ gdal.GDT_Float32, Float32Array ],
+        [ gdal.GDT_Float64, Float64Array ]
+      ]
+      for (const [ type, constructor ] of types) {
+        // the types of the older GDAL versions are undefined
+        if (type === undefined) continue
+        assert.equal(gdal.fromDataType(type), constructor, type)
+      }
+    })
+
+    it('should throw for a data type which has no array', () => {
+      // the complex types have no TypedArray of their own
+      assert.throws(() => gdal.fromDataType(gdal.GDT_CInt16), /No such GDAL type/)
+      assert.throws(() => gdal.fromDataType(gdal.GDT_CFloat64), /No such GDAL type/)
+      assert.throws(() => gdal.fromDataType(null), /No such GDAL type/)
+    })
   })
 
   describe('toDataType()', () => {
     it('toDataType() should return a GDAL data type', () => {
       const array = new Float64Array(1)
       assert.equal(gdal.toDataType(array), gdal.GDT_Float64)
+    })
+
+    it('should return the data type of the values of every array', () => {
+      const arrays: [Parameters<typeof gdal.toDataType>[0], string][] = [
+        [ new Uint8Array(1), gdal.GDT_Byte ],
+        [ new Int16Array(1), gdal.GDT_Int16 ],
+        [ new Uint16Array(1), gdal.GDT_UInt16 ],
+        [ new Int32Array(1), gdal.GDT_Int32 ],
+        [ new Uint32Array(1), gdal.GDT_UInt32 ],
+        [ new BigInt64Array(1), gdal.GDT_Int64 ],
+        [ new BigUint64Array(1), gdal.GDT_UInt64 ],
+        [ new gdal.Float16Array(1), gdal.GDT_Float16 ],
+        [ new Float32Array(1), gdal.GDT_Float32 ],
+        [ new Float64Array(1), gdal.GDT_Float64 ]
+      ]
+      for (const [ array, type ] of arrays) {
+        if (type === undefined) continue
+        assert.equal(gdal.toDataType(array), type, array.constructor.name)
+      }
+    })
+
+    it('should be the inverse of fromDataType()', () => {
+      for (const type of [
+        gdal.GDT_Byte, gdal.GDT_Int16, gdal.GDT_UInt16, gdal.GDT_Int32,
+        gdal.GDT_UInt32, gdal.GDT_Int64, gdal.GDT_UInt64, gdal.GDT_Float16,
+        gdal.GDT_Float32, gdal.GDT_Float64
+      ]) {
+        if (type === undefined) continue
+        const constructor = gdal.fromDataType(type)
+        assert.equal(gdal.toDataType(new constructor(1)), type)
+      }
+    })
+
+    it('should throw for an array which has no data type', () => {
+      // this binding has no 8 bit signed integer type, and `Uint8ClampedArray`
+      // is not the array of any of the types which GDAL has
+      assert.throws(() => gdal.toDataType(new Int8Array(1) as unknown as Uint8Array), /No such GDAL type/)
+      assert.throws(() => gdal.toDataType(new Uint8ClampedArray(1) as unknown as Uint8Array), /No such GDAL type/)
+      assert.throws(() => gdal.toDataType([ 1 ] as unknown as Uint8Array), /No such GDAL type/)
     })
   })
 })

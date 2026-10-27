@@ -188,6 +188,7 @@ export default [
   {
     files: [
       'test/stress.js',
+      'test/_float16_polyfill.js',
       'lib/readable.js',
       'lib/writable.js',
       'lib/multiplexer.js',

@@ -810,5 +810,50 @@ describe('gdal_utils', () => {
       output.close()
       gdal.vsimem.release(tempFile)
     })
+
+    it('should support rasters of 64 bit integers', async () => {
+      const inputFile = `/vsimem/calc_int64_in_${String(Math.random()).substring(2)}.tiff`
+      const outputFile = `/vsimem/calc_int64_out_${String(Math.random()).substring(2)}.tiff`
+      const inputDs = gdal.open(inputFile, 'w', 'GTiff', 4, 4, 1, gdal.GDT_Int64)
+      inputDs.bands.get(1).pixels.write(0, 0, 4, 4, new BigInt64Array(16).fill(3n))
+      const outputDs = gdal.open(outputFile, 'w', 'GTiff', 4, 4, 1, gdal.GDT_Int64)
+
+      // the values of a 64 bit raster are `BigInt`s and the signature of the
+      // function cannot say that
+      const twice = ((value: bigint) => value * 2n) as unknown as (value: number) => number
+      await gdal.calcAsync({ in: inputDs.bands.get(1) }, outputDs.bands.get(1), twice)
+
+      assert.equal(outputDs.bands.get(1).dataType, gdal.GDT_Int64)
+      const data = new BigInt64Array(16)
+      outputDs.bands.get(1).pixels.read(0, 0, 4, 4, data)
+      assert.deepEqual(data, new BigInt64Array(16).fill(6n))
+      inputDs.close()
+      outputDs.close()
+      gdal.vsimem.release(inputFile)
+      gdal.vsimem.release(outputFile)
+    })
+
+    it('should reject with invalid arguments', async () => {
+      const tempFile = `/vsimem/invalid_calc_${String(Math.random()).substring(2)}.tiff`
+      const T2m = gdal.open(path.resolve(__dirname, 'data', 'AROME_T2m_10.tiff'))
+      const size = T2m.rasterSize
+      const input = T2m.bands.get(1)
+      const outputDs = gdal.open(tempFile, 'w', 'GTiff', size.x, size.y, 1, gdal.GDT_Float64)
+      const output = outputDs.bands.get(1)
+      const fn = (a: number, b: number) => a + b
+
+      await assert.isRejected(gdal.calcAsync({ A: 1 as unknown as gdal.RasterBand }, output, fn),
+        /All inputs must be instances of gdal.RasterBand/)
+      await assert.isRejected(gdal.calcAsync({ A: input }, {} as gdal.RasterBand, fn),
+        /output must be an instance of gdal.RasterBand/)
+      await assert.isRejected(gdal.calcAsync({ A: input }, output, 5 as unknown as (a: number, b: number) => number),
+        /fn must be a function/)
+      await assert.isRejected(gdal.calcAsync({ A: input }, output, fn, { progress_cb: 5 as unknown as (complete: number) => void }),
+        /progress_cb must be a function/)
+
+      T2m.close()
+      outputDs.close()
+      gdal.vsimem.release(tempFile)
+    })
   })
 })

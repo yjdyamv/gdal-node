@@ -2352,15 +2352,15 @@ export interface xyz {
  *
  * @example
  *
- * const dataType = gdal.fromDataType(array)
+ * const dataType = gdal.toDataType(array)
  * `
  *
  * @method toDataType
  * @throws TypeError
- * @param {TypedArray} array
+ * @param {TypedArray<number>|TypedArray<bigint>} array
  * @return {string}
  */
-  export function toDataType(array: TypedArray): string
+  export function toDataType(array: TypedArray<number>|TypedArray<bigint>): string
 
   /**
  * Create a GDAL pixel function from a JS function.
@@ -9577,7 +9577,7 @@ export class RasterBandPixels {
  * @param {RasterReadableOptions} [options]
  * @param {boolean} [options.blockOptimize=true] Read by file blocks when possible (when `rasterSize.x == blockSize.x`)
  * @param {boolean} [options.convertNoData=true] Automatically convert `RasterBand.noDataValue` to `NaN`
- * @param {new (len: number) => TypedArray} [options.readAs=undefined] Data type to convert to, must be a `TypedArray` constructor
+ * @param {new (len: number) => TypedArray} [options.type=undefined] Data type to convert to, must be a `TypedArray` constructor
  * @returns {RasterReadStream}
  */
   createReadStream(options?: RasterReadableOptions): RasterReadStream

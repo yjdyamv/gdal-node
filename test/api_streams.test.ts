@@ -1,5 +1,5 @@
 import * as gdal from 'gdal-async'
-import { Transform, finished as _finished } from 'stream'
+import { Readable, Transform, finished as _finished } from 'stream'
 import { promisify } from 'util'
 import { assert } from 'chai'
 import * as path from 'path'
@@ -83,6 +83,75 @@ describe('gdal.RasterReadStream', () => {
   for (const file of inputFiles) {
     it(`should accept various formats (${file})`, (done) => readTest(done, file, true))
   }
+
+  it('should convert to the requested data type', async () => {
+    const ds = gdal.open(path.resolve(__dirname, 'data', 'sample.tif'))
+    const band = ds.bands.get(1)
+    const size = band.size
+    const expected = band.pixels.read(0, 0, size.x, size.y)
+    // sample.tif has a single block per row, which means that it is read block
+    // by block, and `readBlockAsync` refuses an array which is not of the data
+    // type of the band, unlike `readAsync` which converts
+    const chunks: Float32Array[] = []
+    const rs = band.pixels.createReadStream({ type: Float32Array })
+    for await (const chunk of rs as AsyncIterable<Float32Array>) {
+      chunks.push(chunk)
+    }
+    ds.close()
+    assert.isNotEmpty(chunks)
+    const actual = new Float32Array(size.x * size.y)
+    let length = 0
+    for (const chunk of chunks) {
+      assert.instanceOf(chunk, Float32Array)
+      actual.set(chunk, length)
+      length += chunk.length
+    }
+    assert.equal(length, size.x * size.y)
+    assert.deepEqual(actual, Float32Array.from(expected))
+  })
+
+  it('should convert the 64 bit integers', async () => {
+    const filename = `/vsimem/ds_rs_int64.${String(Math.random()).substring(2)}.tiff`
+    const writeDs = gdal.open(filename, 'w', 'GTiff', 4, 4, 1, gdal.GDT_Int64)
+    writeDs.bands.get(1).pixels.write(0, 0, 4, 4, new BigInt64Array(16).fill(7n))
+    writeDs.close()
+
+    const ds = gdal.open(filename)
+    const band = ds.bands.get(1)
+    // both paths are checked: a `BigInt64Array` cannot be converted with `set`
+    // into another type of array, so the conversion is left to GDAL
+    const readAll = async (blockOptimize: boolean): Promise<Float64Array> => {
+      const chunks: Float64Array[] = []
+      const rs = band.pixels.createReadStream({ type: Float64Array, blockOptimize })
+      for await (const chunk of rs as AsyncIterable<Float64Array>) {
+        chunks.push(chunk)
+      }
+      const actual = new Float64Array(16)
+      let length = 0
+      for (const chunk of chunks) {
+        assert.instanceOf(chunk, Float64Array)
+        actual.set(chunk, length)
+        length += chunk.length
+      }
+      assert.equal(length, 16)
+      return actual
+    }
+    const expected = new Float64Array(16).fill(7)
+    assert.deepEqual(await readAll(true), expected)
+    assert.deepEqual(await readAll(false), expected)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
+
+  it('should throw with invalid arguments', () => {
+    const ds = gdal.open(path.resolve(__dirname, 'data', 'sample.tif'))
+    const band = ds.bands.get(1)
+    const construct = (options: unknown) => new gdal.RasterReadStream(options as gdal.RasterReadableOptions)
+    assert.throws(() => construct({}), /"band" must be a gdal.RasterBand/)
+    assert.throws(() => construct({ band: {} }), /"band" must be a gdal.RasterBand/)
+    assert.throws(() => construct({ band, type: 5 }), /"type" must be a constructor/)
+    ds.close()
+  })
 })
 
 describe('gdal.RasterWriteStream', () => {
@@ -218,6 +287,101 @@ describe('gdal.RasterWriteStream', () => {
       }
     })
   })
+
+  it('should throw with an invalid band', () => {
+    const construct = (options: unknown) => new gdal.RasterWriteStream(options as gdal.RasterWritableOptions)
+    assert.throws(() => construct({}), /"band" must be a gdal.RasterBand/)
+    assert.throws(() => construct({ band: {} }), /"band" must be a gdal.RasterBand/)
+  })
+
+  it('should fail on a write which is not a TypedArray', async () => {
+    const filename = `/vsimem/ds_ws_invalid.${String(
+      Math.random()
+    ).substring(2)}.tmp.tiff`
+    const ds = gdal.open(filename, 'w', 'GTiff', 64, 64, 1, gdal.GDT_Float64)
+    const ws = ds.bands.get(1).pixels.createWriteStream()
+    ws.write({} as unknown as Float64Array)
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /Only TypedArrays are supported/)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
+
+  it('should fail on mixing the data types', async () => {
+    const filename = `/vsimem/ds_ws_mixing.${String(
+      Math.random()
+    ).substring(2)}.tmp.tiff`
+    const ds = gdal.open(filename, 'w', 'GTiff', 64, 64, 1, gdal.GDT_Float64)
+    const ws = ds.bands.get(1).pixels.createWriteStream()
+    ws.write(new Float64Array(64))
+    ws.write(new Float32Array(64))
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /Type mixing is not supported/)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
+
+  it('should fail when the stream ends with pending data', async () => {
+    const filename = `/vsimem/ds_ws_pending.${String(
+      Math.random()
+    ).substring(2)}.tmp.tiff`
+    const ds = gdal.open(filename, 'w', 'GTiff', 64, 64, 1, gdal.GDT_Float64)
+    const ws = ds.bands.get(1).pixels.createWriteStream()
+    ws.write(new Float64Array(64))
+    ws.end()
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /Stream finished with pending data/)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
+
+  it('should fail when the stream ends before filling the raster', async () => {
+    const filename = `/vsimem/ds_ws_filling.${String(
+      Math.random()
+    ).substring(2)}.tmp.tiff`
+    const ds = gdal.open(filename, 'w', 'GTiff', 64, 128, 1, gdal.GDT_Float64, { BLOCKXSIZE: 64, BLOCKYSIZE: 64 })
+    const ws = ds.bands.get(1).pixels.createWriteStream()
+    // one whole block of two is written, so nothing is left pending
+    ws.write(new Float64Array(64 * 64))
+    ws.end()
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /Stream finished before filling the raster/)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
+
+  it('should fail when the dataset is opened in read-only mode', async () => {
+    const ds = gdal.open(path.resolve(__dirname, 'data', 'sample.tif'))
+    const band = ds.bands.get(1)
+    const size = band.size
+    const ws = band.pixels.createWriteStream()
+    ws.write(new Uint8Array(size.x * size.y))
+    ws.end()
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /read-only mode/)
+    ds.close()
+  })
+
+  it('should propagate an exception thrown by the callback of the user', async () => {
+    const filename = `/vsimem/ds_ws_throw.${String(
+      Math.random()
+    ).substring(2)}.tmp.tiff`
+    const ds = gdal.open(filename, 'w', 'GTiff', 64, 64, 1, gdal.GDT_Float64)
+    const ws = ds.bands.get(1).pixels.createWriteStream()
+    ws.write(new Float64Array(64 * 64), () => {
+      throw new Error('stir the pot')
+    })
+    const error = await finished(ws).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /stir the pot/)
+    ds.close()
+    gdal.vsimem.release(filename)
+  })
 })
 
 describe('gdal.RasterReadStream + gdal.RasterWriteStream', () => {
@@ -325,6 +489,53 @@ describe('gdal.RasterMuxStream', () => {
     }))
   }
 
+  // the mux only needs streams, but the typings ask for `RasterReadStream`,
+  // and the input does not have to come from a raster
+  function mockInput(...chunks: Float64Array[]): gdal.RasterReadStream {
+    const input = new Readable({ objectMode: true, read: () => undefined })
+    for (const chunk of chunks) input.push(chunk)
+    input.push(null)
+    return input as unknown as gdal.RasterReadStream
+  }
+
+  async function drain(stream: AsyncIterable<unknown>): Promise<void> {
+    for await (const chunk of stream) {
+      // nothing, the point is to consume the stream
+      void chunk
+    }
+  }
+
   it('should accept multiple inputs', () => testMux(undefined))
   it('should support different block sizes', () => testMux(false))
+
+  // the mux synchronizes its inputs on the largest buffer which all of them can
+  // fill, which means that the buffers which are smaller than that have to be
+  // consolidated, and this is what an input which is not read in one piece
+  // produces
+  it('should consolidate the buffers which are smaller than the output block', async () => {
+    const mux = new gdal.RasterMuxStream({
+      A: mockInput(
+        new Float64Array(500).fill(1),
+        new Float64Array(500).fill(2),
+        new Float64Array(500).fill(3)),
+      B: mockInput(new Float64Array(1500).fill(9))
+    }, { blockOptimize: false })
+    const chunks: Record<string, Float64Array>[] = []
+    for await (const chunk of mux as AsyncIterable<Record<string, Float64Array>>) {
+      chunks.push(chunk)
+    }
+    assert.lengthOf(chunks, 1)
+    assert.deepEqual(chunks[0].A, Float64Array.from({ length: 1500 }, (_, i) => Math.floor(i / 500) + 1))
+    assert.deepEqual(chunks[0].B, new Float64Array(1500).fill(9))
+  })
+
+  it('should fail when an input ends before the others', async () => {
+    const mux = new gdal.RasterMuxStream({
+      short: mockInput(new Float64Array(10)),
+      long: mockInput(new Float64Array(20))
+    })
+    const error = await drain(mux as AsyncIterable<unknown>).then(() => undefined, (e: unknown) => e)
+    assert.instanceOf(error, Error)
+    assert.match((error as Error).message, /premature end on short/)
+  })
 })

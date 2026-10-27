@@ -241,5 +241,14 @@ ${Object.keys(metadata).map((k) => `    <MDI key="${k}">${metadata[k]}</MDI>`).j
       gdal.wrapVRT({
         bands: [ { sources: [ {} as gdal.RasterBand ] } ] })
     }, /Dataset must have at least one RasterBand/)
+
+    // the check for a band without sources only looks at the first band
+    assert.throws(() => {
+      gdal.wrapVRT({
+        bands: [
+          { sources: [ gdal.open(arome_t2m).bands.get(1) ] },
+          { sources: [] }
+        ] })
+    }, /Every band must contain at least one source RasterBand/)
   })
 })
