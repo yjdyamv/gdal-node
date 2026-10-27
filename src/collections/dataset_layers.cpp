@@ -96,7 +96,7 @@ struct getBody : node_gdal::AsyncMethodBody {
         std::unique_ptr<std::string> layer_name_ptr(layer_name);
         CPLErrorReset();
         OGRLayer *lyr = raw->GetLayerByName(layer_name->c_str());
-        if (lyr == nullptr) { throw GDALError::fromGDAL(); }
+        if (lyr == nullptr) { throw GDALError::fromGDALOr("Layer not found: " + *layer_name); }
         return lyr;
       };
     } else if (info[0].IsNumber()) {
@@ -104,7 +104,7 @@ struct getBody : node_gdal::AsyncMethodBody {
       job.main = [raw, id](const GDALExecutionProgress &) {
         CPLErrorReset();
         OGRLayer *lyr = raw->GetLayer(id);
-        if (lyr == nullptr) { throw GDALError::fromGDAL(); }
+        if (lyr == nullptr) { throw GDALError::fromGDALOr("Layer not found: " + std::to_string(id)); }
         return lyr;
       };
     } else {

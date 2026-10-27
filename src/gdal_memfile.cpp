@@ -235,7 +235,7 @@ NAPI_METHOD(Memfile::vsimemRelease) {
   CPLErrorReset();
   void *data = VSIGetMemFileBuffer(filename.c_str(), &len, false);
   if (data == nullptr) {
-    throw GDALError::fromGDAL();
+    throw GDALError::fromGDALOr("In-memory file not found: " + filename);
     return node_gdal::napi_env().Undefined();
   }
 

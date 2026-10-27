@@ -235,6 +235,19 @@ struct readBody : node_gdal::AsyncMethodBody {
       Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
+    // A missing property leaves the pointer empty, and every step from here on
+    // reads both of them: the length of the read is a function of the span and
+    // GDALMDArray::Read() takes the origin as its first argument, so an
+    // options object without them crashed the process instead of being
+    // refused
+    if (gdal_origin == nullptr) {
+      Napi::TypeError::New(node_gdal::napi_env(), "origin is required").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (gdal_span == nullptr) {
+      Napi::TypeError::New(node_gdal::napi_env(), "span is required").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
     GPtrDiff_t highest = findHighest(self->dimensions, gdal_span, gdal_stride, offset);
     GPtrDiff_t lowest = findLowest(self->dimensions, gdal_span, gdal_stride, offset);
     size_t length = (highest - (lowest < 0 ? lowest : 0)) + 1;

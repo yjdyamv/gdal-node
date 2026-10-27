@@ -257,7 +257,7 @@ Napi::Value getEntry(const Napi::CallbackInfo &info) {
   CPLErrorReset();
   const GDALColorEntry *color = raw->GetColorEntry(index);
   if (color == nullptr) {
-    throw GDALError::fromGDAL();
+    throw GDALError::fromGDALOr("Color not found: index " + std::to_string(index));
     return node_gdal::napi_env().Undefined();
   }
 

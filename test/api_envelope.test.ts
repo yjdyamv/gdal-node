@@ -258,5 +258,43 @@ describe('gdal.Envelope', () => {
           assert.eventually.propertyVal(envelopeQ, 'maxY', 2) ]))
       })
     })
+    describe('the other envelope', () => {
+      it('should refuse a value which is not an envelope', () => {
+        const envelope = new gdal.Envelope({ minX: 0, maxX: 1, minY: 0, maxY: 1 })
+        // the coordinates of the argument used to be read directly, so a value
+        // which had none of them raised "Cannot read properties of undefined
+        // (reading 'minX')", which names the property and not the argument
+        const values = [ undefined, null, 1, 'envelope', {}, { minX: 0, maxX: 1, minY: 0 } ]
+        for (const value of values) {
+          assert.throws(
+            () => envelope.intersects(value as gdal.Envelope),
+            TypeError,
+            'envelope must be an Envelope'
+          )
+          assert.throws(
+            () => envelope.contains(value as gdal.Envelope),
+            TypeError,
+            'envelope must be an Envelope'
+          )
+          assert.throws(
+            () => envelope.intersect(value as gdal.Envelope),
+            TypeError,
+            'envelope must be an Envelope'
+          )
+          assert.throws(
+            () => envelope.merge(value as gdal.Envelope),
+            TypeError,
+            'envelope must be an Envelope'
+          )
+        }
+      })
+      it('should accept an object which has the coordinates', () => {
+        const envelope = new gdal.Envelope({ minX: 0, maxX: 1, minY: 0, maxY: 1 })
+        const other = { minX: 0, maxX: 2, minY: 0, maxY: 2 }
+        assert.isTrue(envelope.intersects(other as gdal.Envelope))
+        envelope.merge(other as gdal.Envelope)
+        assert.equal(envelope.maxX, 2)
+      })
+    })
   })
 })

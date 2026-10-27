@@ -40,6 +40,13 @@ class GDALError : public std::exception {
   // The failure which GDAL or OGR last reported
   static GDALError fromGDAL();
 
+  // The failure which GDAL or OGR last reported, or `fallback` when it reported
+  // nothing. Not every failure sets a CPL error: a lookup of something which
+  // does not exist returns null and says nothing about it, and fromGDAL() would
+  // report nothing but "Operation failed". The call site knows what it was
+  // looking for, so it can say it instead.
+  static GDALError fromGDALOr(const std::string &fallback);
+
   // The operation was interrupted by its AbortSignal, the error has the same
   // shape as the AbortError of the Node.js core (node:internal/errors)
   static GDALError aborted() {

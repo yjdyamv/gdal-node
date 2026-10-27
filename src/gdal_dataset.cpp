@@ -950,7 +950,12 @@ Napi::Value setGCPs(const Napi::CallbackInfo &info) {
   if (!args.get(0, "gcps", gcps)) return args.failed();
   if (!args.optional(1, "projection", projection)) return args.failed();
 
-  std::shared_ptr<GDAL_GCP[]> list(new GDAL_GCP[gcps.Length()]);
+  // The properties of a GCP are all optional in the object which the caller
+  // gives, so the array is value initialised: a missing one used to leave the
+  // uninitialised contents of the heap in the GCP, which were then stored in
+  // the dataset as numbers of 1e180
+  std::shared_ptr<GDAL_GCP[]> list(new GDAL_GCP[gcps.Length()]());
+
   std::shared_ptr<std::string[]> pszId_list(new std::string[gcps.Length()]);
   std::shared_ptr<std::string[]> pszInfo_list(new std::string[gcps.Length()]);
   GDAL_GCP *gcp = list.get();

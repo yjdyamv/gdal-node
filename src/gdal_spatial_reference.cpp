@@ -137,8 +137,16 @@ struct setWellKnownGeogCSBody : node_gdal::SyncMethodBody {
         info.Env(), "A SpatialReference retrieved from a layer, a geometry or a multidim object");
       return info.Env().Undefined();
     }
+    CPLErrorReset();
     int err = obj->get()->SetWellKnownGeogCS(param.c_str());
-    if (err) { throw GDALError(getOGRErrMsg(err)); }
+    // OSRSetWellKnownGeogCS() returns a bare OGRERR_FAILURE for a name which it
+    // does not know, without saying which name it was told to look for
+    if (err) {
+      const char *msg = getOGRErrMsg(err);
+      throw GDALError(
+        msg != nullptr && *msg != '\0' ? std::string(msg) : std::string("Cannot set the well known geog CS: ") + param
+      );
+    }
     return info.Env().Undefined();
   }
 };

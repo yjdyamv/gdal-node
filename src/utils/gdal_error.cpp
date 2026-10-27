@@ -39,6 +39,13 @@ GDALError GDALError::fromGDAL() {
   }
 }
 
+GDALError GDALError::fromGDALOr(const std::string &fallback) {
+  const char *message = CPLGetLastErrorMsg();
+  if (message != nullptr && *message != '\0') { return fromGDAL(); }
+  CPLError(CE_Failure, CPLE_AppDefined, "%s", fallback.c_str());
+  return fromGDAL();
+}
+
 namespace {
 
 // The name of the class of `error`: the base class is the one of everything

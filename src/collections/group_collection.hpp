@@ -91,7 +91,11 @@ class GroupCollection : public GDALObject<SELF> {
           r = SELF::__get(raw, idx);
         else
           r = SELF::__get(raw, name);
-        if (r == nullptr) throw GDALError("Invalid element");
+        // The name, or the index, of what was being looked for: the caller
+        // knows which collection it is asking, but not which of the elements
+        // the collection does not have
+        if (r == nullptr)
+          throw GDALError(isString ? "Element not found: " + name : "Element not found: index " + std::to_string(idx));
         return r;
       };
       job.rval = [gdal_ds](std::shared_ptr<GDALOBJ> r, const GetFromPersistentFunc &) {

@@ -437,6 +437,26 @@ describe('gdal', () => {
         }, /arrayStartIdx/)
       })
 
+      it('should require both the origin and the span', () => {
+        // the length of the read is a function of the span and
+        // GDALMDArray::Read() takes the origin as its first argument, so a
+        // missing one of them used to crash the process instead of being
+        // refused
+        const without = (options: Record<string, unknown>) => options as unknown as gdal.MDArrayOptions
+        assert.throws(() => {
+          mdarray.read(without({ span: [ 1, 5, 4 ] }))
+        }, /origin is required/)
+        assert.throws(() => {
+          mdarray.read(without({ origin: [ 0, 0, 0 ] }))
+        }, /span is required/)
+        assert.throws(() => {
+          mdarray.read(without({}))
+        }, /origin is required/)
+        assert.throws(() => {
+          mdarray.read(without({ origin: [ 0, 0, 0 ], span: null }))
+        }, /span is required/)
+      })
+
     })
 
     describe('readAsync', () => {
@@ -509,6 +529,11 @@ describe('gdal', () => {
           origin: [ 0, 0, 0 ],
           span: [ 2, 5, 5 ]
         }), /arrayStartIdx/)
+      })
+
+      it('should require both the origin and the span', () => {
+        const without = (options: Record<string, unknown>) => options as unknown as gdal.MDArrayOptions
+        return assert.isRejected(mdarray.readAsync(without({ origin: [ 0, 0, 0 ] })), /span is required/)
       })
     })
   })

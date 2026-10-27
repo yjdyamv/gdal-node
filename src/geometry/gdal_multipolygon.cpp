@@ -60,7 +60,7 @@ Napi::Value unionCascaded(const Napi::CallbackInfo &info) {
   MultiPolygon *geom = node_gdal::UnwrapWrapped<MultiPolygon>(info.This().As<Napi::Object>());
   auto r = geom->get()->UnionCascaded();
   if (r == nullptr) {
-    throw GDALError::fromGDAL();
+    throw GDALError::fromGDALOr("Cannot compute the union of the polygons");
     return node_gdal::napi_env().Undefined();
   }
 

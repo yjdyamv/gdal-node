@@ -250,6 +250,14 @@ describe('gdal.SpatialReference', () => {
         srs.setWellKnownGeogCS('invalid')
       })
     })
+    it('should name the name which it did not recognize', () => {
+      const srs = new gdal.SpatialReference()
+      // OSRSetWellKnownGeogCS() returns a bare failure without saying which
+      // name it was given
+      assert.throws(() => {
+        srs.setWellKnownGeogCS('invalid')
+      }, /Cannot set the well known geog CS: invalid/)
+    })
   })
   describe('validate', () => {
     it('should validate a valid SpatialReference', () => {

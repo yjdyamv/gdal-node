@@ -935,7 +935,7 @@ struct convexHullBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->ConvexHull();
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the convex hull of the geometry"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -979,7 +979,7 @@ struct boundaryBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Boundary();
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the boundary of the geometry"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1032,7 +1032,7 @@ struct intersectionBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Intersection(gdal_x);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the intersection of the geometries"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1085,7 +1085,7 @@ struct unionGeometryBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Union(gdal_x);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the union of the geometries"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1138,7 +1138,7 @@ struct differenceBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Difference(gdal_x);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the difference of the geometries"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1191,7 +1191,7 @@ struct symDifferenceBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->SymDifference(gdal_x);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot compute the symmetric difference of the geometries"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1243,7 +1243,7 @@ struct simplifyBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Simplify(tolerance);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot simplify the geometry"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1295,7 +1295,9 @@ struct simplifyPreserveTopologyBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->SimplifyPreserveTopology(tolerance);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) {
+        throw GDALError::fromGDALOr("Cannot simplify the geometry while preserving its topology");
+      }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1353,7 +1355,7 @@ struct bufferBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom, distance, number_of_segments](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->Buffer(distance, number_of_segments);
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot buffer the geometry"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1400,7 +1402,7 @@ struct makeValidBody : node_gdal::AsyncMethodBody {
     job.main = [gdal_geom](const GDALExecutionProgress &) {
       CPLErrorReset();
       auto r = gdal_geom->MakeValid();
-      if (r == nullptr) throw GDALError::fromGDAL();
+      if (r == nullptr) { throw GDALError::fromGDALOr("Cannot make the geometry valid"); }
       return r;
     };
     job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
@@ -1615,7 +1617,7 @@ struct exportToKMLBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToKML();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError::fromGDAL();
+      if (text == nullptr) { throw GDALError::fromGDALOr("Cannot convert the geometry to KML"); }
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -1671,7 +1673,7 @@ struct exportToGMLBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToGML();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError::fromGDAL();
+      if (text == nullptr) { throw GDALError::fromGDALOr("Cannot convert the geometry to GML"); }
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -1727,7 +1729,7 @@ struct exportToJSONBody : node_gdal::AsyncMethodBody {
       uv_sem_wait(async_lock);
       char *text = gdal_geom->exportToJson();
       uv_sem_post(async_lock);
-      if (text == nullptr) throw GDALError::fromGDAL();
+      if (text == nullptr) { throw GDALError::fromGDALOr("Cannot convert the geometry to GeoJSON"); }
       return text;
     };
     job.rval = [](char *text, const GetFromPersistentFunc &) {
@@ -1784,11 +1786,17 @@ struct centroidBody : node_gdal::AsyncMethodBody {
     job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
       OGRPoint *point = new OGRPoint();
       uv_sem_wait(async_lock);
+      // the message of a failure in this thread which came from an earlier call
+      // would otherwise be read as the reason for this one
+      CPLErrorReset();
       OGRErr err = gdal_geom->Centroid(point);
       uv_sem_post(async_lock);
       if (err) {
         delete point;
-        throw GDALError(getOGRErrMsg(err));
+        const char *msg = getOGRErrMsg(err);
+        throw GDALError(
+          msg != nullptr && *msg != '\0' ? std::string(msg) : std::string("Cannot compute the centroid of the geometry")
+        );
       }
       return point;
     };
@@ -2159,7 +2167,7 @@ struct createFromGeoJsonBody : node_gdal::AsyncMethodBody {
       CPLErrorReset();
       std::unique_ptr<std::string> val_ptr(val);
       OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(val->c_str());
-      if (geom == nullptr) throw GDALError::fromGDAL();
+      if (geom == nullptr) { throw GDALError::fromGDALOr("Cannot parse the GeoJSON"); }
       return geom;
     };
     job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
@@ -2230,7 +2238,7 @@ struct createFromGeoJsonBufferBody : node_gdal::AsyncMethodBody {
       }
       OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(oDocument.GetRoot());
 
-      if (geom == nullptr) throw GDALError::fromGDAL();
+      if (geom == nullptr) { throw GDALError::fromGDALOr("Cannot parse the GeoJSON"); }
       return geom;
     };
     job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };

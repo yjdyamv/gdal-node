@@ -301,7 +301,7 @@ describe('gdal.Dataset', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
             assert.throws(() => {
               ds.layers.get(5)
-            })
+            }, /Layer not found: 5/)
           })
           it('should throw if dataset is closed', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
@@ -320,7 +320,15 @@ describe('gdal.Dataset', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
             assert.throws(() => {
               ds.layers.get('bogus')
-            })
+            }, /Layer not found: bogus/)
+          })
+          it('should not reuse the error of a previous failure', () => {
+            // a missing layer is not a failure of GDAL, which reports nothing
+            const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
+            assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+            assert.throws(() => {
+              ds.layers.get('bogus')
+            }, /^Layer not found: bogus$/)
           })
           it('should throw if dataset is closed', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
@@ -337,11 +345,19 @@ describe('gdal.Dataset', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
             return assert.eventually.instanceOf(ds.layers.getAsync(0), gdal.Layer)
           })
+          it('should reject if layer id is out of range', () => {
+            const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
+            return assert.isRejected(ds.layers.getAsync(5), /Layer not found: 5/)
+          })
         })
         describe('w/name argument', () => {
           it('should return Layer', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
             return assert.eventually.instanceOf(ds.layers.getAsync('sample'), gdal.Layer)
+          })
+          it('should reject if layer name doesnt exist', () => {
+            const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
+            return assert.isRejected(ds.layers.getAsync('bogus'), /Layer not found: bogus/)
           })
         })
       })
@@ -1262,6 +1278,26 @@ describe('gdal.Dataset', () => {
       assert.strictEqual(ds.getGCPProjection(), srs.toWKT())
 
       ds.close()
+    })
+    it('should default the coordinates which are not given', () => {
+      // every property of a GCP is optional in the object which is given, and
+      // the ones which were missing used to be left as the uninitialised
+      // contents of the heap, which the dataset then stored as coordinates of
+      // 1e180
+      const filename = '/vsimem/gcp_partial.tif'
+      const ds = gdal.open(filename, 'w', 'GTiff', 10, 10, 1, gdal.GDT_Byte)
+      ds.setGCPs([ { pszId: 'a', pszInfo: 'b' } ])
+      const gcps = ds.getGCPs()
+      assert.equal(gcps.length, 1)
+      assert.equal(gcps[0].pszId, 'a')
+      assert.equal(gcps[0].pszInfo, 'b')
+      assert.equal(gcps[0].dfGCPPixel, 0)
+      assert.equal(gcps[0].dfGCPLine, 0)
+      assert.equal(gcps[0].dfGCPX, 0)
+      assert.equal(gcps[0].dfGCPY, 0)
+      assert.equal(gcps[0].dfGCPZ, 0)
+      ds.close()
+      gdal.vsimem.release(filename)
     })
   })
   describe('testCapability()', () => {

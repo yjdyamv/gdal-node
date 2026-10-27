@@ -146,5 +146,10 @@ describe('gdal.vsimem', () => {
         gdal.vsimem.release('park.geo.json')
       })
     })
+    it('should say which file it could not find', () => {
+      assert.throws(() => {
+        gdal.vsimem.release('/vsimem/no_such_file.tif')
+      }, /In-memory file not found: \/vsimem\/no_such_file\.tif/)
+    })
   })
 })

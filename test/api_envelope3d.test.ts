@@ -338,5 +338,33 @@ describe('gdal.Envelope3D', () => {
         assert.equal(envelopeA.maxZ, 2)
       })
     })
+    describe('the other envelope', () => {
+      it('should refuse a value which is not a 3D envelope', () => {
+        const envelope = new gdal.Envelope3D({ minX: 0, maxX: 1, minY: 0, maxY: 1, minZ: 0, maxZ: 1 })
+        const values = [ undefined, null, 1, 'envelope', {}, { minX: 0, maxX: 1, minY: 0, maxY: 1 } ]
+        for (const value of values) {
+          assert.throws(
+            () => envelope.intersects(value as gdal.Envelope3D),
+            TypeError,
+            'envelope must be an Envelope3D'
+          )
+          assert.throws(
+            () => envelope.contains(value as gdal.Envelope3D),
+            TypeError,
+            'envelope must be an Envelope3D'
+          )
+          assert.throws(
+            () => envelope.intersect(value as gdal.Envelope3D),
+            TypeError,
+            'envelope must be an Envelope3D'
+          )
+          assert.throws(
+            () => envelope.merge(value as gdal.Envelope3D),
+            TypeError,
+            'envelope must be an Envelope3D'
+          )
+        }
+      })
+    })
   })
 })

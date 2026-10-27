@@ -107,9 +107,13 @@ Napi::Value get(const Napi::CallbackInfo &info) {
   int i;
   if (!args.get(0, "index", i)) return args.failed();
 
+  // the lookup below fails without setting an error when the index is out of
+  // range, and fromGDALOr() would otherwise report the failure of an earlier
+  // call
+  CPLErrorReset();
   auto r = geom->get()->getGeometryRef(i);
   if (r == nullptr) {
-    throw GDALError::fromGDAL();
+    throw GDALError::fromGDALOr("Geometry not found: index " + std::to_string(i));
     return node_gdal::napi_env().Undefined();
   }
   return Geometry::New(r, false);

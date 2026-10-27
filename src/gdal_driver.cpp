@@ -397,7 +397,7 @@ struct openBody : node_gdal::AsyncMethodBody {
       const char *driver_list[2] = {raw->GetDescription(), nullptr};
       CPLErrorReset();
       GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), nullptr);
-      if (!ds) throw GDALError::fromGDAL();
+      if (!ds) throw GDALError::fromGDALOr("Cannot open: " + path);
       return ds;
     };
     job.rval = DatasetRval;

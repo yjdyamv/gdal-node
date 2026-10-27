@@ -202,6 +202,15 @@ describe('gdal.drivers', () => {
         driver.open(`${__dirname}/data/sample.tif`, 'r', 'GEOREF_SOURCES=NONE')
       }, /Failed parsing options/)
     })
+
+    it('should say which file it could not open', () => {
+      // the driver sets no error of its own when it does not know the file, so
+      // the message used to be the generic one of a GDAL call which failed
+      const driver = gdal.drivers.get('GTiff')
+      assert.throws(() => {
+        driver.open(`${__dirname}/data/no_such_file.tif`)
+      }, /Cannot open: .*no_such_file\.tif/)
+    })
   })
 
   describe('create()', () => {

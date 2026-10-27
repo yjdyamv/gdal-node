@@ -37,6 +37,7 @@ SimpleCurve::SimpleCurve(const Napi::CallbackInfo &info)
  * @memberof SimpleCurve
  * @param {number} distance
  * @return {Point}
+ * @throws {RangeError} the curve has no points
  */
 /**
  * Compute the length of a multiSimpleCurve.
@@ -97,11 +98,18 @@ Napi::Value value(const Napi::CallbackInfo &info) {
 
   SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
 
-  OGRPoint *pt = new OGRPoint();
   double dist;
 
   if (!args.get(0, "distance", dist)) return args.failed();
+  // `OGRSimpleCurve::Value()` reads the first and the last vertex of the curve
+  // without looking whether there is one, so asking for the point of an empty
+  // curve segfaults the process
+  if (geom->get()->getNumPoints() == 0) {
+    Napi::RangeError::New(node_gdal::napi_env(), "Cannot get the value of an empty curve").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
 
+  OGRPoint *pt = new OGRPoint();
   geom->get()->Value(dist, pt);
 
   return Point::New(pt);

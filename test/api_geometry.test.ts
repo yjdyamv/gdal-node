@@ -564,10 +564,45 @@ describe('gdal.Geometry', () => {
         return assert.eventually.instanceOf(hull, gdal.Polygon)
       })
     })
+    // OGR returns a null geometry and sets no error when it cannot compute one
+    // of these from an empty ring, which used to be reported as the message of
+    // whatever had failed before it in the same thread, or as the bare
+    // "Operation failed"
+    describe('the operations which OGR refuses without a reason', () => {
+      const empty = () => new gdal.LinearRing()
+
+      it('should name the operation which failed', () => {
+        assert.throws(() => empty().boundary(), /Cannot compute the boundary of the geometry/)
+        assert.throws(() => empty().convexHull(), /Cannot compute the convex hull of the geometry/)
+        assert.throws(() => empty().buffer(0, 8), /Cannot buffer the geometry/)
+        assert.throws(() => empty().centroid(), /Cannot compute the centroid of the geometry/)
+        assert.throws(() => empty().simplify(0), /Cannot simplify the geometry/)
+        assert.throws(
+          () => empty().simplifyPreserveTopology(0),
+          /Cannot simplify the geometry while preserving its topology/
+        )
+        assert.throws(() => empty().makeValid(), /Cannot make the geometry valid/)
+      })
+
+      it('should not report the failure which came before it', () => {
+        // the messages live in a per-thread CPL error, which is only reset when
+        // the call site asks for it
+        assert.throws(() => empty().buffer(0, 8), /Cannot buffer the geometry/)
+        assert.throws(() => empty().centroid(), /Cannot compute the centroid of the geometry/)
+      })
+
+      it('should name the operation which failed asynchronously', async () => {
+        await assert.isRejected(empty().boundaryAsync(), /Cannot compute the boundary of the geometry/)
+        await assert.isRejected(empty().convexHullAsync(), /Cannot compute the convex hull of the geometry/)
+        await assert.isRejected(empty().bufferAsync(0, 8), /Cannot buffer the geometry/)
+        await assert.isRejected(empty().centroidAsync(), /Cannot compute the centroid of the geometry/)
+        await assert.isRejected(empty().simplifyAsync(0), /Cannot simplify the geometry/)
+        await assert.isRejected(empty().makeValidAsync(), /Cannot make the geometry valid/)
+      })
+    })
     describe('boundary()', () => {
       it('should return geometry without inner rings', () => {
         const outerRing = new gdal.LinearRing()
-        outerRing.points.add({ x: 0, y: 0 })
         outerRing.points.add({ x: 20, y: 0 })
         outerRing.points.add({ x: 20, y: 10 })
         outerRing.points.add({ x: 0, y: 10 })

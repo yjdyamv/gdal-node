@@ -9781,6 +9781,7 @@ export class SimpleCurve extends Geometry {
  * @memberof SimpleCurve
  * @param {number} distance
  * @return {Point}
+ * @throws {RangeError} the curve has no points
  */
   value(distance: number): Point
 

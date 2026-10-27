@@ -113,6 +113,10 @@ Napi::Value get(const Napi::CallbackInfo &info) {
   int i;
   if (!args.get(0, "index", i)) return args.failed();
 
+  // the lookup below fails without setting an error when the index is out of
+  // range, and fromGDALOr() would otherwise report the failure of an earlier
+  // call
+  CPLErrorReset();
   OGRLinearRing *r;
   if (i == 0) {
     r = geom->get()->getExteriorRing();
@@ -120,7 +124,7 @@ Napi::Value get(const Napi::CallbackInfo &info) {
     r = geom->get()->getInteriorRing(i - 1);
   }
   if (r == nullptr) {
-    throw GDALError::fromGDAL();
+    throw GDALError::fromGDALOr("Ring not found: index " + std::to_string(i));
     return node_gdal::napi_env().Undefined();
   }
   return LinearRing::New(r, false);

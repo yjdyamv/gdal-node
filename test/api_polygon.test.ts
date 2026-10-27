@@ -19,7 +19,7 @@ describe('gdal.Polygon', () => {
           const polygon = new gdal.Polygon()
           assert.throws(() => {
             polygon.rings.get(2)
-          })
+          }, /Ring not found: index 2/)
         })
         it('should return LinearRing instance', () => {
           const polygon = new gdal.Polygon()
@@ -260,7 +260,18 @@ describe('gdal.MultiPolygon', () => {
       it('should throw if the geometry does not exist', () => {
         assert.throws(() => {
           multiPolygon.children.get(112)
-        })
+        }, /Geometry not found: index 112/)
+      })
+      it('should not reuse the error of a previous failure', () => {
+        // neither lookup sets a CPL error of its own, so the message used to be
+        // whatever the last operation to fail had left behind
+        assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+        assert.throws(() => {
+          multiPolygon.children.get(112)
+        }, /^Geometry not found: index 112$/)
+        assert.throws(() => {
+          new gdal.Polygon().rings.get(2)
+        }, /^Ring not found: index 2$/)
       })
     })
     it('count() should return a number', () => {

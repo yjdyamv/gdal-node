@@ -109,8 +109,20 @@ describe('API surface', () => {
 
     it('should throw when getting a group which does not exist', async () => {
       assert.equal(ds.root.groups.count(), 0)
-      assert.throws(() => ds.root.groups.get(0), /Invalid element/)
-      await assert.isRejected(ds.root.groups.getAsync(0), /Invalid element/)
+      assert.throws(() => ds.root.groups.get(0), /Element not found: index 0/)
+      await assert.isRejected(ds.root.groups.getAsync(0), /Element not found: index 0/)
+    })
+
+    it('should name the element which is not there', () => {
+      // the message is the same for every collection: which one was being
+      // asked is not something the caller can have got wrong
+      const array = ds.root.arrays.get(0)
+      assert.throws(() => ds.root.groups.get('bogus'), /Element not found: bogus/)
+      assert.throws(() => ds.root.arrays.get('bogus'), /Element not found: bogus/)
+      assert.throws(() => ds.root.dimensions.get('bogus'), /Element not found: bogus/)
+      assert.throws(() => array.dimensions.get('bogus'), /Element not found: bogus/)
+      assert.throws(() => array.dimensions.get(99), /Element not found: index 99/)
+      assert.throws(() => array.attributes.get('bogus'), /Element not found: bogus/)
     })
   })
 
@@ -225,6 +237,18 @@ describe('API surface', () => {
       const middle = line.value(5)
       assert.closeTo(middle.x, 5, 1e-6)
       assert.closeTo(middle.y, 0, 1e-6)
+      // the distance is clamped to the curve, as it is in GDAL
+      assert.closeTo(line.value(-1).x, 0, 1e-6)
+      assert.closeTo(line.value(1e9).x, 10, 1e-6)
+    })
+
+    it('should refuse to interpolate on an empty curve', () => {
+      // the curve of a geometry which has no vertices has no first and no last
+      // vertex, and the interpolation of GDAL reads both of them without
+      // looking: asking for the point of an empty curve segfaulted the process
+      assert.throws(() => new gdal.LineString().value(0), /Cannot get the value of an empty curve/)
+      assert.throws(() => new gdal.LinearRing().value(0), /Cannot get the value of an empty curve/)
+      assert.throws(() => new gdal.LineString().value(NaN), /Cannot get the value of an empty curve/)
     })
 
     it('should give the length of a GeometryCollection', () => {

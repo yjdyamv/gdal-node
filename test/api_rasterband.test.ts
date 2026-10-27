@@ -151,6 +151,15 @@ describe('gdal.RasterBand', () => {
             assert.deepEqual(colorTable.get(i), { c1: i, c2: 99 - i , c3: 0, c4: 0 })
           }
         })
+        it('get() should say which color it could not find', () => {
+          // GDAL returns null for an index the table does not have, without
+          // setting an error of its own
+          const colorTable = new gdal.ColorTable(gdal.GPI_RGB)
+          colorTable.ramp(0, { c1: 0, c2: 0, c3: 0, c4: 0 }, 9, { c1: 9, c2: 9, c3: 9, c4: 9 })
+          assert.throws(() => {
+            colorTable.get(99)
+          }, /Color not found: index 99/)
+        })
       })
     })
     describe('"description" property', () => {
