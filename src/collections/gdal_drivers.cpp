@@ -91,8 +91,13 @@ Napi::Value get(const Napi::CallbackInfo &info) {
     gdal_driver = GetGDALDriverManager()->GetDriverByName(name.c_str());
     if (gdal_driver) {
       return Driver::New(gdal_driver);
-      return node_gdal::napi_env().Undefined();
     }
+
+    // A missing driver is not a failure of GDAL, so there is no error to
+    // report: GDALError::fromGDAL() would hand back whatever the last
+    // operation to fail left behind, which has nothing to do with the lookup
+    Napi::Error::New(node_gdal::napi_env(), "Cannot find driver: " + name).ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
 
   } else if (info[0].IsNumber()) {
     int i = static_cast<int>(info[0].As<Napi::Number>().Int64Value());
@@ -100,16 +105,15 @@ Napi::Value get(const Napi::CallbackInfo &info) {
     gdal_driver = GetGDALDriverManager()->GetDriver(i);
     if (gdal_driver) {
       return Driver::New(gdal_driver);
-      return node_gdal::napi_env().Undefined();
     }
+
+    Napi::Error::New(node_gdal::napi_env(), "Cannot find driver with index: " + std::to_string(i)).ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
 
   } else {
     Napi::Error::New(node_gdal::napi_env(), "Argument must be string or integer").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
   }
-
-  throw GDALError::fromGDAL();
-  return node_gdal::napi_env().Undefined();
 }
 
 

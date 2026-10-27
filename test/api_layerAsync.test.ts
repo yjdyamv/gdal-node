@@ -970,6 +970,58 @@ describe('gdal.LayerAsync', () => {
             }, /already destroyed/)
           })
         })
+        // the shapefile of the other cases supports neither lists nor binary
+        // values, so the values which are not primitives need another format
+        const with_layer = (cb: (layer: gdal.Layer) => void) => {
+          const filename = `/vsimem/from_object.${Math.random().toString(2).substring(2)}.gpkg`
+          const ds = gdal.open(filename, 'w', 'GPKG')
+          try {
+            cb(ds.layers.create('from_object', null, gdal.Point))
+          } finally {
+            ds.close()
+            gdal.vsimem.release(filename)
+          }
+        }
+        it('should make fields from the values which are not primitives', () => {
+          with_layer((layer) => {
+            layer.fields.fromObject({
+              when: new Date('2020-01-02T03:04:05Z'),
+              ints: [ 1, 2, 3 ],
+              reals: [ 1.5, 2.5 ],
+              strs: [ 'a', 'b' ],
+              bin: Buffer.from('abc')
+            })
+            assert.equal(layer.fields.get(0).type, gdal.OFTDateTime)
+            assert.equal(layer.fields.get(1).type, gdal.OFTIntegerList)
+            assert.equal(layer.fields.get(2).type, gdal.OFTRealList)
+            assert.equal(layer.fields.get(3).type, gdal.OFTStringList)
+            assert.equal(layer.fields.get(4).type, gdal.OFTBinary)
+          })
+        })
+        it('should not clamp the integers which do not fit in 32 bits', () => {
+          with_layer((layer) => {
+            layer.fields.fromObject({ big: 2 ** 40, bigs: [ 2 ** 40, 2 ** 41 ] })
+            assert.equal(layer.fields.get(0).type, gdal.OFTInteger64)
+            assert.equal(layer.fields.get(1).type, gdal.OFTInteger64List)
+            const feature = new gdal.Feature(layer)
+            feature.fields.set('big', 2 ** 40)
+            layer.features.add(feature)
+            assert.equal(layer.features.first()!.fields.get('big'), 2 ** 40)
+          })
+        })
+        it('should refuse the values which cannot be converted', () => {
+          with_layer((layer) => {
+            assert.throws(() => {
+              layer.fields.fromObject({ nested: [ [ 1 ] ] })
+            }, /Array element cannot be converted into OGRFieldType/)
+            assert.throws(() => {
+              layer.fields.fromObject({ empty: [] })
+            }, /Value cannot be converted into OGRFieldType/)
+            assert.throws(() => {
+              layer.fields.fromObject({ object: {} })
+            }, /Value cannot be converted into OGRFieldType/)
+          })
+        })
       })
       describe('remove()', () => {
         describe('w/id argument', () => {

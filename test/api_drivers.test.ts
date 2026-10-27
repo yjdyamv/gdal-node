@@ -34,7 +34,21 @@ describe('gdal.drivers', () => {
     it('should throw when not found', () => {
       assert.throws(() => {
         gdal.drivers.get('awfag')
-      })
+      }, /Cannot find driver: awfag/)
+    })
+    it('should name the driver and not the last error of GDAL', () => {
+      // a missing driver is not a failure of GDAL, so there is no error to
+      // report: the lookup used to hand back whatever the last operation to
+      // fail left behind, which has nothing to do with the driver
+      assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+      assert.throws(() => {
+        gdal.drivers.get('awfag')
+      }, /^Cannot find driver: awfag$/)
+    })
+    it('should throw when the index is out of range', () => {
+      assert.throws(() => {
+        gdal.drivers.get(gdal.drivers.count())
+      }, /Cannot find driver with index/)
     })
 
     type driverMeta = Record<'DMD_LONGNAME' | 'DMD_MIMETYPE' | 'DMD_EXTENSION' | 'DCAP_CREATE', string | undefined>

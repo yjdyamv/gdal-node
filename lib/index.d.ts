@@ -4772,13 +4772,17 @@ export class FeatureFields {
  * feature.fields.set({name: 'Something'});
  * feature.fields.set('name', 'Something');
  *
+ * // the list types take an array of values
+ * feature.fields.set('names', [ 'Something', 'Else' ]);
+ *
  *
  * @method set
  * @instance
  * @memberof FeatureFields
  * @throws {Error}
  * @param {string|number} key Field name or index
- * @param {any} value
+ * @param {any} value A number, a string, null or a list of them for a field of
+ * one of the list types
  */
   set(key: string|number, value: any): void
 

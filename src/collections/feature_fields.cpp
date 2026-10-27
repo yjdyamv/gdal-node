@@ -34,6 +34,112 @@ Napi::Value FeatureFields::New(Napi::Value layer_obj) {
   return obj;
 }
 
+// Reads the numeric values of a JS array or of a typed array
+static bool toDoubleArray(Napi::Value val, std::vector<double> &values) {
+  if (val.IsArray()) {
+    Napi::Array array = val.As<Napi::Array>();
+    for (uint32_t i = 0; i < array.Length(); i++) {
+      Napi::Value el = array.Get(i);
+      // anything which is not a number would be converted into one, into the
+      // minimum of the type when the conversion is not finite, so it is
+      // refused instead
+      if (!el.IsNumber()) { return false; }
+      values.push_back(el.As<Napi::Number>().DoubleValue());
+    }
+    return true;
+  }
+
+  if (val.IsTypedArray()) {
+    napi_typedarray_type type;
+    size_t length, offset;
+    void *data;
+    napi_value buffer;
+    if (napi_get_typedarray_info(node_gdal::napi_env(), val, &type, &length, &data, &buffer, &offset) != napi_ok) {
+      return false;
+    }
+    for (size_t i = 0; i < length; i++) {
+      switch (type) {
+        case napi_int8_array:
+          values.push_back(static_cast<int8_t *>(data)[i]);
+          break;
+        case napi_uint8_array:
+        case napi_uint8_clamped_array:
+          values.push_back(static_cast<uint8_t *>(data)[i]);
+          break;
+        case napi_int16_array:
+          values.push_back(static_cast<int16_t *>(data)[i]);
+          break;
+        case napi_uint16_array:
+          values.push_back(static_cast<uint16_t *>(data)[i]);
+          break;
+        case napi_int32_array:
+          values.push_back(static_cast<int32_t *>(data)[i]);
+          break;
+        case napi_uint32_array:
+          values.push_back(static_cast<uint32_t *>(data)[i]);
+          break;
+        case napi_float32_array:
+          values.push_back(static_cast<float *>(data)[i]);
+          break;
+        case napi_float64_array:
+          values.push_back(static_cast<double *>(data)[i]);
+          break;
+        default:
+          return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// Sets a field of one of the list types from a JS array or typed array
+inline bool setListField(OGRFeature *f, int field_index, Napi::Value val) {
+  OGRFieldType type = f->GetFieldDefnRef(field_index)->GetType();
+
+  if (type == OFTStringList) {
+    if (!val.IsArray()) { return true; }
+    Napi::Array array = val.As<Napi::Array>();
+    // the strings have to outlive the call to OGR, which keeps the pointers
+    std::vector<std::string> strings;
+    std::vector<const char *> values;
+    for (uint32_t i = 0; i < array.Length(); i++) {
+      Napi::Value el = array.Get(i);
+      if (!el.IsString()) { return true; }
+      strings.push_back(el.As<Napi::String>().Utf8Value());
+    }
+    for (size_t i = 0; i < strings.size(); i++) { values.push_back(strings[i].c_str()); }
+    // the list is null terminated and the count comes from it
+    values.push_back(nullptr);
+    f->SetField(field_index, values.data());
+    return false;
+  }
+
+  std::vector<double> doubles;
+  if (!toDoubleArray(val, doubles)) { return true; }
+
+  switch (type) {
+    case OFTIntegerList: {
+      std::vector<int> values;
+      for (size_t i = 0; i < doubles.size(); i++) { values.push_back(static_cast<int>(doubles[i])); }
+      f->SetField(field_index, static_cast<int>(values.size()), values.data());
+      return false;
+    }
+    case OFTInteger64List: {
+      std::vector<GIntBig> values;
+      for (size_t i = 0; i < doubles.size(); i++) { values.push_back(static_cast<GIntBig>(doubles[i])); }
+      f->SetField(field_index, static_cast<int>(values.size()), values.data());
+      return false;
+    }
+    case OFTRealList:
+      f->SetField(field_index, static_cast<int>(doubles.size()), doubles.data());
+      return false;
+    default:
+      return true;
+  }
+}
+
 inline bool setField(OGRFeature *f, int field_index, Napi::Value val) {
   if (val.IsNumber()) {
     // V8's IsInt32 (what the original used) is "the value survives a round trip
@@ -50,6 +156,8 @@ inline bool setField(OGRFeature *f, int field_index, Napi::Value val) {
     f->SetField(field_index, str.c_str());
   } else if (val.IsNull() || val.IsUndefined()) {
     f->UnsetField(field_index);
+  } else if (val.IsArray() || val.IsTypedArray()) {
+    return setListField(f, field_index, val);
   } else {
     return true;
   }
@@ -69,13 +177,17 @@ inline bool setField(OGRFeature *f, int field_index, Napi::Value val) {
  * feature.fields.set({name: 'Something'});
  * feature.fields.set('name', 'Something');
  *
+ * // the list types take an array of values
+ * feature.fields.set('names', [ 'Something', 'Else' ]);
+ *
  *
  * @method set
  * @instance
  * @memberof FeatureFields
  * @throws {Error}
  * @param {string|number} key Field name or index
- * @param {any} value
+ * @param {any} value A number, a string, null or a list of them for a field of
+ * one of the list types
  */
 
 /**

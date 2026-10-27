@@ -144,6 +144,17 @@ describe('gdal.Dataset', () => {
           })
           assert.deepEqual(ids, expected_ids)
         })
+        it('should stop when the callback returns false', () => {
+          const ds = gdal.open(`${__dirname}/data/multiband.tif`)
+          const ids: (number | null)[] = []
+          ds.bands.forEach((band, i) => {
+            ids.push(band.id)
+            if (i === 2) return false
+            return undefined
+          })
+          ds.close()
+          assert.deepEqual(ids, [ 1, 2 ])
+        })
         it('should throw if dataset is closed', () => {
           const ds = gdal.open(`${__dirname}/data/sample.tif`)
           ds.close()

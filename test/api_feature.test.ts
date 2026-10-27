@@ -339,6 +339,92 @@ describe('gdal.Feature', () => {
             }, /Unsupported type/)
           })
         })
+        describe('w/list values', () => {
+          const list_defn = () => {
+            const lists = new gdal.FeatureDefn()
+            lists.fields.add(new gdal.FieldDefn('ints', gdal.OFTIntegerList))
+            lists.fields.add(new gdal.FieldDefn('i64s', gdal.OFTInteger64List))
+            lists.fields.add(new gdal.FieldDefn('reals', gdal.OFTRealList))
+            lists.fields.add(new gdal.FieldDefn('strs', gdal.OFTStringList))
+            return lists
+          }
+          it('should write the list fields to a dataset', () => {
+            const filename = `/vsimem/list_fields.${Math.random().toString(2).substring(2)}.geojson`
+            const dataset = gdal.open(filename, 'w', 'GeoJSON')
+            try {
+              const layer = dataset.layers.create('list_fields', null, gdal.Point)
+              layer.fields.add(new gdal.FieldDefn('ints', gdal.OFTIntegerList))
+              layer.fields.add(new gdal.FieldDefn('strs', gdal.OFTStringList))
+              const feature = new gdal.Feature(layer)
+              feature.setGeometry(new gdal.Point(1, 2))
+              feature.fields.set({ ints: [ 1, 2 ], strs: [ 'a' ] })
+              layer.features.add(feature)
+            } finally {
+              dataset.close()
+            }
+            try {
+              const reopened = gdal.open(filename)
+              try {
+                const reopened_fields = reopened.layers.get(0).features.first()!.fields
+                assert.deepEqual(reopened_fields.toObject(), { ints: [ 1, 2 ], strs: [ 'a' ] })
+              } finally {
+                reopened.close()
+              }
+            } finally {
+              gdal.vsimem.release(filename)
+            }
+          })
+          it('should set the list fields from arrays', () => {
+            const feature = new gdal.Feature(list_defn())
+            feature.fields.set('ints', [ 1, 2, 3 ])
+            feature.fields.set('i64s', [ 2 ** 40, 2 ** 41 ])
+            feature.fields.set('reals', [ 1.5, 2.5 ])
+            feature.fields.set('strs', [ 'a', 'b' ])
+            assert.deepEqual(feature.fields.get('ints'), [ 1, 2, 3 ])
+            assert.deepEqual(feature.fields.get('i64s'), [ 2 ** 40, 2 ** 41 ])
+            assert.deepEqual(feature.fields.get('reals'), [ 1.5, 2.5 ])
+            assert.deepEqual(feature.fields.get('strs'), [ 'a', 'b' ])
+          })
+          it('should set the numeric list fields from typed arrays', () => {
+            const feature = new gdal.Feature(list_defn())
+            feature.fields.set('ints', new Int32Array([ 4, 5 ]))
+            feature.fields.set('reals', new Float64Array([ 0.5 ]))
+            assert.deepEqual(feature.fields.get('ints'), [ 4, 5 ])
+            assert.deepEqual(feature.fields.get('reals'), [ 0.5 ])
+          })
+          it('should set an empty list', () => {
+            const feature = new gdal.Feature(list_defn())
+            feature.fields.set('ints', [ 1 ])
+            feature.fields.set('strs', [ 'a' ])
+            feature.fields.set('ints', [])
+            feature.fields.set('strs', [])
+            assert.deepEqual(feature.fields.get('ints'), [])
+            assert.deepEqual(feature.fields.get('strs'), [])
+          })
+          it('should set the list fields from an object and from an array of values', () => {
+            const feature = new gdal.Feature(list_defn())
+            feature.fields.set({ ints: [ 6 ], strs: [ 'z' ] })
+            assert.deepEqual(feature.fields.get('ints'), [ 6 ])
+            assert.deepEqual(feature.fields.get('strs'), [ 'z' ])
+            feature.fields.set([ [], [], [], [ 'r' ] ])
+            assert.deepEqual(feature.fields.get(3), [ 'r' ])
+          })
+          it('should throw an error if an element cannot be converted', () => {
+            const feature = new gdal.Feature(list_defn())
+            assert.throws(() => {
+              feature.fields.set('ints', [ 'a' ])
+            }, /Unsupported type/)
+            assert.throws(() => {
+              feature.fields.set('ints', [ [ 1 ] ])
+            }, /Unsupported type/)
+            assert.throws(() => {
+              feature.fields.set('reals', [ null ])
+            }, /Unsupported type/)
+            assert.throws(() => {
+              feature.fields.set('strs', [ 1 ])
+            }, /Unsupported type/)
+          })
+        })
         describe('w/array argument', () => {
           it('should properly set all fields', () => {
             const feature = new gdal.Feature(defn)
