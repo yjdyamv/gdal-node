@@ -21,22 +21,6 @@ Napi::FunctionReference &CoordinateTransformation::constructor() {
   return node_gdal::env_context().constructor<CoordinateTransformation>();
 }
 
-void CoordinateTransformation::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(CoordinateTransformation);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "CoordinateTransformation",
-    {
-        METHOD(toString)
-        METHOD(transformPoint)
-    });
-
-  target.Set("CoordinateTransformation", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 CoordinateTransformation::CoordinateTransformation(const Napi::CallbackInfo &info)
   : GDALObject<CoordinateTransformation>(info) {
   Handle<OGRCoordinateTransformation> pending = node_gdal::TakePendingHandle<OGRCoordinateTransformation>();
@@ -161,10 +145,6 @@ Napi::Value CoordinateTransformation::New(OGRCoordinateTransformation *transform
   return obj;
 }
 
-NAPI_METHOD(CoordinateTransformation::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "CoordinateTransformation");
-}
-
 /**
  * Transform point from source to destination space.
  *
@@ -194,7 +174,14 @@ NAPI_METHOD(CoordinateTransformation::toString) {
  * @param {xyz} point
  * @return {xyz} A regular object containing `x`, `y`, `z` properties.
  */
-NAPI_METHOD(CoordinateTransformation::transformPoint) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "CoordinateTransformation");
+}
+
+
+Napi::Value transformPoint(const Napi::CallbackInfo &info) {
   Args args(info);
   CoordinateTransformation *transform = node_gdal::UnwrapWrapped<CoordinateTransformation>(info.This().As<Napi::Object>());
 
@@ -220,7 +207,7 @@ NAPI_METHOD(CoordinateTransformation::transformPoint) {
 
 #ifdef BUNDLED_GDAL
   int proj_error_code = 0;
-  int r = transform->this_->TransformWithErrorCodes(1, &x, &y, &z, nullptr, &proj_error_code);
+  int r = transform->get()->TransformWithErrorCodes(1, &x, &y, &z, nullptr, &proj_error_code);
   if (!r || proj_error_code != 0) {
     Napi::Error::New(
       node_gdal::napi_env(),
@@ -229,7 +216,7 @@ NAPI_METHOD(CoordinateTransformation::transformPoint) {
     return node_gdal::napi_env().Undefined();
   }
 #else
-  if (!transform->this_->Transform(1, &x, &y, &z)) {
+  if (!transform->get()->Transform(1, &x, &y, &z)) {
     Napi::Error::New(node_gdal::napi_env(), "Error transforming point").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
   }
@@ -241,6 +228,22 @@ NAPI_METHOD(CoordinateTransformation::transformPoint) {
   result.Set( Napi::String::New(node_gdal::napi_env(), "z"), Napi::Number::New(node_gdal::napi_env(), z));
 
   return result;
+}
+
+} // namespace
+
+void CoordinateTransformation::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("transformPoint", transformPoint),
+  };
+
+  Napi::Function lcons = GDALDefineClass<CoordinateTransformation>(env, "CoordinateTransformation", methods);
+
+  target.Set("CoordinateTransformation", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

@@ -19,13 +19,11 @@ class DatasetBands : public GDALObject<DatasetBands> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value ds_obj);
-  static NAPI_METHOD(toString);
 
   GDAL_ASYNCABLE_DECLARE(get);
   GDAL_ASYNCABLE_DECLARE(count);
   GDAL_ASYNCABLE_DECLARE(create);
 
-  static NAPI_GETTER(dsGetter);
 
   DatasetBands(const Napi::CallbackInfo &info);
 

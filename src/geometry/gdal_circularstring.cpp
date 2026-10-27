@@ -15,24 +15,6 @@ Napi::FunctionReference &CircularString::constructor() {
   return node_gdal::env_context().constructor<CircularString>();
 }
 
-void CircularString::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(CircularString);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "CircularString",
-    {
-        METHOD(toString)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, SimpleCurve::constructor().Value());
-
-  target.Set("CircularString", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * Concrete representation of an arc.
  *
@@ -47,8 +29,28 @@ void CircularString::Initialize(Napi::Object target) {
  * @extends SimpleCurve
  */
 
-NAPI_METHOD(CircularString::toString) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
   return Napi::String::New(node_gdal::napi_env(), "CircularString");
+}
+
+} // namespace
+
+void CircularString::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  Napi::Function lcons = GDALDefineClass<CircularString>(env, "CircularString", methods);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, SimpleCurve::constructor().Value());
+
+  target.Set("CircularString", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

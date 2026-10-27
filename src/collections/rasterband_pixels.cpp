@@ -13,29 +13,6 @@ Napi::FunctionReference &RasterBandPixels::constructor() {
   return node_gdal::env_context().constructor<RasterBandPixels>();
 }
 
-void RasterBandPixels::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(RasterBandPixels);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "RasterBandPixels",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(get)
-        METHOD_ASYNCABLE(set)
-        METHOD_ASYNCABLE(read)
-        METHOD_ASYNCABLE(write)
-        METHOD_ASYNCABLE(readBlock)
-        METHOD_ASYNCABLE(writeBlock)
-        METHOD_ASYNCABLE(clampBlock)
-        ATTR_DONT_ENUM(lcons, "band", bandGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("RasterBandPixels", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 RasterBandPixels::RasterBandPixels(const Napi::CallbackInfo &info) : GDALObject<RasterBandPixels>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create RasterBandPixels directly").ThrowAsJavaScriptException();
@@ -80,10 +57,6 @@ Napi::Value RasterBandPixels::New(Napi::Value band_obj) {
   Napi::Object obj = RasterBandPixels::constructor().Value().New(args);
 
   return obj;
-}
-
-NAPI_METHOD(RasterBandPixels::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "RasterBandPixels");
 }
 
 /**
@@ -853,8 +826,41 @@ GDAL_ASYNC_METHOD(RasterBandPixels::clampBlock, clampBlockBody)
  * @memberof RasterBandPixels
  * @type {RasterBand}
  */
-NAPI_GETTER(RasterBandPixels::bandGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "RasterBandPixels");
+}
+
+
+Napi::Value bandGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void RasterBandPixels::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("get", get, getAsync),
+    asyncMethod("set", set, setAsync),
+    asyncMethod("read", read, readAsync),
+    asyncMethod("write", write, writeAsync),
+    asyncMethod("readBlock", readBlock, readBlockAsync),
+    asyncMethod("writeBlock", writeBlock, writeBlockAsync),
+    asyncMethod("clampBlock", clampBlock, clampBlockAsync),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("band", bandGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<RasterBandPixels>(env, "RasterBandPixels", methods, accessors);
+
+  target.Set("RasterBandPixels", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

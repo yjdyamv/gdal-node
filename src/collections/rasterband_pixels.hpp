@@ -21,7 +21,6 @@ class RasterBandPixels : public GDALObject<RasterBandPixels> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value band_obj);
-  static NAPI_METHOD(toString);
 
   GDAL_ASYNCABLE_DECLARE(get);
   GDAL_ASYNCABLE_DECLARE(set);
@@ -31,7 +30,6 @@ class RasterBandPixels : public GDALObject<RasterBandPixels> {
   GDAL_ASYNCABLE_DECLARE(writeBlock);
   GDAL_ASYNCABLE_DECLARE(clampBlock);
 
-  static NAPI_GETTER(bandGetter);
 
 
   RasterBandPixels(const Napi::CallbackInfo &info);

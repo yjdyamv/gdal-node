@@ -19,27 +19,6 @@ Napi::FunctionReference &Group::constructor() {
   return node_gdal::env_context().constructor<Group>();
 }
 
-void Group::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Group);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Group",
-    {
-        METHOD(toString)
-        ATTR_DONT_ENUM(lcons, "_uid", uidGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "description", descriptionGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "groups", groupsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "arrays", arraysGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "dimensions", dimensionsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "attributes", attributesGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("Group", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 Group::Group(const Napi::CallbackInfo &info) : GDALObject<Group>(info), uid(0), this_(nullptr), parent_ds(0) {
   std::shared_ptr<GDALGroup> pending = node_gdal::TakePendingShared<GDALGroup>();
   if (pending) {
@@ -115,10 +94,6 @@ Napi::Value Group::New(std::shared_ptr<GDALGroup> raw, Napi::Object parent_ds) {
   return obj;
 }
 
-NAPI_METHOD(Group::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "Group");
-}
-
 /**
  * @readonly
  * @kind member
@@ -150,10 +125,6 @@ GDAL_SYNC_GETTER(Group::descriptionGetter, descriptionGetterBody)
  * @memberof Group
  * @type {GroupGroups}
  */
-NAPI_GETTER(Group::groupsGetter) {
-  return node_gdal::get_private(info.This(), "groups_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -162,10 +133,6 @@ NAPI_GETTER(Group::groupsGetter) {
  * @memberof Group
  * @type {GroupArrays}
  */
-NAPI_GETTER(Group::arraysGetter) {
-  return node_gdal::get_private(info.This(), "arrays_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -174,10 +141,6 @@ NAPI_GETTER(Group::arraysGetter) {
  * @memberof Group
  * @type {GroupDimensions}
  */
-NAPI_GETTER(Group::dimensionsGetter) {
-  return node_gdal::get_private(info.This(), "dims_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -186,15 +149,62 @@ NAPI_GETTER(Group::dimensionsGetter) {
  * @memberof Group
  * @type {GroupAttributes}
  */
-NAPI_GETTER(Group::attributesGetter) {
+#endif
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "Group");
+}
+
+
+Napi::Value groupsGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "groups_");
+}
+
+
+Napi::Value arraysGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "arrays_");
+}
+
+
+Napi::Value dimensionsGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "dims_");
+}
+
+
+Napi::Value attributesGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "attrs_");
 }
 
-NAPI_GETTER(Group::uidGetter) {
+
+Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   Group *group = node_gdal::UnwrapWrapped<Group>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)group->uid);
 }
 
-#endif
+} // namespace
+
+void Group::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
+    attr("description", descriptionGetter, READ_ONLY_SETTER),
+    attr("groups", groupsGetter, READ_ONLY_SETTER),
+    attr("arrays", arraysGetter, READ_ONLY_SETTER),
+    attr("dimensions", dimensionsGetter, READ_ONLY_SETTER),
+    attr("attributes", attributesGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Group>(env, "Group", methods, accessors);
+
+  target.Set("Group", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

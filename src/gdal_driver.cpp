@@ -13,29 +13,6 @@ Napi::FunctionReference &Driver::constructor() {
   return node_gdal::env_context().constructor<Driver>();
 }
 
-void Driver::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Driver);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Driver",
-    {
-      METHOD(toString)
-      METHOD_ASYNCABLE(open)
-      METHOD_ASYNCABLE(create)
-      METHOD_ASYNCABLE(createCopy)
-      METHOD(deleteDataset)
-      METHOD(rename)
-      METHOD(copyFiles)
-      METHOD(getMetadata)
-      ATTR(lcons, "description", descriptionGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("Driver", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 Driver::Driver(const Napi::CallbackInfo &info)
   : GDALObject<Driver>(info), this_gdaldriver(nullptr), uid(0) {
   if (!info.IsConstructCall()) {
@@ -96,10 +73,6 @@ Napi::Value Driver::New(GDALDriver *driver) {
   return obj;
 }
 
-NAPI_METHOD(Driver::toString) {
-  return Napi::String::New(info.Env(), "Driver");
-}
-
 /**
  * @readonly
  * @kind member
@@ -108,12 +81,6 @@ NAPI_METHOD(Driver::toString) {
  * @memberof Driver
  * @type {string}
  */
-NAPI_GETTER(Driver::descriptionGetter) {
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
-
-  return SafeString::New(driver->getGDALDriver()->GetDescription());
-}
-
 /**
  * @throws {Error}
  * @method deleteDataset
@@ -121,22 +88,6 @@ NAPI_GETTER(Driver::descriptionGetter) {
  * @memberof Driver
  * @param {string} filename
  */
-NAPI_METHOD(Driver::deleteDataset) {
-  Args args(info);
-
-  std::string name("");
-  if (!args.get(0, "dataset name", name)) return args.failed();
-
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
-
-  CPLErr err = driver->getGDALDriver()->Delete(name.c_str());
-  if (err) {
-    throw GDALError::fromGDAL();
-    return info.Env().Undefined();
-  }
-  return info.Env().Undefined();
-}
-
 // This is shared across all Driver functions
 auto DatasetRval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
 
@@ -362,24 +313,6 @@ GDAL_ASYNC_METHOD(Driver::createCopy, createCopyBody)
  * @param {string} name_old New name for the dataset.
  * @param {string} name_new Old name of the dataset.
  */
-NAPI_METHOD(Driver::copyFiles) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
-  std::string old_name;
-  std::string new_name;
-
-  if (!args.get(0, "new name", new_name)) return args.failed();
-  if (!args.get(1, "old name", old_name)) return args.failed();
-
-  CPLErr err = driver->getGDALDriver()->CopyFiles(new_name.c_str(), old_name.c_str());
-  if (err) {
-    throw GDALError::fromGDAL();
-    return info.Env().Undefined();
-  }
-
-  return info.Env().Undefined();
-}
-
 /**
  * Renames the dataset.
  *
@@ -390,24 +323,6 @@ NAPI_METHOD(Driver::copyFiles) {
  * @param {string} new_name New name for the dataset.
  * @param {string} old_name Old name of the dataset.
  */
-NAPI_METHOD(Driver::rename) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
-  std::string old_name;
-  std::string new_name;
-
-  if (!args.get(0, "new name", new_name)) return args.failed();
-  if (!args.get(1, "old name", old_name)) return args.failed();
-
-  CPLErr err = driver->getGDALDriver()->Rename(new_name.c_str(), old_name.c_str());
-  if (err) {
-    throw GDALError::fromGDAL();
-    return info.Env().Undefined();
-  }
-
-  return info.Env().Undefined();
-}
-
 /**
  * Returns metadata about the driver.
  *
@@ -418,21 +333,6 @@ NAPI_METHOD(Driver::rename) {
  * @param {string} [domain]
  * @return {any}
  */
-NAPI_METHOD(Driver::getMetadata) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
-
-  Napi::Object result;
-
-  std::string domain("");
-  if (!args.optional(0, "domain", domain)) return args.failed();
-
-  GDALDriver *raw = driver->getGDALDriver();
-  CSLConstList md = raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
-  result = MajorObject::getMetadata(md);
-  return result;
-}
-
 /**
  * Opens a dataset.
  *
@@ -509,5 +409,115 @@ struct openBody : node_gdal::AsyncMethodBody {
 } // namespace
 
 GDAL_ASYNC_METHOD(Driver::open, openBody)
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(info.Env(), "Driver");
+}
+
+
+Napi::Value descriptionGetter(const Napi::CallbackInfo &info) {
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+
+  return SafeString::New(driver->getGDALDriver()->GetDescription());
+}
+
+
+Napi::Value deleteDataset(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  std::string name("");
+  if (!args.get(0, "dataset name", name)) return args.failed();
+
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+
+  CPLErr err = driver->getGDALDriver()->Delete(name.c_str());
+  if (err) {
+    throw GDALError::fromGDAL();
+    return info.Env().Undefined();
+  }
+  return info.Env().Undefined();
+}
+
+
+Napi::Value copyFiles(const Napi::CallbackInfo &info) {
+  Args args(info);
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+  std::string old_name;
+  std::string new_name;
+
+  if (!args.get(0, "new name", new_name)) return args.failed();
+  if (!args.get(1, "old name", old_name)) return args.failed();
+
+  CPLErr err = driver->getGDALDriver()->CopyFiles(new_name.c_str(), old_name.c_str());
+  if (err) {
+    throw GDALError::fromGDAL();
+    return info.Env().Undefined();
+  }
+
+  return info.Env().Undefined();
+}
+
+
+Napi::Value rename(const Napi::CallbackInfo &info) {
+  Args args(info);
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+  std::string old_name;
+  std::string new_name;
+
+  if (!args.get(0, "new name", new_name)) return args.failed();
+  if (!args.get(1, "old name", old_name)) return args.failed();
+
+  CPLErr err = driver->getGDALDriver()->Rename(new_name.c_str(), old_name.c_str());
+  if (err) {
+    throw GDALError::fromGDAL();
+    return info.Env().Undefined();
+  }
+
+  return info.Env().Undefined();
+}
+
+
+Napi::Value getMetadata(const Napi::CallbackInfo &info) {
+  Args args(info);
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+
+  Napi::Object result;
+
+  std::string domain("");
+  if (!args.optional(0, "domain", domain)) return args.failed();
+
+  GDALDriver *raw = driver->getGDALDriver();
+  CSLConstList md = raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
+  result = MajorObject::getMetadata(md);
+  return result;
+}
+
+} // namespace
+
+void Driver::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("open", open, openAsync),
+    asyncMethod("create", create, createAsync),
+    asyncMethod("createCopy", createCopy, createCopyAsync),
+    method("deleteDataset", deleteDataset),
+    method("rename", rename),
+    method("copyFiles", copyFiles),
+    method("getMetadata", getMetadata),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("description", descriptionGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Driver>(env, "Driver", methods, accessors);
+
+  target.Set("Driver", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

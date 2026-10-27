@@ -36,7 +36,7 @@ const sourceFiles = (dir: string): string[] =>
 // ---------------------------------------------------------------- registration
 
 const DESCRIPTOR =
-  /\b(METHOD_ASYNCABLE_AS|METHOD_ASYNCABLE|METHOD_HIDDEN|METHOD_AS|METHOD|ATTR_ASYNCABLE|ATTR_DONT_ENUM|ATTR)\s*\(([^)]*)\)/g
+  /(?<![\w.])(METHOD_ASYNCABLE_AS|METHOD_ASYNCABLE|METHOD_HIDDEN|METHOD_AS|METHOD|ATTR_ASYNCABLE|ATTR_DONT_ENUM|ATTR|asyncMethod|asyncAttr|hiddenAttr|method|attr)\s*\(([^)]*)\)/g
 
 interface Descriptor {
   macro: string
@@ -56,9 +56,36 @@ const literal = (arg: string | undefined): string | null => {
   return /^[\w$]+$/.test(arg) ? arg : null
 }
 
+/** The code without its comments, so that a commented-out descriptor is ignored. */
+const uncommented = (code: string): string => {
+  let out = ''
+  for (let i = 0; i < code.length; ++i) {
+    const char = code[i]
+    if (char === '/' && code[i + 1] === '/') {
+      const end = code.indexOf('\n', i)
+      i = end < 0 ? code.length : end - 1
+      continue
+    }
+    if (char === '/' && code[i + 1] === '*') {
+      const end = code.indexOf('*/', i + 2)
+      i = end < 0 ? code.length : end + 1
+      continue
+    }
+    if (char === '"' || char === "'") {
+      const from = i
+      for (++i; i < code.length && code[i] !== char; ++i) if (code[i] === '\\') ++i
+      out += code.slice(from, i + 1)
+      continue
+    }
+    out += char
+  }
+  return out
+}
+
 /** The JS name the descriptor registers, or null if it cannot be read statically. */
 const registeredName = (descriptor: Descriptor): string | null => {
-  if (descriptor.macro.startsWith('ATTR')) return literal(descriptor.args[1])
+  // the macros pass the object first, the helpers take the name first
+  if (/^ATTR/.test(descriptor.macro)) return literal(descriptor.args[1])
   return literal(descriptor.args[0])
 }
 
@@ -102,12 +129,16 @@ const registered = (): Map<string, Set<string>> => {
         const members = classes.get(define[1]) ?? new Set<string>()
         classes.set(define[1], members)
 
-        const list = init.indexOf('{', define.index)
-        for (const descriptor of descriptors(block(init, list))) {
+        // the descriptors are the arrays of the registry, which may precede the call
+        for (const descriptor of descriptors(uncommented(init))) {
           const name = registeredName(descriptor)
           if (name === null || !isPublic(name)) continue
           members.add(name)
-          if (descriptor.macro.includes('ASYNCABLE')) members.add(`${name}Async`)
+          const isAsync =
+            descriptor.macro.includes('ASYNCABLE') ||
+            descriptor.macro === 'asyncMethod' ||
+            descriptor.macro === 'asyncAttr'
+          if (isAsync) members.add(`${name}Async`)
         }
       }
 

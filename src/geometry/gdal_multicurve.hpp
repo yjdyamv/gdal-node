@@ -22,8 +22,6 @@ class MultiCurve : public GeometryCollectionBase<MultiCurve, OGRMultiCurve> {
 
   static void Initialize(Napi::Object target);
   using GeometryCollectionBase<MultiCurve, OGRMultiCurve>::New;
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(polygonize);
 };
 
 } // namespace node_gdal

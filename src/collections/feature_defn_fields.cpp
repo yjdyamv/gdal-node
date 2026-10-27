@@ -10,31 +10,6 @@ Napi::FunctionReference &FeatureDefnFields::constructor() {
   return node_gdal::env_context().constructor<FeatureDefnFields>();
 }
 
-void FeatureDefnFields::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(FeatureDefnFields);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "FeatureDefnFields",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(remove)
-        METHOD(getNames)
-        METHOD(indexOf)
-        METHOD(reorder)
-        METHOD(add)
-        ATTR_DONT_ENUM(lcons, "featureDefn", featureDefnGetter, READ_ONLY_SETTER)
-    });
-
-  // METHOD(alter);
-
-  target.Set("FeatureDefnFields", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 FeatureDefnFields::FeatureDefnFields(const Napi::CallbackInfo &info) : GDALObject<FeatureDefnFields>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create FeatureDefnFields directly").ThrowAsJavaScriptException();
@@ -60,10 +35,6 @@ Napi::Value FeatureDefnFields::New(Napi::Value feature_defn) {
   return obj;
 }
 
-NAPI_METHOD(FeatureDefnFields::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "FeatureDefnFields");
-}
-
 /**
  * Returns the number of fields.
  *
@@ -72,7 +43,83 @@ NAPI_METHOD(FeatureDefnFields::toString) {
  * @memberof FeatureDefnFields
  * @return {number}
  */
-NAPI_METHOD(FeatureDefnFields::count) {
+/**
+ * Returns the index of field definition.
+ *
+ * @method indexOf
+ * @instance
+ * @memberof FeatureDefnFields
+ * @param {string} name
+ * @return {number} Index or `-1` if not found.
+ */
+/**
+ * Returns a field definition.
+ *
+ * @method get
+ * @instance
+ * @memberof FeatureDefnFields
+ * @param {string|number} key Field name or index
+ * @throws {Error}
+ * @return {FieldDefn}
+ */
+/**
+ * Returns a list of field names.
+ *
+ * @method getNames
+ * @instance
+ * @memberof FeatureDefnFields
+ * @return {string[]} List of field names.
+ */
+/**
+ * Removes a field definition.
+ *
+ * @method remove
+ * @instance
+ * @memberof FeatureDefnFields
+ * @throws {Error}
+ * @param {string|number} key Field name or index
+ */
+/**
+ * Adds field definition(s).
+ *
+ * @method add
+ * @instance
+ * @memberof FeatureDefnFields
+ * @throws {Error}
+ * @param {FieldDefn|FieldDefn[]} fields
+ */
+/**
+ * Reorders the fields.
+ *
+ * @example
+ *
+ * // reverse fields:
+ * featureDef.fields.reorder([2, 1, 0]);
+ *
+ * @method reorder
+ * @instance
+ * @memberof FeatureDefnFields
+ * @throws {Error}
+ * @param {number[]} map An array representing the new field order.
+ */
+/**
+ * Returns the parent feature definition.
+ *
+ * @readonly
+ * @kind member
+ * @name featureDefn
+ * @instance
+ * @memberof FeatureDefnFields
+ * @type {FeatureDefn}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "FeatureDefnFields");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -85,16 +132,8 @@ NAPI_METHOD(FeatureDefnFields::count) {
   return Napi::Number::New(node_gdal::napi_env(), feature_def->get()->GetFieldCount());
 }
 
-/**
- * Returns the index of field definition.
- *
- * @method indexOf
- * @instance
- * @memberof FeatureDefnFields
- * @param {string} name
- * @return {number} Index or `-1` if not found.
- */
-NAPI_METHOD(FeatureDefnFields::indexOf) {
+
+Napi::Value indexOf(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -111,17 +150,8 @@ NAPI_METHOD(FeatureDefnFields::indexOf) {
   return Napi::Number::New(node_gdal::napi_env(), feature_def->get()->GetFieldIndex(name.c_str()));
 }
 
-/**
- * Returns a field definition.
- *
- * @method get
- * @instance
- * @memberof FeatureDefnFields
- * @param {string|number} key Field name or index
- * @throws {Error}
- * @return {FieldDefn}
- */
-NAPI_METHOD(FeatureDefnFields::get) {
+
+Napi::Value get(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -144,15 +174,8 @@ NAPI_METHOD(FeatureDefnFields::get) {
   return FieldDefn::New(r);
 }
 
-/**
- * Returns a list of field names.
- *
- * @method getNames
- * @instance
- * @memberof FeatureDefnFields
- * @return {string[]} List of field names.
- */
-NAPI_METHOD(FeatureDefnFields::getNames) {
+
+Napi::Value getNames(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -173,16 +196,8 @@ NAPI_METHOD(FeatureDefnFields::getNames) {
   return result;
 }
 
-/**
- * Removes a field definition.
- *
- * @method remove
- * @instance
- * @memberof FeatureDefnFields
- * @throws {Error}
- * @param {string|number} key Field name or index
- */
-NAPI_METHOD(FeatureDefnFields::remove) {
+
+Napi::Value remove(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -212,16 +227,8 @@ NAPI_METHOD(FeatureDefnFields::remove) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Adds field definition(s).
- *
- * @method add
- * @instance
- * @memberof FeatureDefnFields
- * @throws {Error}
- * @param {FieldDefn|FieldDefn[]} fields
- */
-NAPI_METHOD(FeatureDefnFields::add) {
+
+Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -265,21 +272,8 @@ NAPI_METHOD(FeatureDefnFields::add) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Reorders the fields.
- *
- * @example
- *
- * // reverse fields:
- * featureDef.fields.reorder([2, 1, 0]);
- *
- * @method reorder
- * @instance
- * @memberof FeatureDefnFields
- * @throws {Error}
- * @param {number[]} map An array representing the new field order.
- */
-NAPI_METHOD(FeatureDefnFields::reorder) {
+
+Napi::Value reorder(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -336,18 +330,37 @@ NAPI_METHOD(FeatureDefnFields::reorder) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Returns the parent feature definition.
- *
- * @readonly
- * @kind member
- * @name featureDefn
- * @instance
- * @memberof FeatureDefnFields
- * @type {FeatureDefn}
- */
-NAPI_GETTER(FeatureDefnFields::featureDefnGetter) {
+
+Napi::Value featureDefnGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void FeatureDefnFields::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("remove", remove),
+    method("getNames", getNames),
+    method("indexOf", indexOf),
+    method("reorder", reorder),
+    method("add", add),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("featureDefn", featureDefnGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<FeatureDefnFields>(env, "FeatureDefnFields", methods, accessors);
+
+  // method("alter", alter),
+
+  target.Set("FeatureDefnFields", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

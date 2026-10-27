@@ -14,15 +14,27 @@ Napi::FunctionReference &MultiPoint::constructor() {
   return node_gdal::env_context().constructor<MultiPoint>();
 }
 
+/**
+ * @constructor
+ * @class MultiPoint
+ * @extends GeometryCollection
+ */
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "MultiPoint");
+}
+
+} // namespace
+
 void MultiPoint::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
-  SELF_CLASS(MultiPoint);
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
 
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "MultiPoint",
-    {
-        METHOD(toString)
-    });
+  Napi::Function lcons = GDALDefineClass<MultiPoint>(env, "MultiPoint", methods);
 
   // lcons->Inherit() has no DefineClass equivalent
   node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
@@ -30,16 +42,6 @@ void MultiPoint::Initialize(Napi::Object target) {
   target.Set("MultiPoint", lcons);
 
   constructor() = Napi::Persistent(lcons);
-}
-
-/**
- * @constructor
- * @class MultiPoint
- * @extends GeometryCollection
- */
-
-NAPI_METHOD(MultiPoint::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "MultiPoint");
 }
 
 } // namespace node_gdal

@@ -10,31 +10,6 @@ Napi::FunctionReference &LayerFields::constructor() {
   return node_gdal::env_context().constructor<LayerFields>();
 }
 
-void LayerFields::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(LayerFields);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "LayerFields",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(remove)
-        METHOD(getNames)
-        METHOD(indexOf)
-        METHOD(reorder)
-        METHOD(add)
-        ATTR_DONT_ENUM(lcons, "layer", layerGetter, READ_ONLY_SETTER)
-    });
-
-  // METHOD(alter);
-
-  target.Set("LayerFields", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 LayerFields::LayerFields(const Napi::CallbackInfo &info) : GDALObject<LayerFields>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create LayerFields directly").ThrowAsJavaScriptException();
@@ -58,10 +33,6 @@ Napi::Value LayerFields::New(Napi::Value layer_obj) {
   return obj;
 }
 
-NAPI_METHOD(LayerFields::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "LayerFields");
-}
-
 /**
  * Returns the number of fields.
  *
@@ -70,7 +41,86 @@ NAPI_METHOD(LayerFields::toString) {
  * @memberof LayerFields
  * @return {number}
  */
-NAPI_METHOD(LayerFields::count) {
+/**
+ * Find the index of field in the layer.
+ *
+ * @method indexOf
+ * @instance
+ * @memberof LayerFields
+ * @param {string} field
+ * @return {number} Field index, or -1 if the field doesn't exist
+ */
+/**
+ * Returns a field definition.
+ *
+ * @throws {Error}
+ * @method get
+ * @instance
+ * @memberof LayerFields
+ * @param {string|number} field Field name or index (0-based)
+ * @return {FieldDefn}
+ */
+/**
+ * Returns a list of field names.
+ *
+ * @throws {Error}
+ * @method getNames
+ * @instance
+ * @memberof LayerFields
+ * @return {string[]} List of strings.
+ */
+/**
+ * Removes a field.
+ *
+ * @throws {Error}
+ * @method remove
+ * @instance
+ * @memberof LayerFields
+ * @param {string|number} field Field name or index (0-based)
+ */
+/**
+ * Adds field(s).
+ *
+ * @throws {Error}
+ * @method add
+ * @instance
+ * @memberof LayerFields
+ * @param {FieldDefn|FieldDefn[]} defs A field definition, or array of field
+ * definitions.
+ * @param {boolean} [approx=true]
+ */
+/**
+ * Reorders fields.
+ *
+ * @example
+ *
+ * // reverse field order
+ * layer.fields.reorder([2,1,0]);
+ *
+ * @throws {Error}
+ * @method reorder
+ * @instance
+ * @memberof LayerFields
+ * @param {number[]} map An array of new indexes (integers)
+ */
+/**
+ * Returns the parent layer.
+ *
+ * @readonly
+ * @kind member
+ * @name layer
+ * @instance
+ * @memberof LayerFields
+ * @type {Layer}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "LayerFields");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -89,16 +139,8 @@ NAPI_METHOD(LayerFields::count) {
   return Napi::Number::New(node_gdal::napi_env(), def->GetFieldCount());
 }
 
-/**
- * Find the index of field in the layer.
- *
- * @method indexOf
- * @instance
- * @memberof LayerFields
- * @param {string} field
- * @return {number} Field index, or -1 if the field doesn't exist
- */
-NAPI_METHOD(LayerFields::indexOf) {
+
+Napi::Value indexOf(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -121,17 +163,8 @@ NAPI_METHOD(LayerFields::indexOf) {
   return Napi::Number::New(node_gdal::napi_env(), def->GetFieldIndex(name.c_str()));
 }
 
-/**
- * Returns a field definition.
- *
- * @throws {Error}
- * @method get
- * @instance
- * @memberof LayerFields
- * @param {string|number} field Field name or index (0-based)
- * @return {FieldDefn}
- */
-NAPI_METHOD(LayerFields::get) {
+
+Napi::Value get(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -162,16 +195,8 @@ NAPI_METHOD(LayerFields::get) {
   return FieldDefn::New(r);
 }
 
-/**
- * Returns a list of field names.
- *
- * @throws {Error}
- * @method getNames
- * @instance
- * @memberof LayerFields
- * @return {string[]} List of strings.
- */
-NAPI_METHOD(LayerFields::getNames) {
+
+Napi::Value getNames(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -198,16 +223,8 @@ NAPI_METHOD(LayerFields::getNames) {
   return result;
 }
 
-/**
- * Removes a field.
- *
- * @throws {Error}
- * @method remove
- * @instance
- * @memberof LayerFields
- * @param {string|number} field Field name or index (0-based)
- */
-NAPI_METHOD(LayerFields::remove) {
+
+Napi::Value remove(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -239,18 +256,8 @@ NAPI_METHOD(LayerFields::remove) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Adds field(s).
- *
- * @throws {Error}
- * @method add
- * @instance
- * @memberof LayerFields
- * @param {FieldDefn|FieldDefn[]} defs A field definition, or array of field
- * definitions.
- * @param {boolean} [approx=true]
- */
-NAPI_METHOD(LayerFields::add) {
+
+Napi::Value add(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -302,21 +309,8 @@ NAPI_METHOD(LayerFields::add) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Reorders fields.
- *
- * @example
- *
- * // reverse field order
- * layer.fields.reorder([2,1,0]);
- *
- * @throws {Error}
- * @method reorder
- * @instance
- * @memberof LayerFields
- * @param {number[]} map An array of new indexes (integers)
- */
-NAPI_METHOD(LayerFields::reorder) {
+
+Napi::Value reorder(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -375,18 +369,37 @@ NAPI_METHOD(LayerFields::reorder) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Returns the parent layer.
- *
- * @readonly
- * @kind member
- * @name layer
- * @instance
- * @memberof LayerFields
- * @type {Layer}
- */
-NAPI_GETTER(LayerFields::layerGetter) {
+
+Napi::Value layerGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void LayerFields::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("remove", remove),
+    method("getNames", getNames),
+    method("indexOf", indexOf),
+    method("reorder", reorder),
+    method("add", add),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("layer", layerGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<LayerFields>(env, "LayerFields", methods, accessors);
+
+  // method("alter", alter),
+
+  target.Set("LayerFields", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

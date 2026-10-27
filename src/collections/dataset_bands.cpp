@@ -12,25 +12,6 @@ Napi::FunctionReference &DatasetBands::constructor() {
   return node_gdal::env_context().constructor<DatasetBands>();
 }
 
-void DatasetBands::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(DatasetBands);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "DatasetBands",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(count)
-        METHOD_ASYNCABLE(create)
-        METHOD_ASYNCABLE(get)
-        ATTR_DONT_ENUM(lcons, "ds", dsGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("DatasetBands", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 DatasetBands::DatasetBands(const Napi::CallbackInfo &info) : GDALObject<DatasetBands>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create DatasetBands directly").ThrowAsJavaScriptException();
@@ -58,10 +39,6 @@ Napi::Value DatasetBands::New(Napi::Value ds_obj) {
   Napi::Object obj = DatasetBands::constructor().Value().New(args);
 
   return obj;
-}
-
-NAPI_METHOD(DatasetBands::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "DatasetBands");
 }
 
 /**
@@ -269,8 +246,37 @@ GDAL_ASYNC_METHOD(DatasetBands::count, countBody)
  * @memberof DatasetBands
  * @type {Dataset}
  */
-NAPI_GETTER(DatasetBands::dsGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "DatasetBands");
+}
+
+
+Napi::Value dsGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void DatasetBands::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("count", count, countAsync),
+    asyncMethod("create", create, createAsync),
+    asyncMethod("get", get, getAsync),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("ds", dsGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<DatasetBands>(env, "DatasetBands", methods, accessors);
+
+  target.Set("DatasetBands", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

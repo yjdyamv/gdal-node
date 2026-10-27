@@ -23,12 +23,10 @@ class Dimension : public GDALObject<Dimension> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALDimension> group, GDALDataset *parent_ds);
-  static NAPI_METHOD(toString);
   static NAPI_GETTER(sizeGetter);
   static NAPI_GETTER(descriptionGetter);
   static NAPI_GETTER(directionGetter);
   static NAPI_GETTER(typeGetter);
-  static NAPI_GETTER(uidGetter);
 
   Dimension(const Napi::CallbackInfo &info);
 

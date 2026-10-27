@@ -19,24 +19,10 @@ class Layer : public GDALObject<Layer> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent);
   static Napi::Value New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set);
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(getExtent);
-  static NAPI_METHOD(setAttributeFilter);
-  static NAPI_METHOD(setSpatialFilter);
-  static NAPI_METHOD(getSpatialFilter);
   static NAPI_METHOD(testCapability);
   GDAL_ASYNCABLE_DECLARE(syncToDisk);
 
   static NAPI_SETTER(dsSetter);
-  static NAPI_GETTER(dsGetter);
-  static NAPI_GETTER(srsGetter);
-  static NAPI_GETTER(featuresGetter);
-  static NAPI_GETTER(fieldsGetter);
-  static NAPI_GETTER(nameGetter);
-  static NAPI_GETTER(fidColumnGetter);
-  static NAPI_GETTER(geomColumnGetter);
-  static NAPI_GETTER(geomTypeGetter);
-  static NAPI_GETTER(uidGetter);
 
   Layer(const Napi::CallbackInfo &info);
 

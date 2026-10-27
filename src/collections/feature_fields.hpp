@@ -17,16 +17,7 @@ class FeatureFields : public GDALObject<FeatureFields> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value layer_obj);
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(toArray);
-  static NAPI_METHOD(toObject);
 
-  static NAPI_METHOD(get);
-  static NAPI_METHOD(getNames);
-  static NAPI_METHOD(set);
-  static NAPI_METHOD(reset);
-  static NAPI_METHOD(count);
-  static NAPI_METHOD(indexOf);
 
   static Napi::Value get(OGRFeature *f, int field_index);
   static Napi::Value getFieldAsIntegerList(OGRFeature *feature, int field_index);
@@ -36,7 +27,6 @@ class FeatureFields : public GDALObject<FeatureFields> {
   static Napi::Value getFieldAsBinary(OGRFeature *feature, int field_index);
   static Napi::Value getFieldAsDateTime(OGRFeature *feature, int field_index);
 
-  static NAPI_GETTER(featureGetter);
 
   FeatureFields(const Napi::CallbackInfo &info);
 

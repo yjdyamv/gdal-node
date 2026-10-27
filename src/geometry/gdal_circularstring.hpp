@@ -23,7 +23,6 @@ class CircularString : public CurveBase<CircularString, OGRCircularString, LineS
 
   static void Initialize(Napi::Object target);
   using CurveBase<CircularString, OGRCircularString, LineStringPoints>::New;
-  static NAPI_METHOD(toString);
 };
 
 } // namespace node_gdal

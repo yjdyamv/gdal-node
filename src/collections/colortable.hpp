@@ -20,17 +20,8 @@ class ColorTable : public GDALObject<ColorTable> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALColorTable *raw, Napi::Value band);
   static Napi::Value New(GDALColorTable *raw);
-  static NAPI_METHOD(toString);
 
-  static NAPI_METHOD(isSame);
-  static NAPI_METHOD(clone);
-  static NAPI_METHOD(get);
-  static NAPI_METHOD(count);
-  static NAPI_METHOD(set);
-  static NAPI_METHOD(ramp);
 
-  static NAPI_GETTER(interpretationGetter);
-  static NAPI_GETTER(bandGetter);
 
   ColorTable(const Napi::CallbackInfo &info);
 

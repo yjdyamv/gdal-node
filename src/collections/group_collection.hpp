@@ -22,16 +22,19 @@ class GroupCollection : public GDALObject<SELF> {
   static void Initialize(Napi::Object target) {
     Napi::Env env = target.Env();
 
-    // NOTE: the descriptor macros carry their own trailing comma
-    Napi::Function lcons = GDALDefineClass<SELF>(env, SELF::_className,
-      {
-        METHOD(toString)
-        METHOD_ASYNCABLE(count)
-        METHOD_ASYNCABLE(get)
-        ATTR_DONT_ENUM(lcons, "ds", dsGetter, READ_ONLY_SETTER)
-        ATTR_DONT_ENUM(lcons, "parent", parentGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "names", namesGetter, READ_ONLY_SETTER)
-      });
+    static constexpr MethodEntry methods[] = {
+      method("toString", toString),
+      asyncMethod("count", count, countAsync),
+      asyncMethod("get", get, getAsync),
+    };
+
+    static constexpr AccessorEntry accessors[] = {
+      hiddenAttr("ds", dsGetter, READ_ONLY_SETTER),
+      hiddenAttr("parent", parentGetter, READ_ONLY_SETTER),
+      attr("names", namesGetter, READ_ONLY_SETTER),
+    };
+
+    Napi::Function lcons = GDALDefineClass<SELF>(env, SELF::_className, methods, accessors);
 
     target.Set(SELF::_className, lcons);
 

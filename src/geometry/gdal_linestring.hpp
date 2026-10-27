@@ -23,7 +23,6 @@ class LineString : public CurveBase<LineString, OGRLineString, LineStringPoints>
 
   static void Initialize(Napi::Object target);
   using CurveBase<LineString, OGRLineString, LineStringPoints>::New;
-  static NAPI_METHOD(toString);
 };
 
 } // namespace node_gdal

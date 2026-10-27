@@ -19,31 +19,6 @@ Napi::FunctionReference &GeometryCollection::constructor() {
  * @class GeometryCollection
  * @extends Geometry
  */
-void GeometryCollection::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(GeometryCollection);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "GeometryCollection",
-    {
-        METHOD(toString)
-        METHOD(getArea)
-        METHOD(getLength)
-        ATTR(lcons, "children", childrenGetter, READ_ONLY_SETTER)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor().Value());
-
-  target.Set("GeometryCollection", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
-NAPI_METHOD(GeometryCollection::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "GeometryCollection");
-}
-
 /**
  * Computes the combined area of the geometries.
  *
@@ -95,8 +70,39 @@ GDAL_SYNC_METHOD(GeometryCollection::getLength, getLengthBody)
  * @memberof GeometryCollection
  * @type {GeometryCollectionChildren}
  */
-NAPI_GETTER(GeometryCollection::childrenGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "GeometryCollection");
+}
+
+
+Napi::Value childrenGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "children_");
+}
+
+} // namespace
+
+void GeometryCollection::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("getArea", getArea),
+    method("getLength", getLength),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("children", childrenGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<GeometryCollection>(env, "GeometryCollection", methods, accessors);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
+
+  target.Set("GeometryCollection", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

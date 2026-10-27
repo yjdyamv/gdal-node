@@ -20,37 +20,6 @@ Napi::FunctionReference &Layer::constructor() {
   return node_gdal::env_context().constructor<Layer>();
 }
 
-void Layer::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Layer);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Layer",
-    {
-        METHOD(toString)
-        METHOD(getExtent)
-        METHOD(setAttributeFilter)
-        METHOD(setSpatialFilter)
-        METHOD(getSpatialFilter)
-        METHOD(testCapability)
-        METHOD_ASYNCABLE_AS("flush", syncToDisk)
-        ATTR_DONT_ENUM(lcons, "ds", dsGetter, READ_ONLY_SETTER)
-        ATTR_DONT_ENUM(lcons, "_uid", uidGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "srs", srsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "features", featuresGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "fields", fieldsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "name", nameGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "geomType", geomTypeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "geomColumn", geomColumnGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "fidColumn", fidColumnGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("Layer", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
-
 Layer::Layer(const Napi::CallbackInfo &info) : GDALObject<Layer>(info), uid(0), this_(nullptr), parent_ds(0) {
   OGRLayer *pending = node_gdal::TakePendingObject<OGRLayer>();
   if (pending != nullptr) {
@@ -124,21 +93,6 @@ Napi::Value Layer::New(OGRLayer *raw, GDALDataset *raw_parent, bool result_set) 
   node_gdal::set_private(obj, "ds_", ds);
 
   return obj;
-}
-
-NAPI_METHOD(Layer::toString) {
-
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->this_) {
-    return Napi::String::New(node_gdal::napi_env(), "Null layer");
-    return node_gdal::napi_env().Undefined();
-  }
-
-  std::ostringstream ss;
-  GDAL_LOCK_PARENT(layer);
-  ss << "Layer (" << layer->this_->GetName() << ")";
-
-  return SafeString::New(ss.str().c_str());
 }
 
 /**
@@ -219,36 +173,6 @@ GDAL_SYNC_METHOD(Layer::testCapability, testCapabilityBody)
  * @param {boolean} [force=true]
  * @return {Envelope} Bounding envelope
  */
-NAPI_METHOD(Layer::getExtent) {
-  Args args(info);
-
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  int force = 1;
-  if (!args.optional(0, "force", force)) return args.failed();
-
-  std::unique_ptr<OGREnvelope> envelope(new OGREnvelope());
-  GDAL_LOCK_PARENT(layer);
-  OGRErr err = layer->this_->GetExtent(envelope.get(), force);
-
-  if (err) {
-    Napi::Error::New(node_gdal::napi_env(), "Can't get layer extent without computing it").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
-  obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
-  obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
-  obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
-  obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
-
-  return obj;
-}
-
 /**
  * This method returns the current spatial filter for this layer.
  *
@@ -258,20 +182,6 @@ NAPI_METHOD(Layer::getExtent) {
  * @memberof Layer
  * @return {Geometry}
  */
-NAPI_METHOD(Layer::getSpatialFilter) {
-
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetSpatialFilter();
-
-  return Geometry::New(r, false);
-}
-
 /**
  * This method sets the geometry to be used as a spatial filter when fetching
  * features via the `layer.features.next()` method. Only features that
@@ -310,42 +220,6 @@ NAPI_METHOD(Layer::getSpatialFilter) {
  * @param {number} maxX
  * @param {number} maxY
  */
-NAPI_METHOD(Layer::setSpatialFilter) {
-  Args args(info);
-
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  if (info.Length() == 1) {
-    Geometry *filter = nullptr;
-    if (!args.optionalWrapped(0, "filter", "Geometry", filter)) return args.failed();
-
-    GDAL_LOCK_PARENT(layer);
-    if (filter) {
-      layer->this_->SetSpatialFilter(filter->get());
-    } else {
-      layer->this_->SetSpatialFilter(nullptr);
-    }
-  } else if (info.Length() == 4) {
-    double minX, minY, maxX, maxY;
-    if (!args.get(0, "minX", minX)) return args.failed();
-    if (!args.get(1, "minY", minY)) return args.failed();
-    if (!args.get(2, "maxX", maxX)) return args.failed();
-    if (!args.get(3, "maxY", maxY)) return args.failed();
-
-    GDAL_LOCK_PARENT(layer);
-    layer->this_->SetSpatialFilterRect(minX, minY, maxX, maxY);
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid number of arguments").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Sets the attribute query string to be used when fetching features via the
  * `layer.features.next()` method. Only features for which the query evaluates
@@ -370,34 +244,6 @@ NAPI_METHOD(Layer::setSpatialFilter) {
  * @memberof Layer
  * @param {string|null} [filter=null]
  */
-NAPI_METHOD(Layer::setAttributeFilter) {
-  Args args(info);
-
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  std::string filter = "";
-  if (!args.optional(0, "filter", filter)) return args.failed();
-
-  OGRErr err;
-  GDAL_LOCK_PARENT(layer);
-  if (filter.empty()) {
-    err = layer->this_->SetAttributeFilter(nullptr);
-  } else {
-    err = layer->this_->SetAttributeFilter(filter.c_str());
-  }
-
-  if (err) {
-    throw GDALError(getOGRErrMsg(err));
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return node_gdal::napi_env().Undefined();
-}
-
 /*
 NAPI_METHOD(Layer::getLayerDefn)
 {
@@ -420,10 +266,6 @@ false));
  * @memberof Layer
  * @type {Dataset}
  */
-NAPI_GETTER(Layer::dsGetter) {
-  return node_gdal::get_private(info.This(), "ds_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -432,17 +274,6 @@ NAPI_GETTER(Layer::dsGetter) {
  * @memberof Layer
  * @type {SpatialReference|null}
  */
-NAPI_GETTER(Layer::srsGetter) {
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetSpatialRef();
-  return SpatialReference::New(r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -451,17 +282,6 @@ NAPI_GETTER(Layer::srsGetter) {
  * @memberof Layer
  * @type {string}
  */
-NAPI_GETTER(Layer::nameGetter) {
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetName();
-  return SafeString::New(r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -470,17 +290,6 @@ NAPI_GETTER(Layer::nameGetter) {
  * @memberof Layer
  * @type {string}
  */
-NAPI_GETTER(Layer::geomColumnGetter) {
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetGeometryColumn();
-  return SafeString::New(r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -489,17 +298,6 @@ NAPI_GETTER(Layer::geomColumnGetter) {
  * @memberof Layer
  * @type {string}
  */
-NAPI_GETTER(Layer::fidColumnGetter) {
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetFIDColumn();
-  return SafeString::New(r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -508,17 +306,6 @@ NAPI_GETTER(Layer::fidColumnGetter) {
  * @memberof Layer
  * @type {number} (see {@link wkbGeometry|geometry types}
  */
-NAPI_GETTER(Layer::geomTypeGetter) {
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GDAL_LOCK_PARENT(layer);
-  auto r = layer->this_->GetGeomType();
-  return Napi::Number::New(node_gdal::napi_env(), r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -527,10 +314,6 @@ NAPI_GETTER(Layer::geomTypeGetter) {
  * @memberof Layer
  * @type {LayerFeatures}
  */
-NAPI_GETTER(Layer::featuresGetter) {
-  return node_gdal::get_private(info.This(), "features_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -539,13 +322,248 @@ NAPI_GETTER(Layer::featuresGetter) {
  * @memberof Layer
  * @type {LayerFields}
  */
-NAPI_GETTER(Layer::fieldsGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->get()) {
+    return Napi::String::New(node_gdal::napi_env(), "Null layer");
+    return node_gdal::napi_env().Undefined();
+  }
+
+  std::ostringstream ss;
+  GDAL_LOCK_PARENT(layer);
+  ss << "Layer (" << layer->get()->GetName() << ")";
+
+  return SafeString::New(ss.str().c_str());
+}
+
+
+Napi::Value getExtent(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  int force = 1;
+  if (!args.optional(0, "force", force)) return args.failed();
+
+  std::unique_ptr<OGREnvelope> envelope(new OGREnvelope());
+  GDAL_LOCK_PARENT(layer);
+  OGRErr err = layer->get()->GetExtent(envelope.get(), force);
+
+  if (err) {
+    Napi::Error::New(node_gdal::napi_env(), "Can't get layer extent without computing it").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
+  obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
+  obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
+  obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
+  obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
+
+  return obj;
+}
+
+
+Napi::Value getSpatialFilter(const Napi::CallbackInfo &info) {
+
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetSpatialFilter();
+
+  return Geometry::New(r, false);
+}
+
+
+Napi::Value setSpatialFilter(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  if (info.Length() == 1) {
+    Geometry *filter = nullptr;
+    if (!args.optionalWrapped(0, "filter", "Geometry", filter)) return args.failed();
+
+    GDAL_LOCK_PARENT(layer);
+    if (filter) {
+      layer->get()->SetSpatialFilter(filter->get());
+    } else {
+      layer->get()->SetSpatialFilter(nullptr);
+    }
+  } else if (info.Length() == 4) {
+    double minX, minY, maxX, maxY;
+    if (!args.get(0, "minX", minX)) return args.failed();
+    if (!args.get(1, "minY", minY)) return args.failed();
+    if (!args.get(2, "maxX", maxX)) return args.failed();
+    if (!args.get(3, "maxY", maxY)) return args.failed();
+
+    GDAL_LOCK_PARENT(layer);
+    layer->get()->SetSpatialFilterRect(minX, minY, maxX, maxY);
+  } else {
+    Napi::Error::New(node_gdal::napi_env(), "Invalid number of arguments").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value setAttributeFilter(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  std::string filter = "";
+  if (!args.optional(0, "filter", filter)) return args.failed();
+
+  OGRErr err;
+  GDAL_LOCK_PARENT(layer);
+  if (filter.empty()) {
+    err = layer->get()->SetAttributeFilter(nullptr);
+  } else {
+    err = layer->get()->SetAttributeFilter(filter.c_str());
+  }
+
+  if (err) {
+    throw GDALError(getOGRErrMsg(err));
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value dsGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "ds_");
+}
+
+
+Napi::Value srsGetter(const Napi::CallbackInfo &info) {
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetSpatialRef();
+  return SpatialReference::New(r);
+}
+
+
+Napi::Value nameGetter(const Napi::CallbackInfo &info) {
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetName();
+  return SafeString::New(r);
+}
+
+
+Napi::Value geomColumnGetter(const Napi::CallbackInfo &info) {
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetGeometryColumn();
+  return SafeString::New(r);
+}
+
+
+Napi::Value fidColumnGetter(const Napi::CallbackInfo &info) {
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetFIDColumn();
+  return SafeString::New(r);
+}
+
+
+Napi::Value geomTypeGetter(const Napi::CallbackInfo &info) {
+  Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
+  if (!layer->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  GDAL_LOCK_PARENT(layer);
+  auto r = layer->get()->GetGeomType();
+  return Napi::Number::New(node_gdal::napi_env(), r);
+}
+
+
+Napi::Value featuresGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "features_");
+}
+
+
+Napi::Value fieldsGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "fields_");
 }
 
-NAPI_GETTER(Layer::uidGetter) {
+
+Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   Layer *layer = node_gdal::UnwrapWrapped<Layer>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)layer->uid);
 }
+
+} // namespace
+
+void Layer::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("getExtent", getExtent),
+    method("setAttributeFilter", setAttributeFilter),
+    method("setSpatialFilter", setSpatialFilter),
+    method("getSpatialFilter", getSpatialFilter),
+    method("testCapability", testCapability),
+    asyncMethod("flush", syncToDisk, syncToDiskAsync),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("ds", dsGetter, READ_ONLY_SETTER),
+    hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
+    attr("srs", srsGetter, READ_ONLY_SETTER),
+    attr("features", featuresGetter, READ_ONLY_SETTER),
+    attr("fields", fieldsGetter, READ_ONLY_SETTER),
+    attr("name", nameGetter, READ_ONLY_SETTER),
+    attr("geomType", geomTypeGetter, READ_ONLY_SETTER),
+    attr("geomColumn", geomColumnGetter, READ_ONLY_SETTER),
+    attr("fidColumn", fidColumnGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Layer>(env, "Layer", methods, accessors);
+
+  target.Set("Layer", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
+
 
 } // namespace node_gdal

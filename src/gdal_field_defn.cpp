@@ -17,27 +17,6 @@ Napi::FunctionReference &FieldDefn::constructor() {
   return node_gdal::env_context().constructor<FieldDefn>();
 }
 
-void FieldDefn::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(FieldDefn);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "FieldDefn",
-    {
-        ATTR(lcons, "name", nameGetter, nameSetter)
-        ATTR(lcons, "type", typeGetter, typeSetter)
-        ATTR(lcons, "justification", justificationGetter, justificationSetter)
-        ATTR(lcons, "width", widthGetter, widthSetter)
-        ATTR(lcons, "precision", precisionGetter, precisionSetter)
-        ATTR(lcons, "ignored", ignoredGetter, ignoredSetter)
-        METHOD(toString)
-    });
-
-  target.Set("FieldDefn", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * A field definition of a {@link FeatureDefn}.
  *
@@ -101,10 +80,6 @@ Napi::Value FieldDefn::New(OGRFieldDefn *def, bool owned) {
   return FieldDefn::constructor().Value().New(args);
 }
 
-NAPI_METHOD(FieldDefn::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "FieldDefn");
-}
-
 /**
  * @kind member
  * @name name
@@ -112,11 +87,6 @@ NAPI_METHOD(FieldDefn::toString) {
  * @memberof FieldDefn
  * @type {string}
  */
-NAPI_GETTER(FieldDefn::nameGetter) {
-  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  return SafeString::New(def->this_->GetNameRef());
-}
-
 /**
  * Data type (see {@link OFT|OFT constants}
  *
@@ -126,11 +96,6 @@ NAPI_GETTER(FieldDefn::nameGetter) {
  * @memberof FieldDefn
  * @type {string}
  */
-NAPI_GETTER(FieldDefn::typeGetter) {
-  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  return SafeString::New(getFieldTypeName(def->this_->GetType()));
-}
-
 /**
  * @kind member
  * @name ignored
@@ -138,11 +103,6 @@ NAPI_GETTER(FieldDefn::typeGetter) {
  * @memberof FieldDefn
  * @type {boolean}
  */
-NAPI_GETTER(FieldDefn::ignoredGetter) {
-  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  return Napi::Boolean::New(node_gdal::napi_env(), def->this_->IsIgnored());
-}
-
 /**
  * Field justification (see {@link OJ|OJ constants})
  *
@@ -152,9 +112,48 @@ NAPI_GETTER(FieldDefn::ignoredGetter) {
  * @memberof FieldDefn
  * @type {string}
  */
-NAPI_GETTER(FieldDefn::justificationGetter) {
+/**
+ * @kind member
+ * @name width
+ * @instance
+ * @memberof FieldDefn
+ * @type {number}
+ */
+/**
+ * @kind member
+ * @name precision
+ * @instance
+ * @memberof FieldDefn
+ * @type {number}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "FieldDefn");
+}
+
+
+Napi::Value nameGetter(const Napi::CallbackInfo &info) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  OGRJustification justification = def->this_->GetJustify();
+  return SafeString::New(def->get()->GetNameRef());
+}
+
+
+Napi::Value typeGetter(const Napi::CallbackInfo &info) {
+  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  return SafeString::New(getFieldTypeName(def->get()->GetType()));
+}
+
+
+Napi::Value ignoredGetter(const Napi::CallbackInfo &info) {
+  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  return Napi::Boolean::New(node_gdal::napi_env(), def->get()->IsIgnored());
+}
+
+
+Napi::Value justificationGetter(const Napi::CallbackInfo &info) {
+  FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  OGRJustification justification = def->get()->GetJustify();
   if (justification == OJRight) {
     return Napi::String::New(node_gdal::napi_env(), "Right");
     return node_gdal::napi_env().Undefined();
@@ -166,31 +165,20 @@ NAPI_GETTER(FieldDefn::justificationGetter) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * @kind member
- * @name width
- * @instance
- * @memberof FieldDefn
- * @type {number}
- */
-NAPI_GETTER(FieldDefn::widthGetter) {
+
+Napi::Value widthGetter(const Napi::CallbackInfo &info) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), def->this_->GetWidth());
+  return Napi::Number::New(node_gdal::napi_env(), def->get()->GetWidth());
 }
 
-/**
- * @kind member
- * @name precision
- * @instance
- * @memberof FieldDefn
- * @type {number}
- */
-NAPI_GETTER(FieldDefn::precisionGetter) {
+
+Napi::Value precisionGetter(const Napi::CallbackInfo &info) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), def->this_->GetPrecision());
+  return Napi::Number::New(node_gdal::napi_env(), def->get()->GetPrecision());
 }
 
-NAPI_SETTER(FieldDefn::nameSetter) {
+
+void nameSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -201,10 +189,11 @@ NAPI_SETTER(FieldDefn::nameSetter) {
     return;
   }
   std::string name = value.As<Napi::String>().Utf8Value();
-  def->this_->SetName(name.c_str());
+  def->get()->SetName(name.c_str());
 }
 
-NAPI_SETTER(FieldDefn::typeSetter) {
+
+void typeSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -219,11 +208,12 @@ NAPI_SETTER(FieldDefn::typeSetter) {
   if (type < 0) {
     Napi::Error::New(node_gdal::napi_env(), "Unrecognized field type").ThrowAsJavaScriptException();
   } else {
-    def->this_->SetType(OGRFieldType(type));
+    def->get()->SetType(OGRFieldType(type));
   }
 }
 
-NAPI_SETTER(FieldDefn::justificationSetter) {
+
+void justificationSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -250,10 +240,11 @@ NAPI_SETTER(FieldDefn::justificationSetter) {
     return;
   }
 
-  def->this_->SetJustify(justification);
+  def->get()->SetJustify(justification);
 }
 
-NAPI_SETTER(FieldDefn::widthSetter) {
+
+void widthSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -263,10 +254,11 @@ NAPI_SETTER(FieldDefn::widthSetter) {
     Napi::Error::New(node_gdal::napi_env(), "width must be an integer").ThrowAsJavaScriptException();
     return;
   }
-  def->this_->SetWidth(value.As<Napi::Number>().Int64Value());
+  def->get()->SetWidth(value.As<Napi::Number>().Int64Value());
 }
 
-NAPI_SETTER(FieldDefn::precisionSetter) {
+
+void precisionSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -276,10 +268,11 @@ NAPI_SETTER(FieldDefn::precisionSetter) {
     Napi::Error::New(node_gdal::napi_env(), "precision must be an integer").ThrowAsJavaScriptException();
     return;
   }
-  def->this_->SetPrecision(value.As<Napi::Number>().Int64Value());
+  def->get()->SetPrecision(value.As<Napi::Number>().Int64Value());
 }
 
-NAPI_SETTER(FieldDefn::ignoredSetter) {
+
+void ignoredSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
   if (node_gdal::is_read_only(info.This())) {
     node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
@@ -289,7 +282,31 @@ NAPI_SETTER(FieldDefn::ignoredSetter) {
     Napi::Error::New(node_gdal::napi_env(), "ignored must be a boolean").ThrowAsJavaScriptException();
     return;
   }
-  def->this_->SetIgnored(value.As<Napi::Boolean>().Value());
+  def->get()->SetIgnored(value.As<Napi::Boolean>().Value());
+}
+
+} // namespace
+
+void FieldDefn::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("name", nameGetter, nameSetter),
+    attr("type", typeGetter, typeSetter),
+    attr("justification", justificationGetter, justificationSetter),
+    attr("width", widthGetter, widthSetter),
+    attr("precision", precisionGetter, precisionSetter),
+    attr("ignored", ignoredGetter, ignoredSetter),
+  };
+
+  Napi::Function lcons = GDALDefineClass<FieldDefn>(env, "FieldDefn", methods, accessors);
+
+  target.Set("FieldDefn", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

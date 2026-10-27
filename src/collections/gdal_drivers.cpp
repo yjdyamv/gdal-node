@@ -8,26 +8,6 @@ Napi::FunctionReference &GDALDrivers::constructor() {
   return node_gdal::env_context().constructor<GDALDrivers>();
 }
 
-void GDALDrivers::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(GDALDrivers);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "GDALDrivers",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(getNames)
-    });
-
-  GDALAllRegister();
-
-  target.Set("GDALDrivers", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 GDALDrivers::GDALDrivers(const Napi::CallbackInfo &info) : GDALObject<GDALDrivers>(info) {
   // `gdal.drivers` is created by the module; the class is not constructible
   // from JS, which the test suite asserts
@@ -53,10 +33,6 @@ Napi::Value GDALDrivers::New() {
   return obj;
 }
 
-NAPI_METHOD(GDALDrivers::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "GDALDrivers");
-}
-
 /**
  * Returns a driver with the specified name.
  *
@@ -71,7 +47,30 @@ NAPI_METHOD(GDALDrivers::toString) {
  * @throws {Error}
  * @return {Driver}
  */
-NAPI_METHOD(GDALDrivers::get) {
+/**
+ * Returns an array with the names of all the drivers registered with GDAL.
+ *
+ * @method getNames
+ * @instance
+ * @memberof GDALDrivers
+ * @return {string[]}
+ */
+/**
+ * Returns the number of drivers registered with GDAL.
+ *
+ * @method count
+ * @instance
+ * @memberof GDALDrivers
+ * @return {number}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "GDALDrivers");
+}
+
+
+Napi::Value get(const Napi::CallbackInfo &info) {
 
   GDALDriver *gdal_driver;
 
@@ -113,15 +112,8 @@ NAPI_METHOD(GDALDrivers::get) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Returns an array with the names of all the drivers registered with GDAL.
- *
- * @method getNames
- * @instance
- * @memberof GDALDrivers
- * @return {string[]}
- */
-NAPI_METHOD(GDALDrivers::getNames) {
+
+Napi::Value getNames(const Napi::CallbackInfo &info) {
   int gdal_count = GetGDALDriverManager()->GetDriverCount();
   int i, ogr_count = 0;
   std::string name;
@@ -139,19 +131,32 @@ NAPI_METHOD(GDALDrivers::getNames) {
   return driver_names;
 }
 
-/**
- * Returns the number of drivers registered with GDAL.
- *
- * @method count
- * @instance
- * @memberof GDALDrivers
- * @return {number}
- */
-NAPI_METHOD(GDALDrivers::count) {
+
+Napi::Value count(const Napi::CallbackInfo &info) {
 
   int count = GetGDALDriverManager()->GetDriverCount();
 
   return Napi::Number::New(node_gdal::napi_env(), count);
+}
+
+} // namespace
+
+void GDALDrivers::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("getNames", getNames),
+  };
+
+  Napi::Function lcons = GDALDefineClass<GDALDrivers>(env, "GDALDrivers", methods);
+
+  GDALAllRegister();
+
+  target.Set("GDALDrivers", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

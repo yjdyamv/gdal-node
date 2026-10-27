@@ -18,26 +18,6 @@ Napi::FunctionReference &Dimension::constructor() {
   return node_gdal::env_context().constructor<Dimension>();
 }
 
-void Dimension::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Dimension);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Dimension",
-    {
-        METHOD(toString)
-        ATTR_DONT_ENUM(lcons, "_uid", uidGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "size", sizeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "description", descriptionGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "type", typeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "direction", directionGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("Dimension", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 Dimension::Dimension(const Napi::CallbackInfo &info) : GDALObject<Dimension>(info), uid(0), this_(nullptr), parent_ds(0) {
   std::shared_ptr<GDALDimension> pending = node_gdal::TakePendingShared<GDALDimension>();
   if (pending) {
@@ -88,10 +68,6 @@ Napi::Value Dimension::New(std::shared_ptr<GDALDimension> raw, GDALDataset *pare
 
 
   return obj;
-}
-
-NAPI_METHOD(Dimension::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "Dimension");
 }
 
 /**
@@ -185,11 +161,41 @@ struct typeGetterBody : node_gdal::SyncMethodBody {
 
 GDAL_SYNC_GETTER(Dimension::typeGetter, typeGetterBody)
 
-NAPI_GETTER(Dimension::uidGetter) {
+#endif
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "Dimension");
+}
+
+
+Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   Dimension *group = node_gdal::UnwrapWrapped<Dimension>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)group->uid);
 }
 
-#endif
+} // namespace
+
+void Dimension::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
+    attr("size", sizeGetter, READ_ONLY_SETTER),
+    attr("description", descriptionGetter, READ_ONLY_SETTER),
+    attr("type", typeGetter, READ_ONLY_SETTER),
+    attr("direction", directionGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Dimension>(env, "Dimension", methods, accessors);
+
+  target.Set("Dimension", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

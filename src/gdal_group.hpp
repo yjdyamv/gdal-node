@@ -24,13 +24,7 @@ class Group : public GDALObject<Group> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALGroup> group, Napi::Object parent_ds);
   static Napi::Value New(std::shared_ptr<GDALGroup> group, GDALDataset *parent_ds);
-  static NAPI_METHOD(toString);
   static NAPI_GETTER(descriptionGetter);
-  static NAPI_GETTER(groupsGetter);
-  static NAPI_GETTER(arraysGetter);
-  static NAPI_GETTER(dimensionsGetter);
-  static NAPI_GETTER(attributesGetter);
-  static NAPI_GETTER(uidGetter);
 
   Group(const Napi::CallbackInfo &info);
 

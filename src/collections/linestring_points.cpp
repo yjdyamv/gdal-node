@@ -11,27 +11,6 @@ Napi::FunctionReference &LineStringPoints::constructor() {
   return node_gdal::env_context().constructor<LineStringPoints>();
 }
 
-void LineStringPoints::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(LineStringPoints);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "LineStringPoints",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(set)
-        METHOD(add)
-        METHOD(reverse)
-        METHOD(resize)
-    });
-
-  target.Set("LineStringPoints", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 LineStringPoints::LineStringPoints(const Napi::CallbackInfo &info) : GDALObject<LineStringPoints>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create LineStringPoints directly").ThrowAsJavaScriptException();
@@ -57,10 +36,6 @@ Napi::Value LineStringPoints::New(Napi::Value geom) {
   return obj;
 }
 
-NAPI_METHOD(LineStringPoints::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "LineStringPoints");
-}
-
 /**
  * Returns the number of points that are part of the line string.
  *
@@ -69,15 +44,6 @@ NAPI_METHOD(LineStringPoints::toString) {
  * @memberof LineStringPoints
  * @return {number}
  */
-NAPI_METHOD(LineStringPoints::count) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
-
-  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumPoints());
-}
-
 /**
  * Reverses the order of all the points.
  *
@@ -85,17 +51,6 @@ NAPI_METHOD(LineStringPoints::count) {
  * @instance
  * @memberof LineStringPoints
  */
-NAPI_METHOD(LineStringPoints::reverse) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
-
-  geom->get()->reversePoints();
-
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Adjusts the number of points that make up the line string.
  *
@@ -104,20 +59,6 @@ NAPI_METHOD(LineStringPoints::reverse) {
  * @memberof LineStringPoints
  * @param {number} count
  */
-NAPI_METHOD(LineStringPoints::resize) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
-
-  int count;
-  if (!args.get(0, "point count", count)) return args.failed();
-  geom->get()->setNumPoints(count);
-
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Returns the point at the specified index.
  *
@@ -128,28 +69,6 @@ NAPI_METHOD(LineStringPoints::resize) {
  * @throws {Error}
  * @return {Point}
  */
-NAPI_METHOD(LineStringPoints::get) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
-
-  OGRPoint pt;
-  int i;
-
-  if (!args.get(0, "index", i)) return args.failed();
-  if (i < 0 || i >= geom->get()->getNumPoints()) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid point requested").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  geom->get()->getPoint(i, &pt);
-
-  // New will copy the point with GDAL clone()
-  return Point::New(&pt, false);
-}
-
 /**
  * Sets the point at the specified index.
  *
@@ -175,7 +94,103 @@ NAPI_METHOD(LineStringPoints::get) {
  * @param {number} y
  * @param {number} [z]
  */
-NAPI_METHOD(LineStringPoints::set) {
+/**
+ * Adds point(s) to the line string. Also accepts any object with an x and y
+ * property.
+ *
+ * @example
+ *
+ * lineString.points.add(new gdal.Point(1, 2));
+ * lineString.points.add([
+ *     new gdal.Point(1, 2)
+ *     new gdal.Point(3, 4)
+ * ]);
+ *
+ * @method add
+ * @instance
+ * @memberof LineStringPoints
+ * @throws {Error}
+ * @param {Point|xyz|(Point|xyz)[]} points
+ */
+
+/**
+ *
+ * @method add
+ * @instance
+ * @memberof LineStringPoints
+ * @throws {Error}
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [z]
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "LineStringPoints");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
+
+  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumPoints());
+}
+
+
+Napi::Value reverse(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
+
+  geom->get()->reversePoints();
+
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value resize(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
+
+  int count;
+  if (!args.get(0, "point count", count)) return args.failed();
+  geom->get()->setNumPoints(count);
+
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value get(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  LineString *geom = node_gdal::UnwrapWrapped<LineString>(parent);
+
+  OGRPoint pt;
+  int i;
+
+  if (!args.get(0, "index", i)) return args.failed();
+  if (i < 0 || i >= geom->get()->getNumPoints()) {
+    Napi::Error::New(node_gdal::napi_env(), "Invalid point requested").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  geom->get()->getPoint(i, &pt);
+
+  // New will copy the point with GDAL clone()
+  return Point::New(&pt, false);
+}
+
+
+Napi::Value set(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -251,36 +266,8 @@ NAPI_METHOD(LineStringPoints::set) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Adds point(s) to the line string. Also accepts any object with an x and y
- * property.
- *
- * @example
- *
- * lineString.points.add(new gdal.Point(1, 2));
- * lineString.points.add([
- *     new gdal.Point(1, 2)
- *     new gdal.Point(3, 4)
- * ]);
- *
- * @method add
- * @instance
- * @memberof LineStringPoints
- * @throws {Error}
- * @param {Point|xyz|(Point|xyz)[]} points
- */
 
-/**
- *
- * @method add
- * @instance
- * @memberof LineStringPoints
- * @throws {Error}
- * @param {number} x
- * @param {number} y
- * @param {number} [z]
- */
-NAPI_METHOD(LineStringPoints::add) {
+Napi::Value add(const Napi::CallbackInfo &info) {
   Args args(info);
 
   Napi::Object parent =
@@ -380,6 +367,27 @@ NAPI_METHOD(LineStringPoints::add) {
   }
 
   return node_gdal::napi_env().Undefined();
+}
+
+} // namespace
+
+void LineStringPoints::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("set", set),
+    method("add", add),
+    method("reverse", reverse),
+    method("resize", resize),
+  };
+
+  Napi::Function lcons = GDALDefineClass<LineStringPoints>(env, "LineStringPoints", methods);
+
+  target.Set("LineStringPoints", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

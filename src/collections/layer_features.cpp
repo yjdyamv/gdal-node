@@ -10,29 +10,6 @@ Napi::FunctionReference &LayerFeatures::constructor() {
   return node_gdal::env_context().constructor<LayerFeatures>();
 }
 
-void LayerFeatures::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(LayerFeatures);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "LayerFeatures",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(count)
-        METHOD_ASYNCABLE(add)
-        METHOD_ASYNCABLE(get)
-        METHOD_ASYNCABLE(set)
-        METHOD_ASYNCABLE(first)
-        METHOD_ASYNCABLE(next)
-        METHOD_ASYNCABLE(remove)
-        ATTR_DONT_ENUM(lcons, "layer", layerGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("LayerFeatures", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 LayerFeatures::LayerFeatures(const Napi::CallbackInfo &info) : GDALObject<LayerFeatures>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create LayerFeatures directly").ThrowAsJavaScriptException();
@@ -57,10 +34,6 @@ Napi::Value LayerFeatures::New(Napi::Value layer_obj) {
   Napi::Object obj = LayerFeatures::constructor().Value().New(args);
 
   return obj;
-}
-
-NAPI_METHOD(LayerFeatures::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "LayerFeatures");
 }
 
 /**
@@ -541,8 +514,41 @@ GDAL_ASYNC_METHOD(LayerFeatures::remove, removeBody)
  * @memberof LayerFeatures
  * @type {Layer}
  */
-NAPI_GETTER(LayerFeatures::layerGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "LayerFeatures");
+}
+
+
+Napi::Value layerGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void LayerFeatures::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("count", count, countAsync),
+    asyncMethod("add", add, addAsync),
+    asyncMethod("get", get, getAsync),
+    asyncMethod("set", set, setAsync),
+    asyncMethod("first", first, firstAsync),
+    asyncMethod("next", next, nextAsync),
+    asyncMethod("remove", remove, removeAsync),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("layer", layerGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<LayerFeatures>(env, "LayerFeatures", methods, accessors);
+
+  target.Set("LayerFeatures", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

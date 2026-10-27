@@ -9,30 +9,6 @@ Napi::FunctionReference &FeatureFields::constructor() {
   return node_gdal::env_context().constructor<FeatureFields>();
 }
 
-void FeatureFields::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(FeatureFields);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "FeatureFields",
-    {
-        METHOD(toString)
-        METHOD(toObject)
-        METHOD(toArray)
-        METHOD(count)
-        METHOD(get)
-        METHOD(getNames)
-        METHOD(set)
-        METHOD(reset)
-        METHOD(indexOf)
-        ATTR_DONT_ENUM(lcons, "feature", featureGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("FeatureFields", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 FeatureFields::FeatureFields(const Napi::CallbackInfo &info) : GDALObject<FeatureFields>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create FeatureFields directly").ThrowAsJavaScriptException();
@@ -56,10 +32,6 @@ Napi::Value FeatureFields::New(Napi::Value layer_obj) {
   Napi::Object obj = FeatureFields::constructor().Value().New(args);
 
   return obj;
-}
-
-NAPI_METHOD(FeatureFields::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "FeatureFields");
 }
 
 inline bool setField(OGRFeature *f, int field_index, Napi::Value val) {
@@ -113,93 +85,6 @@ inline bool setField(OGRFeature *f, int field_index, Napi::Value val) {
  * @throws {Error}
  * @param {object} fields
  */
-NAPI_METHOD(FeatureFields::set) {
-  int field_index;
-  unsigned int i, n, n_fields_set;
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  if (info.Length() == 1) {
-    if (info[0].IsArray()) {
-      // set([])
-      Napi::Array values = info[0].As<Napi::Array>();
-
-      n = f->get()->GetFieldCount();
-      if (values.Length() < n) { n = values.Length(); }
-
-      for (i = 0; i < n; i++) {
-        Napi::Value val = values.As<Napi::Object>().Get(i);
-        if (setField(f->get(), i, val)) {
-          Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
-          return node_gdal::napi_env().Undefined();
-        }
-      }
-
-      return Napi::Number::New(node_gdal::napi_env(), n);
-      return node_gdal::napi_env().Undefined();
-    } else if (info[0].IsObject()) {
-      // set({})
-      Napi::Object values = info[0].As<Napi::Object>();
-
-      n = f->get()->GetFieldCount();
-      n_fields_set = 0;
-
-      for (i = 0; i < n; i++) {
-        // iterate through field names from field defn,
-        // grabbing values from passed object, if not undefined
-
-        const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
-
-        const char *field_name = field_def->GetNameRef();
-
-        field_index = f->get()->GetFieldIndex(field_name);
-
-        // skip value if field name doesnt exist
-        // both in the feature definition and the passed object
-        if (field_index == -1 || !values.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), field_name))) {
-          continue;
-        }
-
-        Napi::Value val = values.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), field_name));
-        if (setField(f->get(), field_index, val)) {
-          Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
-          return node_gdal::napi_env().Undefined();
-        }
-
-        n_fields_set++;
-      }
-
-      return Napi::Number::New(node_gdal::napi_env(), n_fields_set);
-      return node_gdal::napi_env().Undefined();
-    } else {
-      Napi::Error::New(node_gdal::napi_env(), "Method expected an object or array").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-
-  } else if (info.Length() == 2) {
-    // set(name|index, value)
-    field_index = node_gdal::parse_field_index(info[0], f->get());
-
-    // set field value
-    if (setField(f->get(), field_index, info[1])) {
-      Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-
-    return Napi::Number::New(node_gdal::napi_env(), 1);
-    return node_gdal::napi_env().Undefined();
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid number of arguments").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-}
-
 /**
  * Resets all fields.
  *
@@ -214,54 +99,6 @@ NAPI_METHOD(FeatureFields::set) {
  * @param {object} [values]
  * @return {void}
  */
-NAPI_METHOD(FeatureFields::reset) {
-  int field_index;
-  unsigned int i, n;
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  n = f->get()->GetFieldCount();
-
-  if (info.Length() == 0) {
-    for (i = 0; i < n; i++) { f->get()->UnsetField(i); }
-    return Napi::Number::New(node_gdal::napi_env(), n);
-    return node_gdal::napi_env().Undefined();
-  }
-
-  if (!info[0].IsObject()) {
-    Napi::Error::New(node_gdal::napi_env(), "fields must be an object").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  Napi::Object values = info[0].As<Napi::Object>();
-
-  for (i = 0; i < n; i++) {
-    // iterate through field names from field defn,
-    // grabbing values from passed object
-
-    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
-
-    const char *field_name = field_def->GetNameRef();
-
-    field_index = f->get()->GetFieldIndex(field_name);
-    if (field_index == -1) continue;
-
-    Napi::Value val = values.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), field_name));
-    if (setField(f->get(), field_index, val)) {
-      Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-  }
-
-  return Napi::Number::New(node_gdal::napi_env(), n);
-}
-
 /**
  * Returns the number of fields.
  *
@@ -274,19 +111,6 @@ NAPI_METHOD(FeatureFields::reset) {
  * @memberof FeatureFields
  * @return {number}
  */
-NAPI_METHOD(FeatureFields::count) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return Napi::Number::New(node_gdal::napi_env(), f->get()->GetFieldCount());
-}
-
 /**
  * Returns the index of a field, given its name.
  *
@@ -300,23 +124,6 @@ NAPI_METHOD(FeatureFields::count) {
  * @param {string} name
  * @return {number} Index or, `-1` if it cannot be found.
  */
-NAPI_METHOD(FeatureFields::indexOf) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  std::string name("");
-  if (!args.get(0, "field name", name)) return args.failed();
-
-  return Napi::Number::New(node_gdal::napi_env(), f->get()->GetFieldIndex(name.c_str()));
-}
-
 /**
  * Outputs the field data as a pure JS object.
  *
@@ -326,41 +133,6 @@ NAPI_METHOD(FeatureFields::indexOf) {
  * @memberof FeatureFields
  * @return {any}
  */
-NAPI_METHOD(FeatureFields::toObject) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
-
-  int n = f->get()->GetFieldCount();
-  for (int i = 0; i < n; i++) {
-
-    // get field name
-    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
-    const char *key = field_def->GetNameRef();
-    if (!key) {
-      Napi::Error::New(node_gdal::napi_env(), "Error getting field name").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-
-    // get field value
-    try {
-      Napi::Value val = FeatureFields::get(f->get(), i);
-      obj.Set( Napi::String::New(node_gdal::napi_env(), key), val);
-    } catch (const char *err) {
-      Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-  }
-  return obj;
-}
-
 /**
  * Outputs the field values as a pure JS array.
  *
@@ -370,32 +142,6 @@ NAPI_METHOD(FeatureFields::toObject) {
  * @memberof FeatureFields
  * @return {any[]}
  */
-NAPI_METHOD(FeatureFields::toArray) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  int n = f->get()->GetFieldCount();
-  Napi::Array array = Napi::Array::New(node_gdal::napi_env(), n);
-
-  for (int i = 0; i < n; i++) {
-    // get field value
-    try {
-      Napi::Value val = FeatureFields::get(f->get(), i);
-      array.Set( i, val);
-    } catch (const char *err) {
-      Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-  }
-  return array;
-}
-
 Napi::Value FeatureFields::get(OGRFeature *f, int field_index) {
   //throws
 
@@ -436,30 +182,6 @@ Napi::Value FeatureFields::get(OGRFeature *f, int field_index) {
  * @throws {Error}
  * @return {any}
  */
-NAPI_METHOD(FeatureFields::get) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  if (info.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  int field_index = node_gdal::parse_field_index(info[0], f->get());
-
-  try {
-    Napi::Value result = FeatureFields::get(f->get(), field_index);
-    return result;
-  } catch (const char *err) { Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException(); }
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Returns a list of field name.
  *
@@ -469,34 +191,6 @@ NAPI_METHOD(FeatureFields::get) {
  * @throws {Error}
  * @return {string[]} List of field names.
  */
-NAPI_METHOD(FeatureFields::getNames) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
-  if (!f->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  int n = f->get()->GetFieldCount();
-  Napi::Array result = Napi::Array::New(node_gdal::napi_env(), n);
-
-  for (int i = 0; i < n; i++) {
-
-    // get field name
-    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
-    const char *field_name = field_def->GetNameRef();
-    if (!field_name) {
-      Napi::Error::New(node_gdal::napi_env(), "Error getting field name").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-    result.Set( i, Napi::String::New(node_gdal::napi_env(), field_name));
-  }
-
-  return result;
-}
-
 Napi::Value FeatureFields::getFieldAsIntegerList(OGRFeature *feature, int field_index) {
 
   int count_of_values = 0;
@@ -609,8 +303,328 @@ Napi::Value FeatureFields::getFieldAsDateTime(OGRFeature *feature, int field_ind
  * @memberof FeatureFields
  * @type {Feature}
  */
-NAPI_GETTER(FeatureFields::featureGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "FeatureFields");
+}
+
+
+Napi::Value set(const Napi::CallbackInfo &info) {
+  int field_index;
+  unsigned int i, n, n_fields_set;
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  if (info.Length() == 1) {
+    if (info[0].IsArray()) {
+      // set([])
+      Napi::Array values = info[0].As<Napi::Array>();
+
+      n = f->get()->GetFieldCount();
+      if (values.Length() < n) { n = values.Length(); }
+
+      for (i = 0; i < n; i++) {
+        Napi::Value val = values.As<Napi::Object>().Get(i);
+        if (setField(f->get(), i, val)) {
+          Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+      }
+
+      return Napi::Number::New(node_gdal::napi_env(), n);
+      return node_gdal::napi_env().Undefined();
+    } else if (info[0].IsObject()) {
+      // set({})
+      Napi::Object values = info[0].As<Napi::Object>();
+
+      n = f->get()->GetFieldCount();
+      n_fields_set = 0;
+
+      for (i = 0; i < n; i++) {
+        // iterate through field names from field defn,
+        // grabbing values from passed object, if not undefined
+
+        const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
+
+        const char *field_name = field_def->GetNameRef();
+
+        field_index = f->get()->GetFieldIndex(field_name);
+
+        // skip value if field name doesnt exist
+        // both in the feature definition and the passed object
+        if (field_index == -1 || !values.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), field_name))) {
+          continue;
+        }
+
+        Napi::Value val = values.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), field_name));
+        if (setField(f->get(), field_index, val)) {
+          Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+
+        n_fields_set++;
+      }
+
+      return Napi::Number::New(node_gdal::napi_env(), n_fields_set);
+      return node_gdal::napi_env().Undefined();
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "Method expected an object or array").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+  } else if (info.Length() == 2) {
+    // set(name|index, value)
+    field_index = node_gdal::parse_field_index(info[0], f->get());
+
+    // set field value
+    if (setField(f->get(), field_index, info[1])) {
+      Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    return Napi::Number::New(node_gdal::napi_env(), 1);
+    return node_gdal::napi_env().Undefined();
+  } else {
+    Napi::Error::New(node_gdal::napi_env(), "Invalid number of arguments").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+}
+
+
+Napi::Value reset(const Napi::CallbackInfo &info) {
+  int field_index;
+  unsigned int i, n;
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  n = f->get()->GetFieldCount();
+
+  if (info.Length() == 0) {
+    for (i = 0; i < n; i++) { f->get()->UnsetField(i); }
+    return Napi::Number::New(node_gdal::napi_env(), n);
+    return node_gdal::napi_env().Undefined();
+  }
+
+  if (!info[0].IsObject()) {
+    Napi::Error::New(node_gdal::napi_env(), "fields must be an object").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  Napi::Object values = info[0].As<Napi::Object>();
+
+  for (i = 0; i < n; i++) {
+    // iterate through field names from field defn,
+    // grabbing values from passed object
+
+    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
+
+    const char *field_name = field_def->GetNameRef();
+
+    field_index = f->get()->GetFieldIndex(field_name);
+    if (field_index == -1) continue;
+
+    Napi::Value val = values.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), field_name));
+    if (setField(f->get(), field_index, val)) {
+      Napi::Error::New(node_gdal::napi_env(), "Unsupported type of field value").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+  }
+
+  return Napi::Number::New(node_gdal::napi_env(), n);
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return Napi::Number::New(node_gdal::napi_env(), f->get()->GetFieldCount());
+}
+
+
+Napi::Value indexOf(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  std::string name("");
+  if (!args.get(0, "field name", name)) return args.failed();
+
+  return Napi::Number::New(node_gdal::napi_env(), f->get()->GetFieldIndex(name.c_str()));
+}
+
+
+Napi::Value toObject(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
+
+  int n = f->get()->GetFieldCount();
+  for (int i = 0; i < n; i++) {
+
+    // get field name
+    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
+    const char *key = field_def->GetNameRef();
+    if (!key) {
+      Napi::Error::New(node_gdal::napi_env(), "Error getting field name").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    // get field value
+    try {
+      Napi::Value val = FeatureFields::get(f->get(), i);
+      obj.Set( Napi::String::New(node_gdal::napi_env(), key), val);
+    } catch (const char *err) {
+      Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+  }
+  return obj;
+}
+
+
+Napi::Value toArray(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  int n = f->get()->GetFieldCount();
+  Napi::Array array = Napi::Array::New(node_gdal::napi_env(), n);
+
+  for (int i = 0; i < n; i++) {
+    // get field value
+    try {
+      Napi::Value val = FeatureFields::get(f->get(), i);
+      array.Set( i, val);
+    } catch (const char *err) {
+      Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+  }
+  return array;
+}
+
+
+Napi::Value getField(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  if (info.Length() < 1) {
+    Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  int field_index = node_gdal::parse_field_index(info[0], f->get());
+
+  try {
+    Napi::Value result = FeatureFields::get(f->get(), field_index);
+    return result;
+  } catch (const char *err) { Napi::Error::New(node_gdal::napi_env(), err).ThrowAsJavaScriptException(); }
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value getNames(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Feature *f = node_gdal::UnwrapWrapped<Feature>(parent);
+  if (!f->isAlive()) {
+    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  int n = f->get()->GetFieldCount();
+  Napi::Array result = Napi::Array::New(node_gdal::napi_env(), n);
+
+  for (int i = 0; i < n; i++) {
+
+    // get field name
+    const OGRFieldDefn *field_def = f->get()->GetFieldDefnRef(i);
+    const char *field_name = field_def->GetNameRef();
+    if (!field_name) {
+      Napi::Error::New(node_gdal::napi_env(), "Error getting field name").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    result.Set( i, Napi::String::New(node_gdal::napi_env(), field_name));
+  }
+
+  return result;
+}
+
+
+Napi::Value featureGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void FeatureFields::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("toObject", toObject),
+    method("toArray", toArray),
+    method("count", count),
+    method("get", getField),
+    method("getNames", getNames),
+    method("set", set),
+    method("reset", reset),
+    method("indexOf", indexOf),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("feature", featureGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<FeatureFields>(env, "FeatureFields", methods, accessors);
+
+  target.Set("FeatureFields", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

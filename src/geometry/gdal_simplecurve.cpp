@@ -15,28 +15,6 @@ Napi::FunctionReference &SimpleCurve::constructor() {
   return node_gdal::env_context().constructor<SimpleCurve>();
 }
 
-void SimpleCurve::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(SimpleCurve);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "SimpleCurve",
-    {
-        METHOD(toString)
-        METHOD(getLength)
-        METHOD(value)
-        METHOD(addSubLineString)
-        ATTR(lcons, "points", pointsGetter, READ_ONLY_SETTER)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor().Value());
-
-  target.Set("SimpleCurve", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * Abstract class representing all SimpleCurves.
  *
@@ -51,10 +29,6 @@ SimpleCurve::SimpleCurve(const Napi::CallbackInfo &info)
 }
 
 
-NAPI_METHOD(SimpleCurve::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "SimpleCurve");
-}
-
 /**
  * Returns the point at the specified distance along the SimpleCurve.
  *
@@ -64,21 +38,6 @@ NAPI_METHOD(SimpleCurve::toString) {
  * @param {number} distance
  * @return {Point}
  */
-NAPI_METHOD(SimpleCurve::value) {
-  Args args(info);
-
-  SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
-
-  OGRPoint *pt = new OGRPoint();
-  double dist;
-
-  if (!args.get(0, "distance", dist)) return args.failed();
-
-  geom->this_->Value(dist, pt);
-
-  return Point::New(pt);
-}
-
 /**
  * Compute the length of a multiSimpleCurve.
  *
@@ -109,10 +68,6 @@ GDAL_SYNC_METHOD(SimpleCurve::getLength, getLengthBody)
  * @memberof Geometry
  * @type {LineStringPoints}
  */
-NAPI_GETTER(SimpleCurve::pointsGetter) {
-  return node_gdal::get_private(info.This(), "points_");
-}
-
 /**
  * Add a segment of another LineString to this SimpleCurve subtype.
  *
@@ -130,7 +85,35 @@ NAPI_GETTER(SimpleCurve::pointsGetter) {
  * last vertex of the other LineString
  * @return {void}
  */
-NAPI_METHOD(SimpleCurve::addSubLineString) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "SimpleCurve");
+}
+
+
+Napi::Value value(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
+
+  OGRPoint *pt = new OGRPoint();
+  double dist;
+
+  if (!args.get(0, "distance", dist)) return args.failed();
+
+  geom->get()->Value(dist, pt);
+
+  return Point::New(pt);
+}
+
+
+Napi::Value pointsGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "points_");
+}
+
+
+Napi::Value addSubLineString(const Napi::CallbackInfo &info) {
   Args args(info);
 
   SimpleCurve *geom = node_gdal::UnwrapWrapped<SimpleCurve>(info.This().As<Napi::Object>());
@@ -149,11 +132,36 @@ NAPI_METHOD(SimpleCurve::addSubLineString) {
     return node_gdal::napi_env().Undefined();
   }
 
-  geom->this_->addSubLineString(other->get(), start, end);
+  geom->get()->addSubLineString(other->get(), start, end);
 
   geom->updateAmountOfGeometryMemory();
 
   return node_gdal::napi_env().Undefined();
+}
+
+} // namespace
+
+void SimpleCurve::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("getLength", getLength),
+    method("value", value),
+    method("addSubLineString", addSubLineString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("points", pointsGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<SimpleCurve>(env, "SimpleCurve", methods, accessors);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
+
+  target.Set("SimpleCurve", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

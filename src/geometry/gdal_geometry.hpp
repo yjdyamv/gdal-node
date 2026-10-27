@@ -24,12 +24,10 @@ class Geometry : public GeometryBase<Geometry, OGRGeometry> {
   static void Initialize(Napi::Object target);
   using GeometryBase<Geometry, OGRGeometry>::New;
   static Napi::Value New(OGRGeometry *geom, bool owned);
-  static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(isEmpty);
   GDAL_ASYNCABLE_DECLARE(isValid);
   GDAL_ASYNCABLE_DECLARE(isSimple);
   GDAL_ASYNCABLE_DECLARE(isRing);
-  static NAPI_METHOD(clone);
   GDAL_ASYNCABLE_DECLARE(empty);
   GDAL_ASYNCABLE_DECLARE(exportToKML);
   GDAL_ASYNCABLE_DECLARE(exportToGML);
@@ -77,15 +75,7 @@ class Geometry : public GeometryBase<Geometry, OGRGeometry> {
   static NAPI_METHOD(getName);
   static NAPI_METHOD(getConstructor);
 
-  static NAPI_GETTER(srsGetter);
-  static NAPI_GETTER(typeGetter);
-  static NAPI_GETTER(nameGetter);
-  static NAPI_GETTER(wkbSizeGetter);
-  static NAPI_GETTER(dimensionGetter);
-  static NAPI_GETTER(coordinateDimensionGetter);
 
-  static NAPI_SETTER(srsSetter);
-  static NAPI_SETTER(coordinateDimensionSetter);
 
   static OGRwkbGeometryType getGeometryType_fixed(OGRGeometry *geom);
   static Napi::Value getConstructor(OGRwkbGeometryType type);

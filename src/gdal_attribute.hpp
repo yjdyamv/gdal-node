@@ -23,10 +23,6 @@ class Attribute : public GDALObject<Attribute> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALAttribute> group, GDALDataset *parent_ds);
-  static NAPI_METHOD(toString);
-  static NAPI_GETTER(typeGetter);
-  static NAPI_GETTER(valueGetter);
-  static NAPI_GETTER(uidGetter);
 
   Attribute(const Napi::CallbackInfo &info);
 

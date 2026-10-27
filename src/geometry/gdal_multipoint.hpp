@@ -22,7 +22,6 @@ class MultiPoint : public GeometryCollectionBase<MultiPoint, OGRMultiPoint> {
 
   static void Initialize(Napi::Object target);
   using GeometryCollectionBase<MultiPoint, OGRMultiPoint>::New;
-  static NAPI_METHOD(toString);
 };
 
 } // namespace node_gdal

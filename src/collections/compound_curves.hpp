@@ -19,11 +19,7 @@ class CompoundCurveCurves : public GDALObject<CompoundCurveCurves> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value geom);
-  static NAPI_METHOD(toString);
 
-  static NAPI_METHOD(get);
-  static NAPI_METHOD(count);
-  static NAPI_METHOD(add);
 
   CompoundCurveCurves(const Napi::CallbackInfo &info);
 

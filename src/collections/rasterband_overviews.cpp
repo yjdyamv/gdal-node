@@ -9,24 +9,6 @@ Napi::FunctionReference &RasterBandOverviews::constructor() {
   return node_gdal::env_context().constructor<RasterBandOverviews>();
 }
 
-void RasterBandOverviews::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(RasterBandOverviews);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "RasterBandOverviews",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(count)
-        METHOD_ASYNCABLE(get)
-        METHOD_ASYNCABLE(getBySampleCount)
-    });
-
-  target.Set("RasterBandOverviews", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 RasterBandOverviews::RasterBandOverviews(const Napi::CallbackInfo &info) : GDALObject<RasterBandOverviews>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create RasterBandOverviews directly").ThrowAsJavaScriptException();
@@ -50,10 +32,6 @@ Napi::Value RasterBandOverviews::New(Napi::Value band_obj) {
   Napi::Object obj = RasterBandOverviews::constructor().Value().New(args);
 
   return obj;
-}
-
-NAPI_METHOD(RasterBandOverviews::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "RasterBandOverviews");
 }
 
 /**
@@ -219,5 +197,29 @@ struct countBody : node_gdal::AsyncMethodBody {
 } // namespace
 
 GDAL_ASYNC_METHOD(RasterBandOverviews::count, countBody)
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "RasterBandOverviews");
+}
+
+} // namespace
+
+void RasterBandOverviews::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("count", count, countAsync),
+    asyncMethod("get", get, getAsync),
+    asyncMethod("getBySampleCount", getBySampleCount, getBySampleCountAsync),
+  };
+
+  Napi::Function lcons = GDALDefineClass<RasterBandOverviews>(env, "RasterBandOverviews", methods);
+
+  target.Set("RasterBandOverviews", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

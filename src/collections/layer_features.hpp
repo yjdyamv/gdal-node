@@ -19,7 +19,6 @@ class LayerFeatures : public GDALObject<LayerFeatures> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value layer_obj);
-  static NAPI_METHOD(toString);
 
   GDAL_ASYNCABLE_DECLARE(get);
   GDAL_ASYNCABLE_DECLARE(first);
@@ -29,7 +28,6 @@ class LayerFeatures : public GDALObject<LayerFeatures> {
   GDAL_ASYNCABLE_DECLARE(set);
   GDAL_ASYNCABLE_DECLARE(remove);
 
-  static NAPI_GETTER(layerGetter);
 
   LayerFeatures(const Napi::CallbackInfo &info);
 

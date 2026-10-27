@@ -23,12 +23,8 @@ class SimpleCurve : public CurveBase<SimpleCurve, OGRSimpleCurve, LineStringPoin
   SimpleCurve(const Napi::CallbackInfo &info);
 
   static void Initialize(Napi::Object target);
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(value);
   static NAPI_METHOD(getLength);
-  static NAPI_METHOD(addSubLineString);
 
-  static NAPI_GETTER(pointsGetter);
 };
 
 } // namespace node_gdal

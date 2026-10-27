@@ -19,36 +19,6 @@ Napi::FunctionReference &MDArray::constructor() {
   return node_gdal::env_context().constructor<MDArray>();
 }
 
-void MDArray::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(MDArray);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "MDArray",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(read)
-        METHOD(getView)
-        METHOD(getMask)
-        METHOD(asDataset)
-        ATTR_DONT_ENUM(lcons, "_uid", uidGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "srs", srsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "dataType", typeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "length", lengthGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "unitType", unitTypeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "scale", scaleGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "offset", offsetGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "noDataValue", noDataValueGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "description", descriptionGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "dimensions", dimensionsGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "attributes", attributesGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("MDArray", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 MDArray::MDArray(const Napi::CallbackInfo &info) : GDALObject<MDArray>(info), uid(0), this_(nullptr) {
   std::shared_ptr<GDALMDArray> pending = node_gdal::TakePendingShared<GDALMDArray>();
   if (pending) {
@@ -118,10 +88,6 @@ Napi::Value MDArray::New(std::shared_ptr<GDALMDArray> raw, GDALDataset *parent_d
 
 
   return obj;
-}
-
-NAPI_METHOD(MDArray::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "MDArray");
 }
 
 /* Find the lowest possible element index for the given spans and strides */
@@ -366,24 +332,6 @@ GDAL_ASYNC_METHOD(MDArray::read, readBody)
  * @param {string} view
  * @return {MDArray}
  */
-NAPI_METHOD(MDArray::getView) {
-  Args args(info);
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-
-  std::string viewExpr;
-  if (!args.get(0, "view", viewExpr)) return args.failed();
-  GDAL_LOCK_PARENT(array);
-  CPLErrorReset();
-  std::shared_ptr<GDALMDArray> view = raw->GetView(viewExpr);
-  if (view == nullptr) {
-    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  Napi::Value obj = New(view, array->parent_ds);
-  return obj;
-}
-
 /**
  * Return an array that is a mask for the current array.
  *
@@ -397,21 +345,6 @@ NAPI_METHOD(MDArray::getView) {
  * @throws {Error}
  * @return {MDArray}
  */
-NAPI_METHOD(MDArray::getMask) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-
-  GDAL_LOCK_PARENT(array);
-  CPLErrorReset();
-  std::shared_ptr<GDALMDArray> mask = raw->GetMask(nullptr);
-  if (mask == nullptr) {
-    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  Napi::Value obj = New(mask, array->parent_ds);
-  return obj;
-}
-
 /**
  * Return a view of this array as a gdal.Dataset (ie 2D)
  *
@@ -425,31 +358,6 @@ NAPI_METHOD(MDArray::getMask) {
  * @throws {Error}
  * @return {Dataset}
  */
-NAPI_METHOD(MDArray::asDataset) {
-  Args args(info);
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-
-  int x = -1, y = -1;
-  std::string dim;
-  bool isXString = false;
-  if (!args.getStringOrInt(0, "x", dim, x, isXString)) return args.failed();
-  if (isXString) x = ArrayDimensions::__getIdx(raw, dim);
-  bool isYString = false;
-  if (!args.getStringOrInt(1, "y", dim, y, isYString)) return args.failed();
-  if (isYString) y = ArrayDimensions::__getIdx(raw, dim);
-
-  GDAL_LOCK_PARENT(array);
-  CPLErrorReset();
-  GDALDataset *ds = raw->AsClassicDataset(x, y);
-  if (ds == nullptr) {
-    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  Napi::Value obj = Dataset::New(ds, array->parent_ds);
-  return obj;
-}
-
 /**
  * Spatial reference associated with MDArray.
  *
@@ -460,19 +368,6 @@ NAPI_METHOD(MDArray::asDataset) {
  * @memberof MDArray
  * @type {SpatialReference|null}
  */
-NAPI_GETTER(MDArray::srsGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-  GDAL_LOCK_PARENT(array);
-  std::shared_ptr<OGRSpatialReference> srs = raw->GetSpatialRef();
-  if (srs == nullptr) {
-    return node_gdal::napi_env().Null();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return SpatialReference::New(srs.get(), false);
-}
-
 /**
  * Raster value offset.
  *
@@ -482,17 +377,6 @@ NAPI_GETTER(MDArray::srsGetter) {
  * @memberof MDArray
  * @type {number}
  */
-NAPI_GETTER(MDArray::offsetGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  bool hasOffset = false;
-  GDAL_LOCK_PARENT(array);
-  double result = array->this_->GetOffset(&hasOffset);
-  if (hasOffset)
-    return Napi::Number::New(node_gdal::napi_env(), result);
-  else
-    return Napi::Number::New(node_gdal::napi_env(), 0);
-}
-
 /**
  * Raster value scale.
  *
@@ -502,17 +386,6 @@ NAPI_GETTER(MDArray::offsetGetter) {
  * @memberof MDArray
  * @type {number}
  */
-NAPI_GETTER(MDArray::scaleGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  bool hasScale = false;
-  GDAL_LOCK_PARENT(array);
-  double result = array->this_->GetScale(&hasScale);
-  if (hasScale)
-    return Napi::Number::New(node_gdal::napi_env(), result);
-  else
-    return Napi::Number::New(node_gdal::napi_env(), 1);
-}
-
 /**
  * No data value for this array.
  *
@@ -522,21 +395,6 @@ NAPI_GETTER(MDArray::scaleGetter) {
  * @memberof MDArray
  * @type {number|null}
  */
-NAPI_GETTER(MDArray::noDataValueGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  bool hasNoData = false;
-  GDAL_LOCK_PARENT(array);
-  double result = array->this_->GetNoDataValueAsDouble(&hasNoData);
-
-  if (hasNoData && !std::isnan(result)) {
-    return Napi::Number::New(node_gdal::napi_env(), result);
-    return node_gdal::napi_env().Undefined();
-  } else {
-    return node_gdal::napi_env().Null();
-    return node_gdal::napi_env().Undefined();
-  }
-}
-
 /**
  * Raster unit type (name for the units of this raster's values).
  * For instance, it might be `"m"` for an elevation model in meters,
@@ -549,13 +407,6 @@ NAPI_GETTER(MDArray::noDataValueGetter) {
  * @memberof MDArray
  * @type {string}
  */
-NAPI_GETTER(MDArray::unitTypeGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  GDAL_LOCK_PARENT(array);
-  std::string unit = array->this_->GetUnit();
-  return SafeString::New(unit.c_str());
-}
-
 /**
  * @readonly
  * @kind member
@@ -564,21 +415,6 @@ NAPI_GETTER(MDArray::unitTypeGetter) {
  * @memberof MDArray
  * @type {string}
  */
-NAPI_GETTER(MDArray::typeGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-  GDAL_LOCK_PARENT(array);
-  GDALExtendedDataType type = raw->GetDataType();
-  const char *r;
-  switch (type.GetClass()) {
-    case GEDTC_NUMERIC: r = GDALGetDataTypeName(type.GetNumericDataType()); break;
-    case GEDTC_STRING: r = "String"; break;
-    case GEDTC_COMPOUND: r = "Compound"; break;
-    default: Napi::Error::New(node_gdal::napi_env(), "Invalid attribute type").ThrowAsJavaScriptException(); return node_gdal::napi_env().Undefined();
-  }
-  return SafeString::New(r);
-}
-
 /**
  * @readonly
  * @kind member
@@ -587,10 +423,6 @@ NAPI_GETTER(MDArray::typeGetter) {
  * @memberof MDArray
  * @type {GroupDimensions}
  */
-NAPI_GETTER(MDArray::dimensionsGetter) {
-  return node_gdal::get_private(info.This(), "dims_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -599,10 +431,6 @@ NAPI_GETTER(MDArray::dimensionsGetter) {
  * @memberof MDArray
  * @type {ArrayAttributes}
  */
-NAPI_GETTER(MDArray::attributesGetter) {
-  return node_gdal::get_private(info.This(), "attrs_");
-}
-
 /**
  * @readonly
  * @kind member
@@ -611,14 +439,6 @@ NAPI_GETTER(MDArray::attributesGetter) {
  * @memberof MDArray
  * @type {string}
  */
-NAPI_GETTER(MDArray::descriptionGetter) {
-  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
-  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
-  GDAL_LOCK_PARENT(array);
-  std::string description = raw->GetFullName();
-  return SafeString::New(description.c_str());
-}
-
 /**
  * The flattened length of the array.
  *
@@ -643,11 +463,209 @@ struct lengthGetterBody : node_gdal::SyncMethodBody {
 
 GDAL_SYNC_GETTER(MDArray::lengthGetter, lengthGetterBody)
 
-NAPI_GETTER(MDArray::uidGetter) {
+#endif
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "MDArray");
+}
+
+
+Napi::Value getView(const Napi::CallbackInfo &info) {
+  Args args(info);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+
+  std::string viewExpr;
+  if (!args.get(0, "view", viewExpr)) return args.failed();
+  GDAL_LOCK_PARENT(array);
+  CPLErrorReset();
+  std::shared_ptr<GDALMDArray> view = raw->GetView(viewExpr);
+  if (view == nullptr) {
+    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  Napi::Value obj = MDArray::New(view, array->getParent());
+  return obj;
+}
+
+
+Napi::Value getMask(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+
+  GDAL_LOCK_PARENT(array);
+  CPLErrorReset();
+  std::shared_ptr<GDALMDArray> mask = raw->GetMask(nullptr);
+  if (mask == nullptr) {
+    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  Napi::Value obj = MDArray::New(mask, array->getParent());
+  return obj;
+}
+
+
+Napi::Value asDataset(const Napi::CallbackInfo &info) {
+  Args args(info);
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+
+  int x = -1, y = -1;
+  std::string dim;
+  bool isXString = false;
+  if (!args.getStringOrInt(0, "x", dim, x, isXString)) return args.failed();
+  if (isXString) x = ArrayDimensions::__getIdx(raw, dim);
+  bool isYString = false;
+  if (!args.getStringOrInt(1, "y", dim, y, isYString)) return args.failed();
+  if (isYString) y = ArrayDimensions::__getIdx(raw, dim);
+
+  GDAL_LOCK_PARENT(array);
+  CPLErrorReset();
+  GDALDataset *ds = raw->AsClassicDataset(x, y);
+  if (ds == nullptr) {
+    Napi::Error::New(node_gdal::napi_env(), CPLGetLastErrorMsg()).ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  Napi::Value obj = Dataset::New(ds, array->getParent());
+  return obj;
+}
+
+
+Napi::Value srsGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+  GDAL_LOCK_PARENT(array);
+  std::shared_ptr<OGRSpatialReference> srs = raw->GetSpatialRef();
+  if (srs == nullptr) {
+    return node_gdal::napi_env().Null();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return SpatialReference::New(srs.get(), false);
+}
+
+
+Napi::Value offsetGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  bool hasOffset = false;
+  GDAL_LOCK_PARENT(array);
+  double result = array->get()->GetOffset(&hasOffset);
+  if (hasOffset)
+    return Napi::Number::New(node_gdal::napi_env(), result);
+  else
+    return Napi::Number::New(node_gdal::napi_env(), 0);
+}
+
+
+Napi::Value scaleGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  bool hasScale = false;
+  GDAL_LOCK_PARENT(array);
+  double result = array->get()->GetScale(&hasScale);
+  if (hasScale)
+    return Napi::Number::New(node_gdal::napi_env(), result);
+  else
+    return Napi::Number::New(node_gdal::napi_env(), 1);
+}
+
+
+Napi::Value noDataValueGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  bool hasNoData = false;
+  GDAL_LOCK_PARENT(array);
+  double result = array->get()->GetNoDataValueAsDouble(&hasNoData);
+
+  if (hasNoData && !std::isnan(result)) {
+    return Napi::Number::New(node_gdal::napi_env(), result);
+    return node_gdal::napi_env().Undefined();
+  } else {
+    return node_gdal::napi_env().Null();
+    return node_gdal::napi_env().Undefined();
+  }
+}
+
+
+Napi::Value unitTypeGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  GDAL_LOCK_PARENT(array);
+  std::string unit = array->get()->GetUnit();
+  return SafeString::New(unit.c_str());
+}
+
+
+Napi::Value typeGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+  GDAL_LOCK_PARENT(array);
+  GDALExtendedDataType type = raw->GetDataType();
+  const char *r;
+  switch (type.GetClass()) {
+    case GEDTC_NUMERIC: r = GDALGetDataTypeName(type.GetNumericDataType()); break;
+    case GEDTC_STRING: r = "String"; break;
+    case GEDTC_COMPOUND: r = "Compound"; break;
+    default: Napi::Error::New(node_gdal::napi_env(), "Invalid attribute type").ThrowAsJavaScriptException(); return node_gdal::napi_env().Undefined();
+  }
+  return SafeString::New(r);
+}
+
+
+Napi::Value dimensionsGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "dims_");
+}
+
+
+Napi::Value attributesGetter(const Napi::CallbackInfo &info) {
+  return node_gdal::get_private(info.This(), "attrs_");
+}
+
+
+Napi::Value descriptionGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  std::shared_ptr<GDALMDArray> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(array, "std::shared_ptr<GDALMDArray>");
+  GDAL_LOCK_PARENT(array);
+  std::string description = raw->GetFullName();
+  return SafeString::New(description.c_str());
+}
+
+
+Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   MDArray *ds = node_gdal::UnwrapWrapped<MDArray>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)ds->uid);
 }
 
-#endif
+} // namespace
+
+void MDArray::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("read", read, readAsync),
+    method("getView", getView),
+    method("getMask", getMask),
+    method("asDataset", asDataset),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
+    attr("srs", srsGetter, READ_ONLY_SETTER),
+    attr("dataType", typeGetter, READ_ONLY_SETTER),
+    attr("length", lengthGetter, READ_ONLY_SETTER),
+    attr("unitType", unitTypeGetter, READ_ONLY_SETTER),
+    attr("scale", scaleGetter, READ_ONLY_SETTER),
+    attr("offset", offsetGetter, READ_ONLY_SETTER),
+    attr("noDataValue", noDataValueGetter, READ_ONLY_SETTER),
+    attr("description", descriptionGetter, READ_ONLY_SETTER),
+    attr("dimensions", dimensionsGetter, READ_ONLY_SETTER),
+    attr("attributes", attributesGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<MDArray>(env, "MDArray", methods, accessors);
+
+  target.Set("MDArray", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

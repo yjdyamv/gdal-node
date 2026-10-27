@@ -12,24 +12,6 @@ Napi::FunctionReference &CompoundCurveCurves::constructor() {
   return node_gdal::env_context().constructor<CompoundCurveCurves>();
 }
 
-void CompoundCurveCurves::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(CompoundCurveCurves);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "CompoundCurveCurves",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(add)
-    });
-
-  target.Set("CompoundCurveCurves", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 CompoundCurveCurves::CompoundCurveCurves(const Napi::CallbackInfo &info) : GDALObject<CompoundCurveCurves>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create CompoundCurveCurves directly").ThrowAsJavaScriptException();
@@ -55,10 +37,6 @@ Napi::Value CompoundCurveCurves::New(Napi::Value geom) {
   return obj;
 }
 
-NAPI_METHOD(CompoundCurveCurves::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "CompoundCurveCurves");
-}
-
 /**
  * Returns the number of curves that exist in the collection.
  *
@@ -67,15 +45,6 @@ NAPI_METHOD(CompoundCurveCurves::toString) {
  * @memberof CompoundCurveCurves
  * @return {number}
  */
-NAPI_METHOD(CompoundCurveCurves::count) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
-
-  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumCurves());
-}
-
 /**
  * Returns the curve at the specified index.
  *
@@ -91,22 +60,6 @@ NAPI_METHOD(CompoundCurveCurves::count) {
  * @throws {Error}
  * @return {CompoundCurve|SimpleCurve}
  */
-NAPI_METHOD(CompoundCurveCurves::get) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
-
-  int i;
-  if (!args.get(0, "index", i)) return args.failed();
-
-  if (i >= 0 && i < geom->get()->getNumCurves())
-    return Geometry::New(geom->get()->getCurve(i), false);
-  Napi::RangeError::New(node_gdal::napi_env(), "Invalid curve requested").ThrowAsJavaScriptException();
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Adds a curve to the collection.
  *
@@ -130,7 +83,41 @@ NAPI_METHOD(CompoundCurveCurves::get) {
  * @memberof CompoundCurveCurves
  * @param {SimpleCurve|SimpleCurve[]} curves
  */
-NAPI_METHOD(CompoundCurveCurves::add) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "CompoundCurveCurves");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
+
+  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumCurves());
+}
+
+
+Napi::Value get(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  CompoundCurve *geom = node_gdal::UnwrapWrapped<CompoundCurve>(parent);
+
+  int i;
+  if (!args.get(0, "index", i)) return args.failed();
+
+  if (i >= 0 && i < geom->get()->getNumCurves())
+    return Geometry::New(geom->get()->getCurve(i), false);
+  Napi::RangeError::New(node_gdal::napi_env(), "Invalid curve requested").ThrowAsJavaScriptException();
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -173,6 +160,24 @@ NAPI_METHOD(CompoundCurveCurves::add) {
   }
 
   return node_gdal::napi_env().Undefined();
+}
+
+} // namespace
+
+void CompoundCurveCurves::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("add", add),
+  };
+
+  Napi::Function lcons = GDALDefineClass<CompoundCurveCurves>(env, "CompoundCurveCurves", methods);
+
+  target.Set("CompoundCurveCurves", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

@@ -24,11 +24,9 @@ class GeometryCollection : public GeometryCollectionBase<GeometryCollection, OGR
 
   static void Initialize(Napi::Object target);
   using GeometryCollectionBase<GeometryCollection, OGRGeometryCollection>::New;
-  static NAPI_METHOD(toString);
   static NAPI_METHOD(getArea);
   static NAPI_METHOD(getLength);
 
-  static NAPI_GETTER(childrenGetter);
 };
 
 } // namespace node_gdal

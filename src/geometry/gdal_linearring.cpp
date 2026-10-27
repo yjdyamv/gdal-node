@@ -14,25 +14,6 @@ Napi::FunctionReference &LinearRing::constructor() {
   return node_gdal::env_context().constructor<LinearRing>();
 }
 
-void LinearRing::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(LinearRing);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "LinearRing",
-    {
-        METHOD(toString)
-        METHOD(getArea)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, LineString::constructor().Value());
-
-  target.Set("LinearRing", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
 
   if (!geom) { return node_gdal::napi_env().Null(); }
@@ -61,10 +42,6 @@ Napi::Value LinearRing::New(OGRLinearRing *geom, bool owned) {
  * @extends LineString
  */
 
-NAPI_METHOD(LinearRing::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "LinearRing");
-}
-
 /**
  * Computes the area enclosed by the ring.
  *
@@ -85,5 +62,30 @@ struct getAreaBody : node_gdal::SyncMethodBody {
 } // namespace
 
 GDAL_SYNC_METHOD(LinearRing::getArea, getAreaBody)
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "LinearRing");
+}
+
+} // namespace
+
+void LinearRing::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("getArea", getArea),
+  };
+
+  Napi::Function lcons = GDALDefineClass<LinearRing>(env, "LinearRing", methods);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, LineString::constructor().Value());
+
+  target.Set("LinearRing", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

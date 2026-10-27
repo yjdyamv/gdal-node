@@ -13,34 +13,11 @@ Napi::FunctionReference &MultiCurve::constructor() {
   return node_gdal::env_context().constructor<MultiCurve>();
 }
 
-void MultiCurve::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(MultiCurve);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "MultiCurve",
-    {
-        METHOD(toString)
-        METHOD(polygonize)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
-
-  target.Set("MultiCurve", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * @constructor
  * @class MultiCurve
  * @extends GeometryCollection
  */
-
-NAPI_METHOD(MultiCurve::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "MultiCurve");
-}
 
 /**
  * Converts it to a polygon.
@@ -50,11 +27,37 @@ NAPI_METHOD(MultiCurve::toString) {
  * @memberof MultiCurve
  * @return {Polygon}
  */
-NAPI_METHOD(MultiCurve::polygonize) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "MultiCurve");
+}
+
+
+Napi::Value polygonize(const Napi::CallbackInfo &info) {
 
   MultiCurve *geom = node_gdal::UnwrapWrapped<MultiCurve>(info.This().As<Napi::Object>());
 
-  return Geometry::New(geom->this_->Polygonize());
+  return Geometry::New(geom->get()->Polygonize());
+}
+
+} // namespace
+
+void MultiCurve::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("polygonize", polygonize),
+  };
+
+  Napi::Function lcons = GDALDefineClass<MultiCurve>(env, "MultiCurve", methods);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
+
+  target.Set("MultiCurve", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

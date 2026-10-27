@@ -18,26 +18,18 @@ class RasterBand : public GDALObject<RasterBand> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALRasterBand *band, GDALDataset *parent, bool owned = false);
-  static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(flush);
   GDAL_ASYNCABLE_DECLARE(fill);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
-  static NAPI_METHOD(asMDArray);
 #endif
-  static NAPI_METHOD(getStatistics);
   GDAL_ASYNCABLE_DECLARE(computeStatistics);
-  static NAPI_METHOD(setStatistics);
-  static NAPI_METHOD(getMaskBand);
   static NAPI_METHOD(getMaskFlags);
   static NAPI_METHOD(createMaskBand);
   GDAL_ASYNCABLE_DECLARE(getMetadata);
   GDAL_ASYNCABLE_DECLARE(setMetadata);
-  static NAPI_GETTER(dsGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(sizeGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(idGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(descriptionGetter);
-  static NAPI_GETTER(overviewsGetter);
-  static NAPI_GETTER(pixelsGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(blockSizeGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(minimumGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(maximumGetter);
@@ -51,15 +43,7 @@ class RasterBand : public GDALObject<RasterBand> {
   GDAL_ASYNCABLE_GETTER_DECLARE(categoryNamesGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(colorInterpretationGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(colorTableGetter);
-  static NAPI_GETTER(uidGetter);
 
-  static NAPI_SETTER(unitTypeSetter);
-  static NAPI_SETTER(scaleSetter);
-  static NAPI_SETTER(offsetSetter);
-  static NAPI_SETTER(noDataValueSetter);
-  static NAPI_SETTER(categoryNamesSetter);
-  static NAPI_SETTER(colorInterpretationSetter);
-  static NAPI_SETTER(colorTableSetter);
 
   RasterBand(const Napi::CallbackInfo &info);
 

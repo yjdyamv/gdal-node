@@ -21,8 +21,6 @@ class CoordinateTransformation : public GDALObject<CoordinateTransformation> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(OGRCoordinateTransformation *transform);
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(transformPoint);
 
   CoordinateTransformation(const Napi::CallbackInfo &info);
 

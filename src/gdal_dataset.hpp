@@ -21,32 +21,16 @@ class Dataset : public GDALObject<Dataset> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALDataset *ds, GDALDataset *parent = nullptr, bool close = true, bool shared_lock = true);
-  static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(flush);
   GDAL_ASYNCABLE_DECLARE(getMetadata);
   GDAL_ASYNCABLE_DECLARE(setMetadata);
-  static NAPI_METHOD(getFileList);
-  static NAPI_METHOD(getGCPProjection);
-  static NAPI_METHOD(getGCPs);
-  static NAPI_METHOD(setGCPs);
   GDAL_ASYNCABLE_DECLARE(executeSQL);
-  static NAPI_METHOD(testCapability);
   GDAL_ASYNCABLE_DECLARE(buildOverviews);
-  static NAPI_METHOD(close);
 
-  static NAPI_GETTER(bandsGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(rasterSizeGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(srsGetter);
-  static NAPI_GETTER(driverGetter);
-  static NAPI_GETTER(threadSafeGetter);
   GDAL_ASYNCABLE_GETTER_DECLARE(geoTransformGetter);
-  static NAPI_GETTER(descriptionGetter);
-  static NAPI_GETTER(layersGetter);
-  static NAPI_GETTER(rootGetter);
-  static NAPI_GETTER(uidGetter);
 
-  static NAPI_SETTER(srsSetter);
-  static NAPI_SETTER(geoTransformSetter);
 
   Dataset(const Napi::CallbackInfo &info);
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself

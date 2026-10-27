@@ -24,9 +24,7 @@ class CompoundCurve : public CurveBase<CompoundCurve, OGRCompoundCurve, Compound
 
   static void Initialize(Napi::Object target);
   using CurveBase<CompoundCurve, OGRCompoundCurve, CompoundCurveCurves>::New;
-  static NAPI_METHOD(toString);
 
-  static NAPI_GETTER(curvesGetter);
 
     protected:
   static void SetPrivate(Napi::Object, Napi::Value);

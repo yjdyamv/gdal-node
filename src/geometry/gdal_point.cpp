@@ -10,29 +10,6 @@ Napi::FunctionReference &Point::constructor() {
   return node_gdal::env_context().constructor<Point>();
 }
 
-void Point::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Point);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Point",
-    {
-        METHOD(toString)
-        ATTR(lcons, "x", xGetter, xSetter)
-        ATTR(lcons, "y", yGetter, ySetter)
-        ATTR(lcons, "z", zGetter, zSetter)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor().Value());
-
-  // properties
-
-  target.Set("Point", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * Point class.
  *
@@ -57,10 +34,6 @@ Point::Point(const Napi::CallbackInfo &info) : GeometryBase<Point, OGRPoint>(inf
 }
 
 
-NAPI_METHOD(Point::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "Point");
-}
-
 /**
  * @kind member
  * @name x
@@ -68,12 +41,34 @@ NAPI_METHOD(Point::toString) {
  * @memberof Point
  * @type {number}
  */
-NAPI_GETTER(Point::xGetter) {
-  Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), (geom->this_)->getX());
+/**
+ * @kind member
+ * @name y
+ * @instance
+ * @memberof Point
+ * @type {number}
+ */
+/**
+ * @kind member
+ * @name z
+ * @instance
+ * @memberof Point
+ * @type {number}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "Point");
 }
 
-NAPI_SETTER(Point::xSetter) {
+
+Napi::Value xGetter(const Napi::CallbackInfo &info) {
+  Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
+  return Napi::Number::New(node_gdal::napi_env(), (geom->get())->getX());
+}
+
+
+void xSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
 
   if (!value.IsNumber()) {
@@ -82,22 +77,17 @@ NAPI_SETTER(Point::xSetter) {
   }
   double x = value.As<Napi::Number>().DoubleValue();
 
-  ((OGRPoint *)geom->this_)->setX(x);
+  ((OGRPoint *)geom->get())->setX(x);
 }
 
-/**
- * @kind member
- * @name y
- * @instance
- * @memberof Point
- * @type {number}
- */
-NAPI_GETTER(Point::yGetter) {
+
+Napi::Value yGetter(const Napi::CallbackInfo &info) {
   Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), (geom->this_)->getY());
+  return Napi::Number::New(node_gdal::napi_env(), (geom->get())->getY());
 }
 
-NAPI_SETTER(Point::ySetter) {
+
+void ySetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
 
   if (!value.IsNumber()) {
@@ -106,22 +96,17 @@ NAPI_SETTER(Point::ySetter) {
   }
   double y = value.As<Napi::Number>().DoubleValue();
 
-  ((OGRPoint *)geom->this_)->setY(y);
+  ((OGRPoint *)geom->get())->setY(y);
 }
 
-/**
- * @kind member
- * @name z
- * @instance
- * @memberof Point
- * @type {number}
- */
-NAPI_GETTER(Point::zGetter) {
+
+Napi::Value zGetter(const Napi::CallbackInfo &info) {
   Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), (geom->this_)->getZ());
+  return Napi::Number::New(node_gdal::napi_env(), (geom->get())->getZ());
 }
 
-NAPI_SETTER(Point::zSetter) {
+
+void zSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   Point *geom = node_gdal::UnwrapWrapped<Point>(info.This().As<Napi::Object>());
 
   if (!value.IsNumber()) {
@@ -130,7 +115,33 @@ NAPI_SETTER(Point::zSetter) {
   }
   double z = value.As<Napi::Number>().DoubleValue();
 
-  ((OGRPoint *)geom->this_)->setZ(z);
+  ((OGRPoint *)geom->get())->setZ(z);
+}
+
+} // namespace
+
+void Point::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("x", xGetter, xSetter),
+    attr("y", yGetter, ySetter),
+    attr("z", zGetter, zSetter),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Point>(env, "Point", methods, accessors);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
+
+  // properties
+
+  target.Set("Point", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

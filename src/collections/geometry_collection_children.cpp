@@ -10,25 +10,6 @@ Napi::FunctionReference &GeometryCollectionChildren::constructor() {
   return node_gdal::env_context().constructor<GeometryCollectionChildren>();
 }
 
-void GeometryCollectionChildren::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(GeometryCollectionChildren);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "GeometryCollectionChildren",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(remove)
-        METHOD(add)
-    });
-
-  target.Set("GeometryCollectionChildren", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 GeometryCollectionChildren::GeometryCollectionChildren(const Napi::CallbackInfo &info) : GDALObject<GeometryCollectionChildren>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create GeometryCollectionChildren directly").ThrowAsJavaScriptException();
@@ -54,10 +35,6 @@ Napi::Value GeometryCollectionChildren::New(Napi::Value geom) {
   return obj;
 }
 
-NAPI_METHOD(GeometryCollectionChildren::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "GeometryCollectionChildren");
-}
-
 /**
  * Returns the number of items.
  *
@@ -66,15 +43,6 @@ NAPI_METHOD(GeometryCollectionChildren::toString) {
  * @memberof GeometryCollectionChildren
  * @return {number}
  */
-NAPI_METHOD(GeometryCollectionChildren::count) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
-
-  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumGeometries());
-}
-
 /**
  * Returns the geometry at the specified index.
  *
@@ -85,24 +53,6 @@ NAPI_METHOD(GeometryCollectionChildren::count) {
  * @throws {Error}
  * @return {Geometry}
  */
-NAPI_METHOD(GeometryCollectionChildren::get) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
-
-  int i;
-  if (!args.get(0, "index", i)) return args.failed();
-
-  auto r = geom->get()->getGeometryRef(i);
-  if (r == nullptr) {
-    throw GDALError::fromGDAL();
-    return node_gdal::napi_env().Undefined();
-  }
-  return Geometry::New(r, false);
-}
-
 /**
  * Removes the geometry at the specified index.
  *
@@ -111,25 +61,6 @@ NAPI_METHOD(GeometryCollectionChildren::get) {
  * @memberof GeometryCollectionChildren
  * @param {number} index 0-based index, -1 for all geometries
  */
-NAPI_METHOD(GeometryCollectionChildren::remove) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
-
-  int i;
-  if (!args.get(0, "index", i)) return args.failed();
-
-  OGRErr err = geom->get()->removeGeometry(i);
-  if (err) {
-    throw GDALError(getOGRErrMsg(err));
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return node_gdal::napi_env().Undefined();
-}
-
 /**
  * Adds geometry(s) to the collection.
  *
@@ -149,7 +80,63 @@ NAPI_METHOD(GeometryCollectionChildren::remove) {
  * @memberof GeometryCollectionChildren
  * @param {Geometry|Geometry[]} geometry
  */
-NAPI_METHOD(GeometryCollectionChildren::add) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "GeometryCollectionChildren");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
+
+  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getNumGeometries());
+}
+
+
+Napi::Value get(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
+
+  int i;
+  if (!args.get(0, "index", i)) return args.failed();
+
+  auto r = geom->get()->getGeometryRef(i);
+  if (r == nullptr) {
+    throw GDALError::fromGDAL();
+    return node_gdal::napi_env().Undefined();
+  }
+  return Geometry::New(r, false);
+}
+
+
+Napi::Value remove(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  GeometryCollection *geom = node_gdal::UnwrapWrapped<GeometryCollection>(parent);
+
+  int i;
+  if (!args.get(0, "index", i)) return args.failed();
+
+  OGRErr err = geom->get()->removeGeometry(i);
+  if (err) {
+    throw GDALError(getOGRErrMsg(err));
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return node_gdal::napi_env().Undefined();
+}
+
+
+Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -192,6 +179,25 @@ NAPI_METHOD(GeometryCollectionChildren::add) {
   }
 
   return node_gdal::napi_env().Undefined();
+}
+
+} // namespace
+
+void GeometryCollectionChildren::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("remove", remove),
+    method("add", add),
+  };
+
+  Napi::Function lcons = GDALDefineClass<GeometryCollectionChildren>(env, "GeometryCollectionChildren", methods);
+
+  target.Set("GeometryCollectionChildren", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

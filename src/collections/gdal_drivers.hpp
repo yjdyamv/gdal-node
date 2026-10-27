@@ -17,11 +17,7 @@ class GDALDrivers : public GDALObject<GDALDrivers> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New();
-  static NAPI_METHOD(toString);
 
-  static NAPI_METHOD(get);
-  static NAPI_METHOD(getNames);
-  static NAPI_METHOD(count);
 
   GDALDrivers(const Napi::CallbackInfo &info);
 

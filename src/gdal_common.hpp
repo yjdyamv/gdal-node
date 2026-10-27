@@ -11,6 +11,8 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <array>
+#include <iterator>
 
 // napi
 #include "napi-wrapper.h"
@@ -193,6 +195,147 @@ inline Napi::Value FreeFunctionTrampoline(const Napi::CallbackInfo &info) {
   }
 }
 
+//
+// The declarative member registry
+//
+// A class describes its members as two constexpr arrays of plain function
+// pointers instead of a list of macros. Nothing about a member has to be a
+// property of the class: any function with the shape of NAPI_METHOD will do,
+// which is what lets a definition live in the anonymous namespace of the .cpp
+// file, next to the body struct of its asynchronous variant.
+//
+//   static constexpr MethodEntry methods[] = {
+//     method("count", count),
+//     asyncMethod("count", count, countAsync),
+//   };
+//   static constexpr AccessorEntry accessors[] = {
+//     attr("interpretation", interpretationGetter, READ_ONLY_SETTER),
+//     hiddenAttr("band", bandGetter, READ_ONLY_SETTER),
+//   };
+//   Napi::Function lcons = GDALDefineClass<ColorTable>(env, "ColorTable", methods, accessors);
+//
+// The `Async` variants are registered from the same entry, so that a method
+// cannot have an asynchronous half which is registered as something else.
+//
+enum MemberFlags : unsigned { MEMBER_NONE = 0, MEMBER_HIDDEN = 1U << 0 };
+
+struct MethodEntry {
+  const char *name;
+  Napi::Value (*fn)(const Napi::CallbackInfo &);
+  // when set, the method is registered a second time as `name + "Async"`
+  Napi::Value (*fn_async)(const Napi::CallbackInfo &);
+  unsigned flags;
+};
+
+struct AccessorEntry {
+  const char *name;
+  Napi::Value (*getter)(const Napi::CallbackInfo &);
+  void (*setter)(const Napi::CallbackInfo &, const Napi::Value &);
+  // when set, the accessor is registered a second time as the hidden and
+  // read-only `name + "Async"`
+  Napi::Value (*getter_async)(const Napi::CallbackInfo &);
+  void (*setter_async)(const Napi::CallbackInfo &, const Napi::Value &);
+  unsigned flags;
+};
+
+// `data` of the property descriptor, which is what napi_get_cb_info returns
+inline void *EntryOf(::napi_env env, napi_callback_info info) {
+  size_t argc = 0;
+  void *data = nullptr;
+  if (napi_get_cb_info(env, info, &argc, nullptr, nullptr, &data) != napi_ok) return nullptr;
+  return data;
+}
+
+inline napi_value MethodEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const MethodEntry *>(EntryOf(env, info));
+  if (entry == nullptr) return nullptr;
+  try {
+    return entry->fn(ci);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+}
+
+inline napi_value AsyncMethodEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const MethodEntry *>(EntryOf(env, info));
+  if (entry == nullptr || entry->fn_async == nullptr) return nullptr;
+  try {
+    return entry->fn_async(ci);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+}
+
+inline napi_value GetterEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
+  if (entry == nullptr) return nullptr;
+  try {
+    return entry->getter(ci);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+}
+
+inline napi_value AsyncGetterEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
+  if (entry == nullptr || entry->getter_async == nullptr) return nullptr;
+  try {
+    return entry->getter_async(ci);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+}
+
+// `READ_ONLY_SETTER` is the marker of a property which has no setter; the
+// message names the property, which only the registry entry knows
+//
+inline napi_value ReadOnlySetterTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
+  std::string err = std::string(entry != nullptr ? entry->name : "property") + " is a read-only property";
+  Napi::Error::New(ci.Env(), err.c_str()).ThrowAsJavaScriptException();
+  return nullptr;
+}
+
+inline napi_value SetterEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
+  if (entry == nullptr || entry->setter == nullptr) return nullptr;
+  Napi::Value value = ci.Length() > 0 ? ci[0] : ci.Env().Undefined();
+  try {
+    entry->setter(ci, value);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+  return nullptr;
+}
+
+inline napi_value AsyncSetterEntryTrampoline(::napi_env env, napi_callback_info info) {
+  Napi::CallbackInfo ci(env, info);
+  const auto *entry = static_cast<const AccessorEntry *>(EntryOf(env, info));
+  if (entry == nullptr || entry->setter_async == nullptr) return nullptr;
+  Napi::Value value = ci.Length() > 0 ? ci[0] : ci.Env().Undefined();
+  try {
+    entry->setter_async(ci, value);
+  } catch (...) {
+    return RethrowAsJavaScriptException(ci.Env());
+  }
+  return nullptr;
+}
+
+inline void InstallMethod(Napi::Env env, Napi::Object prototype, const char *name, napi_callback trampoline,
+  const void *entry, bool enumerable) {
+  napi_value fn = nullptr;
+  if (napi_create_function(env, name, NAPI_AUTO_LENGTH, trampoline, const_cast<void *>(entry), &fn) != napi_ok) return;
+  prototype.DefineProperty(Napi::PropertyDescriptor::Value(name, Napi::Value(env, fn),
+    static_cast<napi_property_attributes>(napi_writable | napi_configurable | (enumerable ? napi_enumerable : 0))));
+}
+
+
 } // namespace node_gdal
 
 template <typename T, Napi::Value (*FN)(const Napi::CallbackInfo &)>
@@ -252,53 +395,77 @@ inline Napi::ClassPropertyDescriptor<T> GDALInstanceAccessorHiddenT(const char *
 // chain is enough to make them inheritable. Accessors are unaffected and keep
 // going through napi_define_class.
 //
-template <typename T>
-inline Napi::Function GDALDefineClass(
-  Napi::Env env, const char *name, const std::initializer_list<Napi::ClassPropertyDescriptor<T>> &properties) {
-  std::vector<napi_property_descriptor> methods;
-  std::vector<Napi::ClassPropertyDescriptor<T>> accessors;
-  for (const auto &p : properties) {
-    napi_property_descriptor d = p;
-    if (d.method != nullptr) {
-      methods.push_back(d);
-    } else {
-      accessors.push_back(p);
+
+//
+// The declarative form of the above: the members of the class are two constexpr
+// arrays of function pointers, which is why a definition does not have to be a
+// member of the class (see node_gdal::MethodEntry)
+//
+// the marker of a read-only property, defined in gdal_common.cpp
+NAPI_SETTER(READ_ONLY_SETTER);
+
+template <typename T, size_t N, typename Accessors>
+inline Napi::Function GDALDefineClass(Napi::Env env, const char *name, const node_gdal::MethodEntry (&methods)[N],
+  const Accessors &accessors) {
+  std::vector<Napi::ClassPropertyDescriptor<T>> properties;
+  // the `Async` accessors generate their name, and napi_property_descriptor
+  // keeps the pointer: the storage has to outlive the loop
+  std::vector<std::string> async_names;
+  properties.reserve(std::size(accessors) * 2);
+  async_names.reserve(std::size(accessors));
+
+  constexpr napi_property_attributes base_attributes = static_cast<napi_property_attributes>(napi_writable | napi_configurable);
+  constexpr napi_property_attributes enumerable_attributes =
+    static_cast<napi_property_attributes>(napi_writable | napi_configurable | napi_enumerable);
+
+  for (const auto &entry : accessors) {
+    const bool hidden = (entry.flags & node_gdal::MEMBER_HIDDEN) != 0;
+    napi_property_descriptor d = {};
+    d.utf8name = entry.name;
+    d.getter = &node_gdal::GetterEntryTrampoline;
+    d.setter = entry.setter == nullptr ? nullptr
+             : entry.setter == &READ_ONLY_SETTER ? &node_gdal::ReadOnlySetterTrampoline
+                                                 : &node_gdal::SetterEntryTrampoline;
+    d.data = const_cast<node_gdal::AccessorEntry *>(&entry);
+    d.attributes = hidden ? base_attributes : enumerable_attributes;
+    properties.push_back(Napi::ClassPropertyDescriptor<T>(d));
+
+    if (entry.getter_async != nullptr) {
+      async_names.push_back(std::string(entry.name) + "Async");
+      napi_property_descriptor a = {};
+      a.utf8name = async_names.back().c_str();
+      a.getter = &node_gdal::AsyncGetterEntryTrampoline;
+      a.setter = &node_gdal::AsyncSetterEntryTrampoline;
+      a.data = const_cast<node_gdal::AccessorEntry *>(&entry);
+      a.attributes = base_attributes;
+      properties.push_back(Napi::ClassPropertyDescriptor<T>(a));
     }
   }
 
-  Napi::Function lcons = Napi::ObjectWrap<T>::DefineClass(env, name, accessors);
-
+  Napi::Function lcons = Napi::ObjectWrap<T>::DefineClass(env, name, properties);
   Napi::Object prototype = lcons.Get("prototype").As<Napi::Object>();
-  for (const auto &d : methods) {
-    napi_value fn = nullptr;
-    // napi_create_function, not a `method` descriptor: no signature is attached
-    if (napi_create_function(env, d.utf8name, NAPI_AUTO_LENGTH, d.method, d.data, &fn) != napi_ok) continue;
-    prototype.DefineProperty(
-      Napi::PropertyDescriptor::Value(d.utf8name, fn, static_cast<napi_property_attributes>(d.attributes)));
+
+  for (const auto &entry : methods) {
+    node_gdal::InstallMethod(env, prototype, entry.name, &node_gdal::MethodEntryTrampoline, &entry, true);
+    if (entry.fn_async != nullptr) {
+      const std::string async_name = std::string(entry.name) + "Async";
+      node_gdal::InstallMethod(env, prototype, async_name.c_str(), &node_gdal::AsyncMethodEntryTrampoline, &entry, true);
+    }
   }
 
   return lcons;
 }
 
-template <typename T, Napi::Value (*GET)(const Napi::CallbackInfo &)>
-inline Napi::ClassPropertyDescriptor<T> GDALInstanceAccessorT(const char *name) {
-  napi_property_descriptor d = {};
-  d.utf8name = name;
-  d.getter = &node_gdal::MethodTrampoline<GET>;
-  d.data = (void *)name;
-  d.attributes = static_cast<napi_property_attributes>(napi_writable | napi_enumerable | napi_configurable);
-  return Napi::ClassPropertyDescriptor<T>(d);
+// a class without accessors
+//
+template <typename T, size_t N>
+inline Napi::Function GDALDefineClass(Napi::Env env, const char *name, const node_gdal::MethodEntry (&methods)[N]) {
+  static constexpr std::array<node_gdal::AccessorEntry, 0> no_accessors = {};
+  return GDALDefineClass<T>(env, name, methods, no_accessors);
 }
 
-template <typename T, Napi::Value (*GET)(const Napi::CallbackInfo &)>
-inline Napi::ClassPropertyDescriptor<T> GDALInstanceAccessorHiddenT(const char *name) {
-  napi_property_descriptor d = {};
-  d.utf8name = name;
-  d.getter = &node_gdal::MethodTrampoline<GET>;
-  d.data = (void *)name;
-  d.attributes = static_cast<napi_property_attributes>(napi_writable | napi_configurable);
-  return Napi::ClassPropertyDescriptor<T>(d);
-}
+
+
 
 //
 // Scalar -> Napi::Value conversions used by the generated method bodies
@@ -858,33 +1025,6 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 
 #define NODE_DEFINE_CONSTANT(target, constant) target.Set(#constant, Napi::Number::New(target.Env(), constant))
 
-// ----- class registration helpers -------
-//
-// Used inside a class' `Initialize`, where `SELF` must name the class:
-//
-//   Napi::Function func = GDALDefineClass<SELF>(env, "Driver", {
-//     METHOD(toString), METHOD_ASYNCABLE(open), ATTR(lcons, "description", descriptionGetter, READ_ONLY_SETTER),
-//   });
-//
-#define SELF_CLASS(S) using SELF = S;
-
-#define METHOD(name) GDALInstanceMethodT<SELF, &SELF::name>(#name),
-#define METHOD_ASYNCABLE(name)                                                                                         \
-  GDALInstanceMethodT<SELF, &SELF::name>(#name), GDALInstanceMethodT<SELF, &SELF::name##Async>(#name "Async"),
-
-// Same, but for the ~20 members whose JS name differs from the C++ name
-// (eg. the JS "toWKT" is Geometry::exportToWKT, and "isVectical" really is
-// spelled that way in the public API)
-#define METHOD_AS(name, method) GDALInstanceMethodT<SELF, &SELF::method>(name),
-#define METHOD_ASYNCABLE_AS(name, method)                                                                              \
-  GDALInstanceMethodT<SELF, &SELF::method>(name), GDALInstanceMethodT<SELF, &SELF::method##Async>(name "Async"),
-
-#define ATTR(t, name, get, set) GDALInstanceAccessorT<SELF, &SELF::get, &set>(name),
-#define ATTR_DONT_ENUM(t, name, get, set) GDALInstanceAccessorHiddenT<SELF, &SELF::get, &set>(name),
-#define ATTR_ASYNCABLE(t, name, get, set)                                                                              \
-  GDALInstanceAccessorT<SELF, &SELF::get, &set>(name),                                                                 \
-    GDALInstanceAccessorHiddenT<SELF, &SELF::get##Async, &READ_ONLY_SETTER>(name "Async"),
-
 NAPI_SETTER(READ_ONLY_SETTER);
 
 // module-level asyncable free functions
@@ -895,4 +1035,41 @@ NAPI_SETTER(READ_ONLY_SETTER);
 // module-level plain free function
 #define GDAL_SetMethod(env, target, name, method)                                                                      \
   target.Set(name, Napi::Function::New(env, &node_gdal::FreeFunctionTrampoline<method>));
+//
+// The entries of the registry above. A member is a value, not an expansion:
+//
+//   static constexpr MethodEntry methods[] = {
+//     method("toString", toString),
+//     asyncMethod("open", open, openAsync),
+//   };
+//
+using node_gdal::AccessorEntry;
+using node_gdal::MethodEntry;
+
+inline constexpr MethodEntry method(const char *name, Napi::Value (*fn)(const Napi::CallbackInfo &)) {
+  return MethodEntry{ name, fn, nullptr, node_gdal::MEMBER_NONE };
+}
+
+inline constexpr MethodEntry asyncMethod(
+  const char *name, Napi::Value (*fn)(const Napi::CallbackInfo &), Napi::Value (*fn_async)(const Napi::CallbackInfo &)) {
+  return MethodEntry{ name, fn, fn_async, node_gdal::MEMBER_NONE };
+}
+
+inline constexpr AccessorEntry attr(const char *name, Napi::Value (*getter)(const Napi::CallbackInfo &),
+  void (*setter)(const Napi::CallbackInfo &, const Napi::Value &)) {
+  return AccessorEntry{ name, getter, setter, nullptr, nullptr, node_gdal::MEMBER_NONE };
+}
+
+inline constexpr AccessorEntry hiddenAttr(const char *name, Napi::Value (*getter)(const Napi::CallbackInfo &),
+  void (*setter)(const Napi::CallbackInfo &, const Napi::Value &)) {
+  return AccessorEntry{ name, getter, setter, nullptr, nullptr, node_gdal::MEMBER_HIDDEN };
+}
+
+inline constexpr AccessorEntry asyncAttr(const char *name, Napi::Value (*getter)(const Napi::CallbackInfo &),
+  void (*setter)(const Napi::CallbackInfo &, const Napi::Value &), Napi::Value (*getter_async)(const Napi::CallbackInfo &)) {
+  // the asynchronous form of an accessor is always read-only: there is no
+  // `xAsync = value`
+  return AccessorEntry{ name, getter, setter, getter_async, &READ_ONLY_SETTER, node_gdal::MEMBER_NONE };
+}
+
 #endif

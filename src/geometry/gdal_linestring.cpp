@@ -14,24 +14,6 @@ Napi::FunctionReference &LineString::constructor() {
   return node_gdal::env_context().constructor<LineString>();
 }
 
-void LineString::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(LineString);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "LineString",
-    {
-        METHOD(toString)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, SimpleCurve::constructor().Value());
-
-  target.Set("LineString", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * Concrete representation of a multi-vertex line.
  *
@@ -46,8 +28,28 @@ void LineString::Initialize(Napi::Object target) {
  * @extends SimpleCurve
  */
 
-NAPI_METHOD(LineString::toString) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
   return Napi::String::New(node_gdal::napi_env(), "LineString");
+}
+
+} // namespace
+
+void LineString::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  Napi::Function lcons = GDALDefineClass<LineString>(env, "LineString", methods);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, SimpleCurve::constructor().Value());
+
+  target.Set("LineString", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

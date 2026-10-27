@@ -13,25 +13,6 @@ Napi::FunctionReference &CompoundCurve::constructor() {
   return node_gdal::env_context().constructor<CompoundCurve>();
 }
 
-void CompoundCurve::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(CompoundCurve);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "CompoundCurve",
-    {
-        METHOD(toString)
-        ATTR(lcons, "curves", curvesGetter, READ_ONLY_SETTER)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor().Value());
-
-  target.Set("CompoundCurve", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 void CompoundCurve::SetPrivate(Napi::Object _this, Napi::Value value) {
   node_gdal::set_private(_this, "curves_", value);
 };
@@ -50,10 +31,6 @@ void CompoundCurve::SetPrivate(Napi::Object _this, Napi::Value value) {
  * @extends Geometry
  */
 
-NAPI_METHOD(CompoundCurve::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "CompoundCurve");
-}
-
 /**
  * Points that make up the compound curve.
  *
@@ -63,8 +40,37 @@ NAPI_METHOD(CompoundCurve::toString) {
  * @memberof CompoundCurve
  * @type {CompoundCurveCurves}
  */
-NAPI_GETTER(CompoundCurve::curvesGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "CompoundCurve");
+}
+
+
+Napi::Value curvesGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "curves_");
+}
+
+} // namespace
+
+void CompoundCurve::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("curves", curvesGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<CompoundCurve>(env, "CompoundCurve", methods, accessors);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
+
+  target.Set("CompoundCurve", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

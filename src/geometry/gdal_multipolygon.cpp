@@ -13,35 +13,11 @@ Napi::FunctionReference &MultiPolygon::constructor() {
   return node_gdal::env_context().constructor<MultiPolygon>();
 }
 
-void MultiPolygon::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(MultiPolygon);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "MultiPolygon",
-    {
-        METHOD(toString)
-        METHOD(unionCascaded)
-        METHOD(getArea)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
-
-  target.Set("MultiPolygon", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 /**
  * @constructor
  * @class MultiPolygon
  * @extends GeometryCollection
  */
-
-NAPI_METHOD(MultiPolygon::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "MultiPolygon");
-}
 
 /**
  * Unions all the geometries and returns the result.
@@ -51,18 +27,6 @@ NAPI_METHOD(MultiPolygon::toString) {
  * @memberof MultiPolygon
  * @return {Geometry}
  */
-NAPI_METHOD(MultiPolygon::unionCascaded) {
-
-  MultiPolygon *geom = node_gdal::UnwrapWrapped<MultiPolygon>(info.This().As<Napi::Object>());
-  auto r = geom->this_->UnionCascaded();
-  if (r == nullptr) {
-    throw GDALError::fromGDAL();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  return Geometry::New(r);
-}
-
 /**
  * Computes the combined area of the collection.
  *
@@ -83,5 +47,44 @@ struct getAreaBody : node_gdal::SyncMethodBody {
 } // namespace
 
 GDAL_SYNC_METHOD(MultiPolygon::getArea, getAreaBody)
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "MultiPolygon");
+}
+
+
+Napi::Value unionCascaded(const Napi::CallbackInfo &info) {
+
+  MultiPolygon *geom = node_gdal::UnwrapWrapped<MultiPolygon>(info.This().As<Napi::Object>());
+  auto r = geom->get()->UnionCascaded();
+  if (r == nullptr) {
+    throw GDALError::fromGDAL();
+    return node_gdal::napi_env().Undefined();
+  }
+
+  return Geometry::New(r);
+}
+
+} // namespace
+
+void MultiPolygon::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("unionCascaded", unionCascaded),
+    method("getArea", getArea),
+  };
+
+  Napi::Function lcons = GDALDefineClass<MultiPolygon>(env, "MultiPolygon", methods);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, GeometryCollection::constructor().Value());
+
+  target.Set("MultiPolygon", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

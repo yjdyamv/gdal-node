@@ -21,16 +21,10 @@ class Driver : public GDALObject<Driver> {
   static Napi::FunctionReference &constructor();
   static void Initialize(Napi::Object target);
   static Napi::Value New(GDALDriver *driver);
-  static NAPI_METHOD(toString);
   GDAL_ASYNCABLE_DECLARE(open);
   GDAL_ASYNCABLE_DECLARE(create);
   GDAL_ASYNCABLE_DECLARE(createCopy);
-  static NAPI_METHOD(deleteDataset);
-  static NAPI_METHOD(rename);
-  GDAL_ASYNCABLE_DECLARE(copyFiles);
-  static NAPI_METHOD(getMetadata);
 
-  static NAPI_GETTER(descriptionGetter);
 
   Driver(const Napi::CallbackInfo &info);
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself

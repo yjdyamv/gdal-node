@@ -25,20 +25,11 @@ class SpatialReference : public GDALObject<SpatialReference> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(const OGRSpatialReference *srs);
   static Napi::Value New(OGRSpatialReference *srs, bool owned);
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(clone);
-  static NAPI_METHOD(cloneGeogCS);
-  static NAPI_METHOD(exportToWKT);
-  static NAPI_METHOD(exportToPrettyWKT);
-  static NAPI_METHOD(exportToProj4);
-  static NAPI_METHOD(exportToXML);
   static NAPI_METHOD(setWellKnownGeogCS);
   static NAPI_METHOD(morphToESRI);
   static NAPI_METHOD(morphFromESRI);
   static NAPI_METHOD(EPSGTreatsAsLatLong);
   static NAPI_METHOD(EPSGTreatsAsNorthingEasting);
-  static NAPI_METHOD(getLinearUnits);
-  static NAPI_METHOD(getAngularUnits);
   static NAPI_METHOD(isGeocentric);
   static NAPI_METHOD(isGeographic);
   static NAPI_METHOD(isProjected);
@@ -49,10 +40,6 @@ class SpatialReference : public GDALObject<SpatialReference> {
   static NAPI_METHOD(isSameVertCS);
   static NAPI_METHOD(isSame);
   static NAPI_METHOD(autoIdentifyEPSG);
-  static NAPI_METHOD(getAuthorityCode);
-  static NAPI_METHOD(getAuthorityName);
-  static NAPI_METHOD(getAttrValue);
-  static NAPI_METHOD(validate);
 
   GDAL_ASYNCABLE_DECLARE(fromUserInput);
   static NAPI_METHOD(fromWKT);

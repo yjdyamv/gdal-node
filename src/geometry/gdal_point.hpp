@@ -23,14 +23,7 @@ class Point : public GeometryBase<Point, OGRPoint> {
 
   static void Initialize(Napi::Object target);
   using GeometryBase<Point, OGRPoint>::New;
-  static NAPI_METHOD(toString);
 
-  static NAPI_GETTER(xGetter);
-  static NAPI_GETTER(yGetter);
-  static NAPI_GETTER(zGetter);
-  static NAPI_SETTER(xSetter);
-  static NAPI_SETTER(ySetter);
-  static NAPI_SETTER(zSetter);
 };
 
 } // namespace node_gdal

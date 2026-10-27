@@ -24,21 +24,7 @@ class MDArray : public GDALObject<MDArray> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALMDArray> group, GDALDataset *parent_ds);
   GDAL_ASYNCABLE_DECLARE(read);
-  static NAPI_METHOD(getView);
-  static NAPI_METHOD(getMask);
-  static NAPI_METHOD(asDataset);
-  static NAPI_METHOD(toString);
-  static NAPI_GETTER(typeGetter);
   static NAPI_GETTER(lengthGetter);
-  static NAPI_GETTER(srsGetter);
-  static NAPI_GETTER(unitTypeGetter);
-  static NAPI_GETTER(scaleGetter);
-  static NAPI_GETTER(offsetGetter);
-  static NAPI_GETTER(noDataValueGetter);
-  static NAPI_GETTER(dimensionsGetter);
-  static NAPI_GETTER(descriptionGetter);
-  static NAPI_GETTER(attributesGetter);
-  static NAPI_GETTER(uidGetter);
 
   MDArray(const Napi::CallbackInfo &info);
 
@@ -46,6 +32,10 @@ class MDArray : public GDALObject<MDArray> {
   ~MDArray();
   inline std::shared_ptr<GDALMDArray> get() {
     return this_;
+  }
+
+  inline GDALDataset *getParent() {
+    return parent_ds;
   }
 
   void dispose();

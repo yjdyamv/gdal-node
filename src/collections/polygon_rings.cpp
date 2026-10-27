@@ -11,24 +11,6 @@ Napi::FunctionReference &PolygonRings::constructor() {
   return node_gdal::env_context().constructor<PolygonRings>();
 }
 
-void PolygonRings::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(PolygonRings);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "PolygonRings",
-    {
-        METHOD(toString)
-        METHOD(count)
-        METHOD(get)
-        METHOD(add)
-    });
-
-  target.Set("PolygonRings", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 PolygonRings::PolygonRings(const Napi::CallbackInfo &info) : GDALObject<PolygonRings>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create PolygonRings directly").ThrowAsJavaScriptException();
@@ -54,10 +36,6 @@ Napi::Value PolygonRings::New(Napi::Value geom) {
   return obj;
 }
 
-NAPI_METHOD(PolygonRings::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "PolygonRings");
-}
-
 /**
  * Returns the number of rings that exist in the collection.
  *
@@ -66,18 +44,6 @@ NAPI_METHOD(PolygonRings::toString) {
  * @memberof PolygonRings
  * @return {number}
  */
-NAPI_METHOD(PolygonRings::count) {
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
-
-  int i = geom->get()->getExteriorRing() ? 1 : 0;
-  i += geom->get()->getNumInteriorRings();
-
-  return Napi::Number::New(node_gdal::napi_env(), i);
-}
-
 /**
  * Returns the ring at the specified index. The ring
  * at index `0` will always be the polygon's exterior ring.
@@ -94,29 +60,6 @@ NAPI_METHOD(PolygonRings::count) {
  * @throws {Error}
  * @return {LinearRing}
  */
-NAPI_METHOD(PolygonRings::get) {
-  Args args(info);
-
-  Napi::Object parent =
-    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
-
-  int i;
-  if (!args.get(0, "index", i)) return args.failed();
-
-  OGRLinearRing *r;
-  if (i == 0) {
-    r = geom->get()->getExteriorRing();
-  } else {
-    r = geom->get()->getInteriorRing(i - 1);
-  }
-  if (r == nullptr) {
-    throw GDALError::fromGDAL();
-    return node_gdal::napi_env().Undefined();
-  }
-  return LinearRing::New(r, false);
-}
-
 /**
  * Adds a ring to the collection.
  *
@@ -140,7 +83,51 @@ NAPI_METHOD(PolygonRings::get) {
  * @memberof PolygonRings
  * @param {LinearRing|LinearRing[]} rings
  */
-NAPI_METHOD(PolygonRings::add) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "PolygonRings");
+}
+
+
+Napi::Value count(const Napi::CallbackInfo &info) {
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
+
+  int i = geom->get()->getExteriorRing() ? 1 : 0;
+  i += geom->get()->getNumInteriorRings();
+
+  return Napi::Number::New(node_gdal::napi_env(), i);
+}
+
+
+Napi::Value get(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
+
+  int i;
+  if (!args.get(0, "index", i)) return args.failed();
+
+  OGRLinearRing *r;
+  if (i == 0) {
+    r = geom->get()->getExteriorRing();
+  } else {
+    r = geom->get()->getInteriorRing(i - 1);
+  }
+  if (r == nullptr) {
+    throw GDALError::fromGDAL();
+    return node_gdal::napi_env().Undefined();
+  }
+  return LinearRing::New(r, false);
+}
+
+
+Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
@@ -183,6 +170,24 @@ NAPI_METHOD(PolygonRings::add) {
   }
 
   return node_gdal::napi_env().Undefined();
+}
+
+} // namespace
+
+void PolygonRings::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("count", count),
+    method("get", get),
+    method("add", add),
+  };
+
+  Napi::Function lcons = GDALDefineClass<PolygonRings>(env, "PolygonRings", methods);
+
+  target.Set("PolygonRings", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

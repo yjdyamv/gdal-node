@@ -18,24 +18,6 @@ Napi::FunctionReference &Attribute::constructor() {
   return node_gdal::env_context().constructor<Attribute>();
 }
 
-void Attribute::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Attribute);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Attribute",
-    {
-        METHOD(toString)
-        ATTR_DONT_ENUM(lcons, "_uid", uidGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "dataType", typeGetter, READ_ONLY_SETTER)
-        ATTR(lcons, "value", valueGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("Attribute", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 Attribute::Attribute(const Napi::CallbackInfo &info) : GDALObject<Attribute>(info), uid(0), this_(nullptr), parent_ds(0) {
   std::shared_ptr<GDALAttribute> pending = node_gdal::TakePendingShared<GDALAttribute>();
   if (pending) {
@@ -88,10 +70,6 @@ Napi::Value Attribute::New(std::shared_ptr<GDALAttribute> raw, GDALDataset *pare
   return obj;
 }
 
-NAPI_METHOD(Attribute::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "Attribute");
-}
-
 /**
  * Complex GDAL data types introduced in 3.1 are not yet supported
  * @readonly
@@ -102,7 +80,24 @@ NAPI_METHOD(Attribute::toString) {
  * @throws {Error}
  * @type {string|number}
  */
-NAPI_GETTER(Attribute::valueGetter) {
+/**
+ * @readonly
+ * @kind member
+ * @name dataType
+ * @instance
+ * @memberof Attribute
+ * @type {string}
+ */
+#endif
+
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "Attribute");
+}
+
+
+Napi::Value valueGetter(const Napi::CallbackInfo &info) {
   Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
   std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
   GDAL_LOCK_PARENT(attribute);
@@ -117,15 +112,8 @@ NAPI_GETTER(Attribute::valueGetter) {
   return r;
 }
 
-/**
- * @readonly
- * @kind member
- * @name dataType
- * @instance
- * @memberof Attribute
- * @type {string}
- */
-NAPI_GETTER(Attribute::typeGetter) {
+
+Napi::Value typeGetter(const Napi::CallbackInfo &info) {
   Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
   std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
   GDAL_LOCK_PARENT(attribute);
@@ -141,11 +129,31 @@ NAPI_GETTER(Attribute::typeGetter) {
   return SafeString::New(r);
 }
 
-NAPI_GETTER(Attribute::uidGetter) {
+
+Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   Attribute *group = node_gdal::UnwrapWrapped<Attribute>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)group->uid);
 }
 
-#endif
+} // namespace
+
+void Attribute::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
+    attr("dataType", typeGetter, READ_ONLY_SETTER),
+    attr("value", valueGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Attribute>(env, "Attribute", methods, accessors);
+
+  target.Set("Attribute", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
 
 } // namespace node_gdal

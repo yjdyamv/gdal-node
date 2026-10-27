@@ -24,7 +24,6 @@ class LinearRing : public CurveBase<LinearRing, OGRLinearRing, LineStringPoints>
   static void Initialize(Napi::Object target);
   using CurveBase<LinearRing, OGRLinearRing, LineStringPoints>::New;
   static Napi::Value New(OGRLinearRing *geom, bool owned);
-  static NAPI_METHOD(toString);
   static NAPI_METHOD(getArea);
 };
 

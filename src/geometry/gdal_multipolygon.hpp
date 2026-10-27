@@ -22,8 +22,6 @@ class MultiPolygon : public GeometryCollectionBase<MultiPolygon, OGRMultiPolygon
 
   static void Initialize(Napi::Object target);
   using GeometryCollectionBase<MultiPolygon, OGRMultiPolygon>::New;
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(unionCascaded);
   static NAPI_METHOD(getArea);
 };
 

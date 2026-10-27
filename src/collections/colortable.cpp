@@ -20,30 +20,6 @@ Napi::FunctionReference &ColorTable::constructor() {
   return node_gdal::env_context().constructor<ColorTable>();
 }
 
-void ColorTable::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(ColorTable);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "ColorTable",
-    {
-        METHOD(toString)
-        METHOD(isSame)
-        METHOD(clone)
-        METHOD(count)
-        METHOD(get)
-        METHOD(set)
-        METHOD(ramp)
-        ATTR(lcons, "interpretation", interpretationGetter, READ_ONLY_SETTER)
-        ATTR_DONT_ENUM(lcons, "band", bandGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("ColorTable", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
-
 ColorTable::ColorTable(const Napi::CallbackInfo &info) : GDALObject<ColorTable>(info), parent_uid(0) {
   Handle<GDALColorTable> pending = node_gdal::TakePendingHandle<GDALColorTable>();
   if (pending) {
@@ -137,10 +113,6 @@ Napi::Value ColorTable::New(GDALColorTable *raw) {
   return obj;
 }
 
-NAPI_METHOD(ColorTable::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "ColorTable");
-}
-
 /**
  * @typedef {object} Color
  * @memberof ColorTable
@@ -159,11 +131,6 @@ NAPI_METHOD(ColorTable::toString) {
  * @memberof ColorTable
  * @return {ColorTable}
  */
-NAPI_METHOD(ColorTable::clone) {
-  ColorTable *ct = node_gdal::UnwrapWrapped<ColorTable>(info.This().As<Napi::Object>());
-  return ColorTable::New(ct->this_->Clone());
-}
-
 /**
  * Compares two ColorTable objects for equality.
  *
@@ -174,7 +141,90 @@ NAPI_METHOD(ColorTable::clone) {
  * @throws {Error}
  * @return {boolean}
  */
-NAPI_METHOD(ColorTable::isSame) {
+/**
+ * Returns the color with the given ID.
+ *
+ * @method get
+ * @instance
+ * @memberof ColorTable
+ * @param {number} index
+ * @throws {Error}
+ * @return {Color}
+ */
+#define COLOR_FROM_OBJ(args, obj, color)                                                                          \
+  if (!args.from(obj, "c1", color.c1)) return args.failed();                                                           \
+  if (!args.from(obj, "c2", color.c2)) return args.failed();                                                           \
+  if (!args.from(obj, "c3", color.c3)) return args.failed();                                                           \
+  if (!args.from(obj, "c4", color.c4)) return args.failed();
+
+/**
+ * Sets the color entry with the given ID.
+ *
+ * @method set
+ * @instance
+ * @memberof ColorTable
+ * @throws {Error}
+ * @param {number} index
+ * @param {Color} color
+ * @return {void}
+ */
+
+/**
+ * Creates a color ramp from one color entry to another.
+ *
+ * @method ramp
+ * @instance
+ * @memberof ColorTable
+ * @throws {Error}
+ * @param {number} start_index
+ * @param {Color} start_color
+ * @param {number} end_index
+ * @param {Color} end_color
+ * @return {number} total number of color entries
+ */
+
+/**
+ * Returns the number of color entries.
+ *
+ * @method count
+ * @instance
+ * @memberof ColorTable
+ * @return {number}
+ */
+/**
+ * Color interpretation of the palette.
+ *
+ * @readonly
+ * @kind member
+ * @name interpretation
+ * @instance
+ * @memberof ColorTable
+ * @type {string}
+ */
+/**
+ * Returns the parent band.
+ *
+ * @readonly
+ * @kind member
+ * @name band
+ * @instance
+ * @memberof ColorTable
+ * @type {RasterBand|undefined}
+ */
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "ColorTable");
+}
+
+
+Napi::Value clone(const Napi::CallbackInfo &info) {
+  ColorTable *ct = node_gdal::UnwrapWrapped<ColorTable>(info.This().As<Napi::Object>());
+  return ColorTable::New(ct->get()->Clone());
+}
+
+
+Napi::Value isSame(const Napi::CallbackInfo &info) {
   Args args(info);
 
   ColorTable *self = node_gdal::unwrap_or_throw<ColorTable>(info.This(), "ColorTable");
@@ -188,17 +238,8 @@ NAPI_METHOD(ColorTable::isSame) {
   return Napi::Boolean::New(node_gdal::napi_env(), raw->IsSame(raw_other));
 }
 
-/**
- * Returns the color with the given ID.
- *
- * @method get
- * @instance
- * @memberof ColorTable
- * @param {number} index
- * @throws {Error}
- * @return {Color}
- */
-NAPI_METHOD(ColorTable::get) {
+
+Napi::Value getEntry(const Napi::CallbackInfo &info) {
   Args args(info);
 
   int index;
@@ -228,25 +269,8 @@ NAPI_METHOD(ColorTable::get) {
   return result;
 }
 
-#define COLOR_FROM_OBJ(args, obj, color)                                                                          \
-  if (!args.from(obj, "c1", color.c1)) return args.failed();                                                           \
-  if (!args.from(obj, "c2", color.c2)) return args.failed();                                                           \
-  if (!args.from(obj, "c3", color.c3)) return args.failed();                                                           \
-  if (!args.from(obj, "c4", color.c4)) return args.failed();
 
-/**
- * Sets the color entry with the given ID.
- *
- * @method set
- * @instance
- * @memberof ColorTable
- * @throws {Error}
- * @param {number} index
- * @param {Color} color
- * @return {void}
- */
-
-NAPI_METHOD(ColorTable::set) {
+Napi::Value set(const Napi::CallbackInfo &info) {
   Args args(info);
 
   int index;
@@ -271,21 +295,8 @@ NAPI_METHOD(ColorTable::set) {
   return node_gdal::napi_env().Undefined();
 }
 
-/**
- * Creates a color ramp from one color entry to another.
- *
- * @method ramp
- * @instance
- * @memberof ColorTable
- * @throws {Error}
- * @param {number} start_index
- * @param {Color} start_color
- * @param {number} end_index
- * @param {Color} end_color
- * @return {number} total number of color entries
- */
 
-NAPI_METHOD(ColorTable::ramp) {
+Napi::Value ramp(const Napi::CallbackInfo &info) {
   Args args(info);
 
   int start_index, end_index;
@@ -321,15 +332,8 @@ NAPI_METHOD(ColorTable::ramp) {
   return Napi::Number::New(node_gdal::napi_env(), r);
 }
 
-/**
- * Returns the number of color entries.
- *
- * @method count
- * @instance
- * @memberof ColorTable
- * @return {number}
- */
-NAPI_METHOD(ColorTable::count) {
+
+Napi::Value count(const Napi::CallbackInfo &info) {
 
   ColorTable *self = node_gdal::unwrap_or_throw<ColorTable>(info.This(), "ColorTable");
   GDALColorTable * raw = node_gdal::raw_or_throw<GDALColorTable *>(self, "GDALColorTable");
@@ -344,17 +348,8 @@ NAPI_METHOD(ColorTable::count) {
   return Napi::Number::New(node_gdal::napi_env(), raw->GetColorEntryCount());
 }
 
-/**
- * Color interpretation of the palette.
- *
- * @readonly
- * @kind member
- * @name interpretation
- * @instance
- * @memberof ColorTable
- * @type {string}
- */
-NAPI_GETTER(ColorTable::interpretationGetter) {
+
+Napi::Value interpretationGetter(const Napi::CallbackInfo &info) {
 
   ColorTable *self = node_gdal::unwrap_or_throw<ColorTable>(info.This(), "ColorTable");
   GDALColorTable * raw = node_gdal::raw_or_throw<GDALColorTable *>(self, "GDALColorTable");
@@ -378,22 +373,40 @@ NAPI_GETTER(ColorTable::interpretationGetter) {
   return SafeString::New(r.c_str());
 }
 
-/**
- * Returns the parent band.
- *
- * @readonly
- * @kind member
- * @name band
- * @instance
- * @memberof ColorTable
- * @type {RasterBand|undefined}
- */
-NAPI_GETTER(ColorTable::bandGetter) {
+
+Napi::Value bandGetter(const Napi::CallbackInfo &info) {
   Napi::Value parentMaybe = node_gdal::get_private(info.This(), "parent_");
   if (!parentMaybe.IsEmpty() && !parentMaybe.IsUndefined() && !parentMaybe.IsNull()) {
     return parentMaybe;
   }
   return node_gdal::napi_env().Undefined();
 }
+
+} // namespace
+
+void ColorTable::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("isSame", isSame),
+    method("clone", clone),
+    method("count", count),
+    method("get", getEntry),
+    method("set", set),
+    method("ramp", ramp),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("interpretation", interpretationGetter, READ_ONLY_SETTER),
+    hiddenAttr("band", bandGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<ColorTable>(env, "ColorTable", methods, accessors);
+
+  target.Set("ColorTable", lcons);
+
+  constructor() = Napi::Persistent(lcons);
+}
+
 
 } // namespace node_gdal

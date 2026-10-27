@@ -12,26 +12,6 @@ Napi::FunctionReference &Polygon::constructor() {
   return node_gdal::env_context().constructor<Polygon>();
 }
 
-void Polygon::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(Polygon);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "Polygon",
-    {
-        METHOD(toString)
-        METHOD(getArea)
-        ATTR(lcons, "rings", ringsGetter, READ_ONLY_SETTER)
-    });
-
-  // lcons->Inherit() has no DefineClass equivalent
-  node_gdal::Inherit(lcons, Geometry::constructor().Value());
-
-  target.Set("Polygon", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 void Polygon::SetPrivate(Napi::Object _this, Napi::Value value) {
   node_gdal::set_private(_this, "rings_", value);
 };
@@ -43,10 +23,6 @@ void Polygon::SetPrivate(Napi::Object _this, Napi::Value value) {
  * @class Polygon
  * @extends Geometry
  */
-
-NAPI_METHOD(Polygon::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "Polygon");
-}
 
 /**
  * Computes the area of the polygon.
@@ -78,8 +54,38 @@ GDAL_SYNC_METHOD(Polygon::getArea, getAreaBody)
  * @memberof Polygon
  * @type {PolygonRings}
  */
-NAPI_GETTER(Polygon::ringsGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "Polygon");
+}
+
+
+Napi::Value ringsGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "rings_");
+}
+
+} // namespace
+
+void Polygon::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    method("getArea", getArea),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    attr("rings", ringsGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<Polygon>(env, "Polygon", methods, accessors);
+
+  // lcons->Inherit() has no DefineClass equivalent
+  node_gdal::Inherit(lcons, Geometry::constructor().Value());
+
+  target.Set("Polygon", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

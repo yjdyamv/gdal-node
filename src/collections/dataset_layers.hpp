@@ -19,7 +19,6 @@ class DatasetLayers : public GDALObject<DatasetLayers> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value ds_obj);
-  static NAPI_METHOD(toString);
 
   GDAL_ASYNCABLE_DECLARE(get);
   GDAL_ASYNCABLE_DECLARE(count);
@@ -27,7 +26,6 @@ class DatasetLayers : public GDALObject<DatasetLayers> {
   GDAL_ASYNCABLE_DECLARE(copy);
   GDAL_ASYNCABLE_DECLARE(remove);
 
-  static NAPI_GETTER(dsGetter);
 
   DatasetLayers(const Napi::CallbackInfo &info);
 

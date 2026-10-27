@@ -24,10 +24,8 @@ class Polygon : public CurveBase<Polygon, OGRPolygon, PolygonRings> {
 
   static void Initialize(Napi::Object target);
   using CurveBase<Polygon, OGRPolygon, PolygonRings>::New;
-  static NAPI_METHOD(toString);
   static NAPI_METHOD(getArea);
 
-  static NAPI_GETTER(ringsGetter);
 
     protected:
   static void SetPrivate(Napi::Object, Napi::Value);

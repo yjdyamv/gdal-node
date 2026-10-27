@@ -13,27 +13,6 @@ Napi::FunctionReference &DatasetLayers::constructor() {
   return node_gdal::env_context().constructor<DatasetLayers>();
 }
 
-void DatasetLayers::Initialize(Napi::Object target) {
-  Napi::Env env = target.Env();
-  SELF_CLASS(DatasetLayers);
-
-  // NOTE: the descriptor macros carry their own trailing comma
-  Napi::Function lcons = GDALDefineClass<SELF>(env, "DatasetLayers",
-    {
-        METHOD(toString)
-        METHOD_ASYNCABLE(count)
-        METHOD_ASYNCABLE(create)
-        METHOD_ASYNCABLE(copy)
-        METHOD_ASYNCABLE(get)
-        METHOD_ASYNCABLE(remove)
-        ATTR_DONT_ENUM(lcons, "ds", dsGetter, READ_ONLY_SETTER)
-    });
-
-  target.Set("DatasetLayers", lcons);
-
-  constructor() = Napi::Persistent(lcons);
-}
-
 DatasetLayers::DatasetLayers(const Napi::CallbackInfo &info) : GDALObject<DatasetLayers>(info) {
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::Error::New(info.Env(), "Cannot create DatasetLayers directly").ThrowAsJavaScriptException();
@@ -62,10 +41,6 @@ Napi::Value DatasetLayers::New(Napi::Value ds_obj) {
 
 
   return obj;
-}
-
-NAPI_METHOD(DatasetLayers::toString) {
-  return Napi::String::New(node_gdal::napi_env(), "DatasetLayers");
 }
 
 /**
@@ -436,8 +411,39 @@ GDAL_ASYNC_METHOD(DatasetLayers::remove, removeBody)
  * @memberof DatasetLayers
  * @type {Dataset}
  */
-NAPI_GETTER(DatasetLayers::dsGetter) {
+namespace {
+
+Napi::Value toString(const Napi::CallbackInfo &info) {
+  return Napi::String::New(node_gdal::napi_env(), "DatasetLayers");
+}
+
+
+Napi::Value dsGetter(const Napi::CallbackInfo &info) {
   return node_gdal::get_private(info.This(), "parent_");
+}
+
+} // namespace
+
+void DatasetLayers::Initialize(Napi::Object target) {
+  Napi::Env env = target.Env();
+  static constexpr MethodEntry methods[] = {
+    method("toString", toString),
+    asyncMethod("count", count, countAsync),
+    asyncMethod("create", create, createAsync),
+    asyncMethod("copy", copy, copyAsync),
+    asyncMethod("get", get, getAsync),
+    asyncMethod("remove", remove, removeAsync),
+  };
+
+  static constexpr AccessorEntry accessors[] = {
+    hiddenAttr("ds", dsGetter, READ_ONLY_SETTER),
+  };
+
+  Napi::Function lcons = GDALDefineClass<DatasetLayers>(env, "DatasetLayers", methods, accessors);
+
+  target.Set("DatasetLayers", lcons);
+
+  constructor() = Napi::Persistent(lcons);
 }
 
 } // namespace node_gdal

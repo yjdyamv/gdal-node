@@ -22,8 +22,6 @@ class MultiLineString : public GeometryCollectionBase<MultiLineString, OGRMultiL
 
   static void Initialize(Napi::Object target);
   using GeometryCollectionBase<MultiLineString, OGRMultiLineString>::New;
-  static NAPI_METHOD(toString);
-  static NAPI_METHOD(polygonize);
 };
 
 } // namespace node_gdal

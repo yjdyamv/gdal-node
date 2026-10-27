@@ -19,7 +19,6 @@ class RasterBandOverviews : public GDALObject<RasterBandOverviews> {
 
   static void Initialize(Napi::Object target);
   static Napi::Value New(Napi::Value band_obj);
-  static NAPI_METHOD(toString);
 
   GDAL_ASYNCABLE_DECLARE(get);
   GDAL_ASYNCABLE_DECLARE(getBySampleCount);
