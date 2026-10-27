@@ -52,7 +52,10 @@ describe('Open', () => {
 
     after(() => ds && ds.close())
 
-    before('should not throw', () => {
+    before('should not throw', function () {
+      // The archive is downloaded before it can be read, which takes a while
+      // when the rest of the suite is using the network at the same time
+      this.timeout(180000)
       ds = gdal.open('/vsigzip//vsicurl/https://s3.amazonaws.com/elevation-tiles-prod/skadi/N40/N40E001.hgt.gz')
     })
 

@@ -127,7 +127,20 @@ NAPI_METHOD(Group::toString) {
  * @memberof Group
  * @type {string}
  */
-NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Group, descriptionGetter, GetFullName);
+namespace {
+// Group::descriptionGetter()
+struct descriptionGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Group>(info, "Group");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    auto r = obj->get()->GetFullName();
+    return SafeString::New(info.Env(), r.c_str());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(Group::descriptionGetter, descriptionGetterBody)
 
 /**
  * @readonly

@@ -102,7 +102,19 @@ NAPI_METHOD(Dimension::toString) {
  * @memberof Dimension
  * @type {number}
  */
-NODE_WRAPPED_GETTER_WITH_RESULT_LOCKED(Dimension, sizeGetter, Number, GetSize);
+namespace {
+// Dimension::sizeGetter()
+struct sizeGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Dimension>(info, "Dimension");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    return Number::New(info.Env(), obj->get()->GetSize());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(Dimension::sizeGetter, sizeGetterBody)
 
 /**
  * @readonly
@@ -112,7 +124,20 @@ NODE_WRAPPED_GETTER_WITH_RESULT_LOCKED(Dimension, sizeGetter, Number, GetSize);
  * @memberof Dimension
  * @type {string}
  */
-NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Dimension, descriptionGetter, GetFullName);
+namespace {
+// Dimension::descriptionGetter()
+struct descriptionGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Dimension>(info, "Dimension");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    auto r = obj->get()->GetFullName();
+    return SafeString::New(info.Env(), r.c_str());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(Dimension::descriptionGetter, descriptionGetterBody)
 
 /**
  * @readonly
@@ -122,7 +147,20 @@ NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Dimension, descriptionGetter, GetFullName
  * @memberof Dimension
  * @type {string}
  */
-NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Dimension, directionGetter, GetDirection);
+namespace {
+// Dimension::directionGetter()
+struct directionGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Dimension>(info, "Dimension");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    auto r = obj->get()->GetDirection();
+    return SafeString::New(info.Env(), r.c_str());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(Dimension::directionGetter, directionGetterBody)
 
 /**
  * @readonly
@@ -132,7 +170,20 @@ NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Dimension, directionGetter, GetDirection)
  * @memberof Dimension
  * @type {string}
  */
-NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(Dimension, typeGetter, GetType);
+namespace {
+// Dimension::typeGetter()
+struct typeGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Dimension>(info, "Dimension");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    auto r = obj->get()->GetType();
+    return SafeString::New(info.Env(), r.c_str());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(Dimension::typeGetter, typeGetterBody)
 
 NAPI_GETTER(Dimension::uidGetter) {
   Dimension *group = node_gdal::UnwrapWrapped<Dimension>(info.This().As<Napi::Object>());

@@ -92,51 +92,59 @@ NAPI_METHOD(DatasetLayers::toString) {
  * @return {Promise<Layer>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetLayers::get) {
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct getBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    if (info.Length() < 1) {
+      Napi::Error::New(node_gdal::napi_env(), "method must be given integer or string").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALAsyncableJob<OGRLayer *> job(ds->uid);
+    job.persist(parent);
+    if (info[0].IsString()) {
+      std::string *layer_name = new std::string(info[0].As<Napi::String>().Utf8Value());
+      job.main = [raw, layer_name](const GDALExecutionProgress &) {
+        std::unique_ptr<std::string> layer_name_ptr(layer_name);
+        CPLErrorReset();
+        OGRLayer *lyr = raw->GetLayerByName(layer_name->c_str());
+        if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+        return lyr;
+      };
+    } else if (info[0].IsNumber()) {
+      int64_t id = info[0].As<Napi::Number>().Int64Value();
+      job.main = [raw, id](const GDALExecutionProgress &) {
+        CPLErrorReset();
+        OGRLayer *lyr = raw->GetLayer(id);
+        if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+        return lyr;
+      };
+    } else {
+      Napi::TypeError::New(node_gdal::napi_env(), "method must be given integer or string").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    job.rval = [raw](OGRLayer *lyr, const GetFromPersistentFunc &) { return Layer::New(lyr, raw); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  if (info.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "method must be given integer or string").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  GDALAsyncableJob<OGRLayer *> job(ds->uid);
-  job.persist(parent);
-  if (info[0].IsString()) {
-    std::string *layer_name = new std::string(info[0].As<Napi::String>().Utf8Value());
-    job.main = [raw, layer_name](const GDALExecutionProgress &) {
-      std::unique_ptr<std::string> layer_name_ptr(layer_name);
-      CPLErrorReset();
-      OGRLayer *lyr = raw->GetLayerByName(layer_name->c_str());
-      if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
-      return lyr;
-    };
-  } else if (info[0].IsNumber()) {
-    int64_t id = info[0].As<Napi::Number>().Int64Value();
-    job.main = [raw, id](const GDALExecutionProgress &) {
-      CPLErrorReset();
-      OGRLayer *lyr = raw->GetLayer(id);
-      if (lyr == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
-      return lyr;
-    };
-  } else {
-    Napi::TypeError::New(node_gdal::napi_env(), "method must be given integer or string").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  job.rval = [raw](OGRLayer *lyr, const GetFromPersistentFunc &) { return Layer::New(lyr, raw); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(DatasetLayers::get, getBody)
 
 /**
  * Adds a new layer.
@@ -181,50 +189,58 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::get) {
  * @return {Promise<Layer>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetLayers::create) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct createBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    std::string *layer_name = new std::string;
+    SpatialReference *spatial_ref = NULL;
+    OGRwkbGeometryType geom_type = wkbUnknown;
+    StringList *options = new StringList;
+
+    if (!args.get(0, "layer name", *layer_name)) return args.failed();
+    if (!args.optionalWrapped(1, "spatial reference", "SpatialReference", spatial_ref)) return args.failed();
+    if (!args.optionalEnum(2, "geometry type", "OGRwkbGeometryType", geom_type)) return args.failed();
+    if (info.Length() > 3 && options->parse(info[3])) {
+      return node_gdal::napi_env().Undefined(); // error parsing string list
+    }
+
+    OGRSpatialReference *srs = NULL;
+    if (spatial_ref) srs = spatial_ref->get();
+
+    GDALAsyncableJob<OGRLayer *> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw, layer_name, srs, geom_type, options](const GDALExecutionProgress &) {
+      std::unique_ptr<StringList> options_ptr(options);
+      std::unique_ptr<std::string> layer_name_ptr(layer_name);
+      CPLErrorReset();
+      OGRLayer *layer = raw->CreateLayer(layer_name->c_str(), srs, geom_type, options->get());
+      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return layer;
+    };
+
+    job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, false); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  std::string *layer_name = new std::string;
-  SpatialReference *spatial_ref = NULL;
-  OGRwkbGeometryType geom_type = wkbUnknown;
-  StringList *options = new StringList;
-
-  if (!args.get(0, "layer name", *layer_name)) return args.failed();
-  if (!args.optionalWrapped(1, "spatial reference", "SpatialReference", spatial_ref)) return args.failed();
-  if (!args.optionalEnum(2, "geometry type", "OGRwkbGeometryType", geom_type)) return args.failed();
-  if (info.Length() > 3 && options->parse(info[3])) {
-    return node_gdal::napi_env().Undefined(); // error parsing string list
-  }
-
-  OGRSpatialReference *srs = NULL;
-  if (spatial_ref) srs = spatial_ref->get();
-
-  GDALAsyncableJob<OGRLayer *> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw, layer_name, srs, geom_type, options](const GDALExecutionProgress &) {
-    std::unique_ptr<StringList> options_ptr(options);
-    std::unique_ptr<std::string> layer_name_ptr(layer_name);
-    CPLErrorReset();
-    OGRLayer *layer = raw->CreateLayer(layer_name->c_str(), srs, geom_type, options->get());
-    if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return layer;
-  };
-
-  job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, false); };
-
-  return job.run(info, async, 4);
-}
+GDAL_ASYNC_METHOD(DatasetLayers::create, createBody)
 
 /**
  * Returns the number of layers.
@@ -246,29 +262,37 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::create) {
  * @return {Promise<number>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetLayers::count) {
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct countBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    GDALAsyncableJob<int> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw](const GDALExecutionProgress &) {
+      int count = raw->GetLayerCount();
+      return count;
+    };
+
+    job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  GDALAsyncableJob<int> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw](const GDALExecutionProgress &) {
-    int count = raw->GetLayerCount();
-    return count;
-  };
-
-  job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
-  return job.run(info, async, 0);
-}
+GDAL_ASYNC_METHOD(DatasetLayers::count, countBody)
 
 /**
  * Copies a layer.
@@ -296,44 +320,52 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::count) {
  * @return {Promise<Layer>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetLayers::copy) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct copyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    Layer *layer_to_copy;
+    std::string *new_name = new std::string("");
+    StringList *options = new StringList;
+
+    if (!args.getWrapped(0, "layer to copy", "Layer", layer_to_copy)) return args.failed();
+    if (!args.get(1, "new layer name", *new_name)) return args.failed();
+    if (info.Length() > 2 && options->parse(info[2])) { node_gdal::ThrowOverPending(node_gdal::napi_env(), "Error parsing string list"); }
+
+    OGRLayer *src = layer_to_copy->get();
+    GDALAsyncableJob<OGRLayer *> job(ds->uid);
+    job.persist(parent, info[0].As<Napi::Object>());
+    job.main = [raw, src, new_name, options](const GDALExecutionProgress &) {
+      std::unique_ptr<StringList> options_ptr(options);
+      std::unique_ptr<std::string> new_name_ptr(new_name);
+      CPLErrorReset();
+      OGRLayer *layer = raw->CopyLayer(src, new_name->c_str(), options->get());
+      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return layer;
+    };
+
+    job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw); };
+
+    return job.run(info, node_gdal::is_async<Async>, 3);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  Layer *layer_to_copy;
-  std::string *new_name = new std::string("");
-  StringList *options = new StringList;
-
-  if (!args.getWrapped(0, "layer to copy", "Layer", layer_to_copy)) return args.failed();
-  if (!args.get(1, "new layer name", *new_name)) return args.failed();
-  if (info.Length() > 2 && options->parse(info[2])) { node_gdal::ThrowOverPending(node_gdal::napi_env(), "Error parsing string list"); }
-
-  OGRLayer *src = layer_to_copy->get();
-  GDALAsyncableJob<OGRLayer *> job(ds->uid);
-  job.persist(parent, info[0].As<Napi::Object>());
-  job.main = [raw, src, new_name, options](const GDALExecutionProgress &) {
-    std::unique_ptr<StringList> options_ptr(options);
-    std::unique_ptr<std::string> new_name_ptr(new_name);
-    CPLErrorReset();
-    OGRLayer *layer = raw->CopyLayer(src, new_name->c_str(), options->get());
-    if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return layer;
-  };
-
-  job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw); };
-
-  return job.run(info, async, 3);
-}
+GDAL_ASYNC_METHOD(DatasetLayers::copy, copyBody)
 
 /**
  * Removes a layer.
@@ -358,33 +390,41 @@ GDAL_ASYNCABLE_DEFINE(DatasetLayers::copy) {
  * @return {Promise<void>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetLayers::remove) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct removeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    int i;
+    if (!args.get(0, "layer index", i)) return args.failed();
+    GDALAsyncableJob<OGRErr> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw, i](const GDALExecutionProgress &) {
+      OGRErr err = raw->DeleteLayer(i);
+      if (err) throw GDALError(getOGRErrMsg(err));
+      return err;
+    };
+
+    job.rval = [](int count, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  int i;
-  if (!args.get(0, "layer index", i)) return args.failed();
-  GDALAsyncableJob<OGRErr> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw, i](const GDALExecutionProgress &) {
-    OGRErr err = raw->DeleteLayer(i);
-    if (err) throw GDALError(getOGRErrMsg(err));
-    return err;
-  };
-
-  job.rval = [](int count, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(DatasetLayers::remove, removeBody)
 
 /**
  * Returns the parent dataset.

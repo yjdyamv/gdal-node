@@ -274,13 +274,18 @@ describe('AbortController', () => {
     let ds: gdal.Dataset
     let band: gdal.RasterBand
     let big: gdal.Dataset
+    // Big enough that the abort which the progress callback of the test below
+    // performs arrives while the read is still running. The abort itself is
+    // carried out by the JS thread, which has to run the notification first, and
+    // a smaller band can be read completely before it gets to do that
+    const bigSize = 4096
     const buf = new Float32Array(64 * 64)
 
     beforeEach(() => {
       ds = gdal.open('/vsimem/abort_pixels.tif', 'w', 'GTiff', 64, 64, 1)
       band = ds.bands.get(1)
-      big = gdal.open('/vsimem/abort_pixels_big.tif', 'w', 'GTiff', 1024, 1024, 1)
-      big.bands.get(1).pixels.write(0, 0, 1024, 1024, new Float32Array(1024 * 1024))
+      big = gdal.open('/vsimem/abort_pixels_big.tif', 'w', 'GTiff', bigSize, bigSize, 1)
+      big.bands.get(1).pixels.write(0, 0, bigSize, bigSize, new Float32Array(bigSize * bigSize))
     })
     afterEach(() => {
       ds.close()
@@ -311,12 +316,19 @@ describe('AbortController', () => {
     it('should abort a read while it is running', async function () {
       const controller = new AbortController()
       let progress = 0
-      await assertAborted(this, big.bands.get(1).pixels.readAsync(0, 0, 1024, 1024, undefined, {
-        abort_signal: controller.signal,
-        progress_cb: () => {
-          if (progress++ === 0) controller.abort()
-        }
-      }), () => progress)
+      // Opened for reading, so that the blocks of the band which was just written
+      // are not served from the block cache of the writer
+      const source = gdal.open('/vsimem/abort_pixels_big.tif')
+      try {
+        await assertAborted(this, source.bands.get(1).pixels.readAsync(0, 0, bigSize, bigSize, undefined, {
+          abort_signal: controller.signal,
+          progress_cb: () => {
+            if (progress++ === 0) controller.abort()
+          }
+        }), () => progress)
+      } finally {
+        source.close()
+      }
     })
 
     it('should not do anything when the signal is not aborted', async () => {

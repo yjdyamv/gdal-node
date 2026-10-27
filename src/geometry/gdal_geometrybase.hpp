@@ -59,9 +59,7 @@ template <typename OGRT> inline void free_geometry(void *ptr) {
 
 #define UPDATE_AMOUNT_OF_GEOMETRY_MEMORY(geom)                                                                         \
   {                                                                                                                    \
-    int new_size = geom->this_->WkbSize();                                                                             \
-    if (geom->this_.owned()) Napi::MemoryManagement::AdjustExternalMemory(geom->Env(), new_size - geom->size_);         \
-    geom->size_ = new_size;                                                                                            \
+    if (geom->this_.owned()) geom->setExternalMemory(geom->this_->WkbSize());                                          \
   }
 
 // OGRSimpleCurve and OGRGeometry are abstract (Geometry/SimpleCurve only exist
@@ -82,6 +80,11 @@ template <class T, class OGRT> class GeometryBase : public GDALObject<T> {
   static Napi::Value New(OGRT *geom, bool owned);
 
   GeometryBase(const Napi::CallbackInfo &info);
+  // The lock the bodies of the methods wait on, which used to be reachable
+  // because they were members of the class
+  inline uv_sem_t *lock() {
+    return async_lock;
+  }
   inline OGRT *get() {
     return this_;
   }
@@ -92,7 +95,6 @@ template <class T, class OGRT> class GeometryBase : public GDALObject<T> {
     protected:
   ~GeometryBase();
   Handle<OGRT> this_;
-  int size_;
   // true when the wrapper was created by a factory rather than from JS: the base
   // constructor then takes the OGR object from the thread-local slot
   bool from_factory_;
@@ -131,7 +133,7 @@ template <class T, class OGRT> Napi::Value GeometryBase<T, OGRT>::New(OGRT *geom
 
 template <class T, class OGRT>
 GeometryBase<T, OGRT>::GeometryBase(const Napi::CallbackInfo &info)
-  : GDALObject<T>(info), size_(0), from_factory_(false) {
+  : GDALObject<T>(info), from_factory_(false) {
   // The async locks must live outside the V8 memory management,
   // otherwise they won't be accessible from the async threads
   async_lock = new uv_sem_t;
@@ -151,7 +153,7 @@ GeometryBase<T, OGRT>::GeometryBase(const Napi::CallbackInfo &info)
 template <class T, class OGRT> GeometryBase<T, OGRT>::~GeometryBase() {
   if (this_) {
     LOG("Disposing Geometry %s [%p]", typeid(T).name(), this_.get());
-    if (this_.owned()) { Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), -size_); }
+    this->setExternalMemory(0);
     // The handle destroys the geometry, if this wrapper owns it
     this_.reset();
   }

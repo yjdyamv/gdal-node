@@ -3,10 +3,12 @@
 
 #include <thread>
 #include <cstdint>
+#include <string>
 #include <functional>
 #include <chrono>
 #include <atomic>
 #include <memory>
+#include <type_traits>
 #include "napi-wrapper.h"
 #include "gdal_common.hpp"
 
@@ -20,53 +22,167 @@ namespace node_gdal {
 // be touched. Per-thread, so that a worker exiting does not stop the pending
 // callbacks of the main environment.
 
-// This generates method definitions for 2 methods: sync and async version and a hidden common block
-#define GDAL_ASYNCABLE_DEFINE(method)                                                                                  \
-  NAPI_METHOD(method) {                                                                                                 \
-    return method##_do(info, false);                                                                                   \
-  }                                                                                                                    \
-  NAPI_METHOD(method##Async) {                                                                                          \
-    return method##_do(info, true);                                                                                    \
-  }                                                                                                                    \
-  Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
+// The common form of the methods and the getters: the body is a small struct
+// with a static `run()` which is a template on whether the caller wants the
+// asynchronous form, given as a type instead of a run time bool, so a method can
+// build the job for one of the two and the compiler still sees the argument
+// checks only once. Both JS functions are then generated from the one body:
+//
+//   namespace {
+//   struct barBody : node_gdal::AsyncMethodBody {
+//     template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+//       Args args(info);
+//       ...
+//       return job.run(info, node_gdal::is_async<Async>);
+//     }
+//   };
+//   } // namespace
+//
+//   GDAL_ASYNC_METHOD(Foo::bar, barBody)
 
-// This generates getter definitions for 2 getters: sync and async version and a hidden common block
-#define GDAL_ASYNCABLE_GETTER_DEFINE(method)                                                                           \
-  NAPI_GETTER(method) {                                                                                                 \
-    return method##_do(info, false);                                                                                   \
-  }                                                                                                                    \
-  NAPI_GETTER(method##Async) {                                                                                          \
-    return method##_do(info, true);                                                                                    \
-  }                                                                                                                    \
-  Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
+struct AsyncMethodBody {};
 
-// This generates method declarations for 2 methods: sync and async version and a hidden common block
+template <class Async> inline constexpr bool is_async = Async::value;
+
+template <class Impl> Napi::Value AsyncMethod(const Napi::CallbackInfo &info, std::false_type) {
+  return Impl::run(info, std::false_type{});
+}
+
+template <class Impl> Napi::Value AsyncMethod(const Napi::CallbackInfo &info, std::true_type) {
+  // A function as the last argument is the callback of the asynchronous method,
+  // and a caller which has to be called back cannot be given a promise, so the
+  // failures are thrown at it, the way the synchronous variant reports them.
+  if (info.Length() > 0 && info[info.Length() - 1].IsFunction()) {
+    return Impl::run(info, std::true_type{});
+  }
+
+  // Without a callback the method returns a promise, so the failures have to
+  // reject it instead of being thrown at the caller
+  Napi::Env env = info.Env();
+  Napi::Value result = Impl::run(info, std::true_type{});
+  if (!env.IsExceptionPending()) { return result; }
+
+  napi_value exception = nullptr;
+  if (napi_get_and_clear_last_exception(env, &exception) != napi_ok || exception == nullptr) { return result; }
+  Napi::Promise::Deferred deferred(env);
+  deferred.Reject(Napi::Value(env, exception));
+  return deferred.Promise();
+}
+
+#define GDAL_ASYNC_METHOD(method, Body)                                                                                \
+  NAPI_METHOD(method) {                                                                                                \
+    return node_gdal::AsyncMethod<Body>(info, std::false_type{});                                                      \
+  }                                                                                                                    \
+  NAPI_METHOD(method##Async) {                                                                                         \
+    return node_gdal::AsyncMethod<Body>(info, std::true_type{});                                                       \
+  }
+
+// This generates getter definitions for 2 getters: sync and async version
+#define GDAL_ASYNC_GETTER(method, Body)                                                                                \
+  NAPI_GETTER(method) {                                                                                                \
+    return node_gdal::AsyncMethod<Body>(info, std::false_type{});                                                      \
+  }                                                                                                                    \
+  NAPI_GETTER(method##Async) {                                                                                         \
+    return node_gdal::AsyncMethod<Body>(info, std::true_type{});                                                       \
+  }
+
+// This generates method definitions for 2 methods, for the classes which are
+// templates themselves (the hidden common block is then a struct in the class)
+#define GDAL_ASYNC_METHOD_STATIC(method, Body)                                                                         \
+  static NAPI_METHOD(method) {                                                                                         \
+    return node_gdal::AsyncMethod<Body>(info, std::false_type{});                                                      \
+  }                                                                                                                    \
+  static NAPI_METHOD(method##Async) {                                                                                  \
+    return node_gdal::AsyncMethod<Body>(info, std::true_type{});                                                       \
+  }
+
+// A method which has no asynchronous variant, written in the same shape: the
+// body is a struct with a static `run()`, only without the template on the
+// caller. The check that `this` is still alive is `unwrapThis()`, so a body is
+// the argument checks and the wrapped call itself:
+//
+//   namespace {
+//   struct getAreaBody : node_gdal::SyncMethodBody {
+//     static Napi::Value run(const Napi::CallbackInfo &info) {
+//       auto geom = node_gdal::unwrapThis<GeometryCollection>(info, "GeometryCollection");
+//       if (!geom) { return geom.failure; }
+//       return Napi::Number::New(info.Env(), geom->get()->get_Area());
+//     }
+//   };
+//   } // namespace
+//
+//   GDAL_SYNC_METHOD(GeometryCollection::getArea, getAreaBody)
+
+struct SyncMethodBody {};
+
+// What `unwrapThis()` returns: the object, or the value the method has to
+// return when the object has already been destroyed.
+//
+// The two forms cannot report the failure in the same way. The synchronous one
+// throws, because its caller is the JS method itself, so `failure` is only the
+// undefined the body has to return after the exception has been scheduled. The
+// asynchronous one has to reject, because its caller is already holding a
+// promise - an exception thrown from a getter which is asked for the
+// asynchronous form would reach the caller instead of rejecting that promise.
+template <class T> struct UnwrapResult {
+  T *obj;
+  Napi::Value failure;
+
+  operator bool() const { return obj != nullptr; }
+  T *operator->() const { return obj; }
+  T &operator*() const { return *obj; }
+};
+
+template <class T> UnwrapResult<T> unwrapThis(const Napi::CallbackInfo &info, const char *class_name) {
+  T *obj = UnwrapWrapped<T>(info.This().As<Napi::Object>());
+  if (obj != nullptr && obj->isAlive()) { return { obj, info.Env().Undefined() }; }
+
+  Napi::Error::New(info.Env(), std::string(class_name) + " object has already been destroyed")
+    .ThrowAsJavaScriptException();
+  return { nullptr, info.Env().Undefined() };
+}
+
+template <class T, class Async>
+UnwrapResult<T> unwrapThis(const Napi::CallbackInfo &info, const char *class_name, Async) {
+  T *obj = UnwrapWrapped<T>(info.This().As<Napi::Object>());
+  if (obj != nullptr && obj->isAlive()) { return { obj, info.Env().Undefined() }; }
+
+  auto message = std::string(class_name) + " object has already been destroyed";
+  // The same body also generates the synchronous form of the method, which
+  // throws like every other synchronous method does
+  if constexpr (Async::value) { return { nullptr, RejectPromise(info, message.c_str()) }; }
+  Napi::Error::New(info.Env(), message).ThrowAsJavaScriptException();
+  return { nullptr, info.Env().Undefined() };
+}
+
+template <class Impl> inline Napi::Value SyncMethod(const Napi::CallbackInfo &info) {
+  return Impl::run(info);
+}
+
+#define GDAL_SYNC_METHOD(method, Body)                                                                                 \
+  NAPI_METHOD(method) {                                                                                                \
+    return node_gdal::SyncMethod<Body>(info);                                                                          \
+  }
+
+#define GDAL_SYNC_GETTER(method, Body)                                                                                 \
+  NAPI_GETTER(method) {                                                                                                \
+    return node_gdal::SyncMethod<Body>(info);                                                                          \
+  }
+
+// This generates method declarations for 2 methods: sync and async version
 #define GDAL_ASYNCABLE_DECLARE(method)                                                                                 \
-  static NAPI_METHOD(method);                                                                                           \
-  static NAPI_METHOD(method##Async);                                                                                    \
-  static Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
+  static NAPI_METHOD(method);                                                                                          \
+  static NAPI_METHOD(method##Async);
 
-// This generates getter declarations for 2 getters: sync and async version and a hidden common block
+// This generates getter declarations for 2 getters: sync and async version
 #define GDAL_ASYNCABLE_GETTER_DECLARE(method)                                                                          \
-  static NAPI_GETTER(method);                                                                                           \
-  static NAPI_GETTER(method##Async);                                                                                    \
-  static Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
+  static NAPI_GETTER(method);                                                                                          \
+  static NAPI_GETTER(method##Async);
 
+// The declarations of the methods which are not members of a class
 #define GDAL_ASYNCABLE_GLOBAL(method)                                                                                  \
   Napi::Value method(const Napi::CallbackInfo &info);                                                                  \
-  Napi::Value method##Async(const Napi::CallbackInfo &info);                                                           \
-  Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
-
-#define GDAL_ASYNCABLE_TEMPLATE(method)                                                                                \
-  static NAPI_METHOD(method) {                                                                                          \
-    return method##_do(info, false);                                                                                   \
-  }                                                                                                                    \
-  static NAPI_METHOD(method##Async) {                                                                                   \
-    return method##_do(info, true);                                                                                    \
-  }                                                                                                                    \
-  static Napi::Value method##_do(const Napi::CallbackInfo &info, bool async)
-
-#define GDAL_ISASYNC async
+  Napi::Value method##Async(const Napi::CallbackInfo &info);
 
 // Handle locking (used only for sync methods)
 #define GDAL_LOCK_PARENT(p)                                                                                            \
@@ -532,6 +648,7 @@ template <class GDALType> class GDALPromiseWorker : public GDALAsyncWorker<GDALT
     public:
   GDALPromiseWorker(
     Napi::Env env,
+    Napi::FunctionReference *progressCallback,
     const std::shared_ptr<GDALAbortSignal> &abort,
     const GDALMainFunc &doit,
     const GDALRValFunc &rval,
@@ -550,12 +667,13 @@ template <class GDALType> class GDALPromiseWorker : public GDALAsyncWorker<GDALT
 template <class GDALType>
 GDALPromiseWorker<GDALType>::GDALPromiseWorker(
   Napi::Env env,
+  Napi::FunctionReference *progressCallback,
   const std::shared_ptr<GDALAbortSignal> &abort,
   const GDALMainFunc &doit,
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
-  : GDALAsyncWorker<GDALType>(env, nullptr, abort, doit, rval, objects, ds_uids), deferred(env) {
+  : GDALAsyncWorker<GDALType>(env, progressCallback, abort, doit, rval, objects, ds_uids), deferred(env) {
 }
 
 template <class GDALType> void GDALPromiseWorker<GDALType>::OnOK() {
@@ -662,19 +780,36 @@ template <class GDALType> class GDALAsyncableJob {
     for (auto const &i : objs) persist(i);
   }
 
+  // The promise form of an asynchronous method, used by the methods which take
+  // a callback and by the getters, which never do. The worker takes over the
+  // progress callback, exactly like the callback form below.
+  inline Napi::Value promiseRun(const Napi::CallbackInfo &info) {
+    auto *worker = new GDALPromiseWorker<GDALType>(info.Env(), progress, abort, main, rval, persistent, ds_uids);
+    Napi::Value promise = worker->Promise();
+    worker->Queue();
+    return promise;
+  }
+
   Napi::Value run(const Napi::CallbackInfo &info, bool async, int cb_arg) {
     // The rval lambdas look this up by name ("this"), so it cannot go through
     // the auto-indexed overload
     if (!info.This().IsEmpty() && info.This().IsObject()) persist("this", info.This());
     if (async) {
       if (progress) persist("progress_cb", progress->Value());
-      Napi::FunctionReference *callback;
-      NODE_ARG_CB(cb_arg, "callback", callback);
-      // The worker makes its own reference to the callback, ours is not needed anymore
-      auto *worker =
-        new GDALCallbackWorker<GDALType>(callback->Value(), progress, abort, main, rval, persistent, ds_uids);
-      callback->Reset();
-      delete callback;
+      // The callback is optional: without one the method returns the promise
+      // itself. It is either at `cb_arg` or, when the caller left the optional
+      // arguments in front of it out, the last argument of the call.
+      const size_t length = info.Length();
+      int num = -1;
+      if (cb_arg >= 0 && static_cast<size_t>(cb_arg) < length && info[cb_arg].IsFunction()) {
+        num = cb_arg;
+      } else if (length > 0 && info[length - 1].IsFunction()) {
+        num = static_cast<int>(length) - 1;
+      }
+      if (num < 0) { return promiseRun(info); }
+      // The worker makes its own reference to the callback
+      auto *worker = new GDALCallbackWorker<GDALType>(
+        info[num].As<Napi::Function>(), progress, abort, main, rval, persistent, ds_uids);
       worker->Queue();
       return info.Env().Undefined();
     }
@@ -706,13 +841,7 @@ template <class GDALType> class GDALAsyncableJob {
   Napi::Value run(const Napi::CallbackInfo &info, bool async) {
     // See the note in the callback overload above
     if (!info.This().IsEmpty() && info.This().IsObject()) persist("this", info.This());
-    if (async) {
-      auto *worker =
-        new GDALPromiseWorker<GDALType>(info.Env(), abort, main, rval, persistent, ds_uids);
-      Napi::Value promise = worker->Promise();
-      worker->Queue();
-      return promise;
-    }
+    if (async) { return promiseRun(info); }
     // In sync mode the event loop is blocked, so the listener can never run
     // while the operation is in progress - the signal is only useful for an
     // abort which has already happened. It is also the only sync case which is

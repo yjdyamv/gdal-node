@@ -129,88 +129,96 @@ void VSI::Initialize(Napi::Object target) {
  * @returns {Promise<VSIStat>}
  */
 
-GDAL_ASYNCABLE_DEFINE(VSI::stat) {
-  Args args(info);
-  std::string filename;
-  bool bigint = false;
+namespace {
 
-  if (!args.get(0, "filename", filename)) return args.failed();
-  if (!args.optional(1, "bigint", bigint)) return args.failed();
+struct statBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    std::string filename;
+    bool bigint = false;
 
-  GDALAsyncableJob<VSIStatBufL> job(0);
-  job.main = [filename](const GDALExecutionProgress &) {
-    VSIStatBufL stat;
-    CPLErrorReset();
-    int r = VSIStatL(filename.c_str(), &stat);
-    if (r < 0) throw GDALError(CPLGetLastErrorMsg());
-    return stat;
-  };
+    if (!args.get(0, "filename", filename)) return args.failed();
+    if (!args.optional(1, "bigint", bigint)) return args.failed();
 
-  if (bigint) {
-    job.rval = [](VSIStatBufL stat, const GetFromPersistentFunc &) {
-
-      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "dev"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_dev)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "mode"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_mode)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "nlink"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_nlink)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "uid"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_uid)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "gid"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_gid)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "rdev"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_rdev)));
-
-#ifndef WIN32
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_blksize)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_ino)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_size)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_blocks)));
-#else
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), node_gdal::napi_env().Undefined());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), node_gdal::napi_env().Undefined());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_size)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), node_gdal::napi_env().Undefined());
-#endif
-
-      result.Set( Napi::String::New(node_gdal::napi_env(), "atime"), Napi::Date::New(node_gdal::napi_env(), stat.st_atime * 1000));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "mtime"), Napi::Date::New(node_gdal::napi_env(), stat.st_mtime * 1000));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ctime"), Napi::Date::New(node_gdal::napi_env(), stat.st_ctime * 1000));
-
-      return result;
+    GDALAsyncableJob<VSIStatBufL> job(0);
+    job.main = [filename](const GDALExecutionProgress &) {
+      VSIStatBufL stat;
+      CPLErrorReset();
+      int r = VSIStatL(filename.c_str(), &stat);
+      if (r < 0) throw GDALError(CPLGetLastErrorMsg());
+      return stat;
     };
-  } else {
-    // Ahh, the joy of JavaScript number types
-    // Which other language has floating-point file sizes
-    // Anyway, 2^53 bytes ought to be enough for anybody
-    job.rval = [](VSIStatBufL stat, const GetFromPersistentFunc &) {
 
-      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "dev"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_dev)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "mode"), Napi::Number::New(node_gdal::napi_env(), stat.st_mode));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "nlink"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_nlink)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "uid"), Napi::Number::New(node_gdal::napi_env(), stat.st_uid));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "gid"), Napi::Number::New(node_gdal::napi_env(), stat.st_gid));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "rdev"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_rdev)));
+    if (bigint) {
+      job.rval = [](VSIStatBufL stat, const GetFromPersistentFunc &) {
 
-#ifndef WIN32
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_blksize)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_ino)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_size)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_blocks)));
-#else
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), node_gdal::napi_env().Undefined());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), node_gdal::napi_env().Undefined());
-      result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_size)));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), node_gdal::napi_env().Undefined());
-#endif
+        Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "dev"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_dev)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "mode"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_mode)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "nlink"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_nlink)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "uid"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_uid)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "gid"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_gid)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "rdev"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_rdev)));
 
-      result.Set( Napi::String::New(node_gdal::napi_env(), "atime"), Napi::Date::New(node_gdal::napi_env(), stat.st_atime * 1000));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "mtime"), Napi::Date::New(node_gdal::napi_env(), stat.st_mtime * 1000));
-      result.Set( Napi::String::New(node_gdal::napi_env(), "ctime"), Napi::Date::New(node_gdal::napi_env(), stat.st_ctime * 1000));
+  #ifndef WIN32
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_blksize)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_ino)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_size)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_blocks)));
+  #else
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), node_gdal::napi_env().Undefined());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), node_gdal::napi_env().Undefined());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::BigInt::New(node_gdal::napi_env(), static_cast<int64_t>(stat.st_size)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), node_gdal::napi_env().Undefined());
+  #endif
 
-      return result;
-    };
+        result.Set( Napi::String::New(node_gdal::napi_env(), "atime"), Napi::Date::New(node_gdal::napi_env(), stat.st_atime * 1000));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "mtime"), Napi::Date::New(node_gdal::napi_env(), stat.st_mtime * 1000));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ctime"), Napi::Date::New(node_gdal::napi_env(), stat.st_ctime * 1000));
+
+        return result;
+      };
+    } else {
+      // Ahh, the joy of JavaScript number types
+      // Which other language has floating-point file sizes
+      // Anyway, 2^53 bytes ought to be enough for anybody
+      job.rval = [](VSIStatBufL stat, const GetFromPersistentFunc &) {
+
+        Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "dev"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_dev)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "mode"), Napi::Number::New(node_gdal::napi_env(), stat.st_mode));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "nlink"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_nlink)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "uid"), Napi::Number::New(node_gdal::napi_env(), stat.st_uid));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "gid"), Napi::Number::New(node_gdal::napi_env(), stat.st_gid));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "rdev"), Napi::Number::New(node_gdal::napi_env(), static_cast<uint32_t>(stat.st_rdev)));
+
+  #ifndef WIN32
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_blksize)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_ino)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_size)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_blocks)));
+  #else
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blksize"), node_gdal::napi_env().Undefined());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ino"), node_gdal::napi_env().Undefined());
+        result.Set( Napi::String::New(node_gdal::napi_env(), "size"), Napi::Number::New(node_gdal::napi_env(), static_cast<double>(stat.st_size)));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "blocks"), node_gdal::napi_env().Undefined());
+  #endif
+
+        result.Set( Napi::String::New(node_gdal::napi_env(), "atime"), Napi::Date::New(node_gdal::napi_env(), stat.st_atime * 1000));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "mtime"), Napi::Date::New(node_gdal::napi_env(), stat.st_mtime * 1000));
+        result.Set( Napi::String::New(node_gdal::napi_env(), "ctime"), Napi::Date::New(node_gdal::napi_env(), stat.st_ctime * 1000));
+
+        return result;
+      };
+    }
+
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  return job.run(info, async, 2);
-}
+} // namespace
+
+GDAL_ASYNC_METHOD(VSI::stat, statBody)
 
 /**
  * Read file names in a directory.
@@ -235,32 +243,40 @@ GDAL_ASYNCABLE_DEFINE(VSI::stat) {
  * @param {callback<string[]>} [callback=undefined]
  * @returns {Promise<string[]>}
  */
-GDAL_ASYNCABLE_DEFINE(VSI::readDir) {
-  Args args(info);
-  std::string directory;
+namespace {
 
-  if (!args.get(0, "directory", directory)) return args.failed();
+struct readDirBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    std::string directory;
 
-  GDALAsyncableJob<char **> job(0);
-  job.main = [directory](const GDALExecutionProgress &) {
-    CPLErrorReset();
+    if (!args.get(0, "directory", directory)) return args.failed();
 
-    char **names = VSIReadDir(directory.c_str());
-    if (names == nullptr) throw GDALError(CPLGetLastErrorMsg());
+    GDALAsyncableJob<char **> job(0);
+    job.main = [directory](const GDALExecutionProgress &) {
+      CPLErrorReset();
 
-    return names;
-  };
+      char **names = VSIReadDir(directory.c_str());
+      if (names == nullptr) throw GDALError(CPLGetLastErrorMsg());
 
-  job.rval = [](char **names, const GetFromPersistentFunc &) {
-    Napi::Array results = Napi::Array::New(node_gdal::napi_env());
-    int i = 0;
-    while (names[i] != nullptr) {
-      results.Set( i, SafeString::New(names[i]));
-      i++;
-    }
-    CSLDestroy(names);
-    return results;
-  };
-  return job.run(info, async, 1);
-}
+      return names;
+    };
+
+    job.rval = [](char **names, const GetFromPersistentFunc &) {
+      Napi::Array results = Napi::Array::New(node_gdal::napi_env());
+      int i = 0;
+      while (names[i] != nullptr) {
+        results.Set( i, SafeString::New(names[i]));
+        i++;
+      }
+      CSLDestroy(names);
+      return results;
+    };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(VSI::readDir, readDirBody)
 } // namespace node_gdal

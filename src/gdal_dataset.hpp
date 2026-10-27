@@ -57,6 +57,7 @@ class Dataset : public GDALObject<Dataset> {
   }
 
   void dispose(bool manual);
+  void updateMemory();
   long uid;
   long parent_uid;
 

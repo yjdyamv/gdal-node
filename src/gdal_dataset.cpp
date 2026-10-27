@@ -89,9 +89,50 @@ Dataset::~Dataset() {
   dispose(false);
 }
 
+//
+// What a dataset costs, as far as it can be told from the outside: the blocks of
+// its bands are what GDAL keeps in memory for it, and for a MEM dataset the
+// block of a band is the whole raster. Everything else a driver holds (its
+// caches, its own structures) is out of reach and is left unreported, so the
+// estimate is on the low side.
+//
+static int64_t dataset_memory(GDALDataset *ds) {
+  int64_t size = 1024;
+
+  // A MEM dataset is the raster itself, not a cache of blocks of a file
+  bool in_memory = EQUAL(ds->GetDriverName(), "MEM");
+
+  for (int i = 1; i <= ds->GetRasterCount(); i++) {
+    GDALRasterBand *band = ds->GetRasterBand(i);
+    int64_t bytes = GDALGetDataTypeSizeBytes(band->GetRasterDataType());
+
+    if (in_memory) {
+      size += static_cast<int64_t>(ds->GetRasterXSize()) * ds->GetRasterYSize() * bytes;
+      continue;
+    }
+
+    int block_x = 0, block_y = 0;
+    band->GetBlockSize(&block_x, &block_y);
+    if (block_x <= 0 || block_y <= 0) continue;
+    size += static_cast<int64_t>(block_x) * block_y * bytes;
+  }
+
+  return size;
+}
+
+void Dataset::updateMemory() {
+  if (!this_dataset) {
+    setExternalMemory(0);
+    return;
+  }
+  setExternalMemory(dataset_memory(this_dataset));
+}
+
 void Dataset::dispose(bool manual) {
   if (this_dataset) {
     LOG("Disposing Dataset [%p]", this_dataset);
+
+    setExternalMemory(0);
 
     object_store().dispose(uid, manual);
 
@@ -137,6 +178,7 @@ Napi::Value Dataset::New(GDALDataset *raw, GDALDataset *parent, bool close, bool
   Dataset *wrapped = node_gdal::UnwrapWrapped<Dataset>(obj);
 
   wrapped->uid = object_store().add(raw, *wrapped, parent_uid, close, shared_lock);
+  wrapped->updateMemory();
 
   return obj;
 }
@@ -166,21 +208,29 @@ NAPI_METHOD(Dataset::toString) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<any>}
  */
-GDAL_ASYNCABLE_DEFINE(Dataset::getMetadata) {
-  Args args(info);
-  NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+namespace {
 
-  std::string domain("");
-  if (!args.optional(0, "domain", domain)) return args.failed();
+struct getMetadataBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
-  GDALAsyncableJob<CSLConstList> job(ds->uid);
-  job.main = [raw, domain](const GDALExecutionProgress &) {
-    return raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
-  };
-  job.rval = [](CSLConstList md, const GetFromPersistentFunc &) { return MajorObject::getMetadata(md); };
-  return job.run(info, async, 1);
-}
+    std::string domain("");
+    if (!args.optional(0, "domain", domain)) return args.failed();
+
+    GDALAsyncableJob<CSLConstList> job(ds->uid);
+    job.main = [raw, domain](const GDALExecutionProgress &) {
+      return raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
+    };
+    job.rval = [](CSLConstList md, const GetFromPersistentFunc &) { return MajorObject::getMetadata(md); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Dataset::getMetadata, getMetadataBody)
 
 /**
  * Set metadata. Can return a warning (false) for formats not supporting persistent metadata.
@@ -205,29 +255,37 @@ GDAL_ASYNCABLE_DEFINE(Dataset::getMetadata) {
  * @param {callback<boolean>} [callback=undefined]
  * @return {Promise<boolean>}
  */
-GDAL_ASYNCABLE_DEFINE(Dataset::setMetadata) {
-  Args args(info);
-  NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+namespace {
 
-  auto options = make_shared<StringList>();
-  if (info.Length() == 0 || options->parse(info[0])) {
-    node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed parsing metadata");
-    return node_gdal::napi_env().Undefined();
+struct setMetadataBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+
+    auto options = make_shared<StringList>();
+    if (info.Length() == 0 || options->parse(info[0])) {
+      node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed parsing metadata");
+      return node_gdal::napi_env().Undefined();
+    }
+
+    std::string domain("");
+    if (!args.optional(1, "domain", domain)) return args.failed();
+
+    GDALAsyncableJob<CPLErr> job(ds->uid);
+    job.main = [raw, options, domain](const GDALExecutionProgress &) {
+      CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
+      if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  std::string domain("");
-  if (!args.optional(1, "domain", domain)) return args.failed();
+} // namespace
 
-  GDALAsyncableJob<CPLErr> job(ds->uid);
-  job.main = [raw, options, domain](const GDALExecutionProgress &) {
-    CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-    if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(Dataset::setMetadata, setMetadataBody)
 
 /**
  * Determines if the dataset supports the indicated operation.
@@ -331,19 +389,27 @@ NAPI_METHOD(Dataset::close) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Dataset::flush) {
-  NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
-  GDALAsyncableJob<int> job(ds->uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    raw->FlushCache();
-    return 0;
-  };
-  job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 0);
+namespace {
 
-  return node_gdal::napi_env().Undefined();
-}
+struct flushBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    GDALAsyncableJob<int> job(ds->uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      raw->FlushCache();
+      return 0;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+
+    return node_gdal::napi_env().Undefined();
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Dataset::flush, flushBody)
 
 /**
  * Execute an SQL statement against the data store.
@@ -382,37 +448,45 @@ GDAL_ASYNCABLE_DEFINE(Dataset::flush) {
  * @param {callback<Layer>} [callback=undefined]
  * @return {Promise<Layer>}
  */
-GDAL_ASYNCABLE_DEFINE(Dataset::executeSQL) {
-  Args args(info);
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
+namespace {
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+struct executeSQLBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+
+    std::string sql;
+    std::string sql_dialect;
+    Geometry *spatial_filter = NULL;
+
+    if (!args.get(0, "sql text", sql)) return args.failed();
+    if (!args.optionalWrapped(1, "spatial filter geometry", "Geometry", spatial_filter)) return args.failed();
+    if (!args.optional(2, "sql dialect", sql_dialect)) return args.failed();
+
+    GDALAsyncableJob<OGRLayer *> job(ds->uid);
+    OGRGeometry *geom_filter = spatial_filter ? spatial_filter->get() : NULL;
+    job.main = [raw, sql, sql_dialect, geom_filter](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? NULL : sql_dialect.c_str());
+      if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return layer;
+    };
+    job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, true); };
+
+    return job.run(info, node_gdal::is_async<Async>, 3);
   }
+};
 
-  GDALDataset *raw = ds->get();
+} // namespace
 
-  std::string sql;
-  std::string sql_dialect;
-  Geometry *spatial_filter = NULL;
-
-  if (!args.get(0, "sql text", sql)) return args.failed();
-  if (!args.optionalWrapped(1, "spatial filter geometry", "Geometry", spatial_filter)) return args.failed();
-  if (!args.optional(2, "sql dialect", sql_dialect)) return args.failed();
-
-  GDALAsyncableJob<OGRLayer *> job(ds->uid);
-  OGRGeometry *geom_filter = spatial_filter ? spatial_filter->get() : NULL;
-  job.main = [raw, sql, sql_dialect, geom_filter](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    OGRLayer *layer = raw->ExecuteSQL(sql.c_str(), geom_filter, sql_dialect.empty() ? NULL : sql_dialect.c_str());
-    if (layer == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return layer;
-  };
-  job.rval = [raw](OGRLayer *layer, const GetFromPersistentFunc &) { return Layer::New(layer, raw, true); };
-
-  return job.run(info, async, 3);
-}
+GDAL_ASYNC_METHOD(Dataset::executeSQL, executeSQLBody)
 
 /**
  * Fetch files forming dataset.
@@ -612,81 +686,89 @@ NAPI_METHOD(Dataset::setGCPs) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Dataset::buildOverviews) {
-  Args args(info);
+namespace {
 
-  NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+struct buildOverviewsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  std::string resampling = "";
-  Napi::Array overviews;
-  Napi::Array bands;
+    NODE_UNWRAP_CHECK(Dataset, info.This(), ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
-  if (!args.get(0, "resampling", resampling)) return args.failed();
-  if (!args.get(1, "overviews", overviews)) return args.failed();
-  if (!args.optional(2, "bands", bands)) return args.failed();
+    std::string resampling = "";
+    Napi::Array overviews;
+    Napi::Array bands;
 
-  int n_overviews = overviews.Length();
-  int i, n_bands = 0;
+    if (!args.get(0, "resampling", resampling)) return args.failed();
+    if (!args.get(1, "overviews", overviews)) return args.failed();
+    if (!args.optional(2, "bands", bands)) return args.failed();
 
-  std::shared_ptr<int[]> o(new int[n_overviews]);
-  std::shared_ptr<int[]> b;
-  for (i = 0; i < n_overviews; i++) {
-    Napi::Value val = overviews.As<Napi::Object>().Get(i);
-    if (!val.IsNumber()) {
-      Napi::Error::New(node_gdal::napi_env(), "overviews array must only contain numbers").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
-    o.get()[i] = val.As<Napi::Number>().Int32Value();
-  }
+    int n_overviews = overviews.Length();
+    int i, n_bands = 0;
 
-  if (!bands.IsEmpty()) {
-    n_bands = bands.Length();
-    b = std::shared_ptr<int[]>(new int[n_bands]);
-    for (i = 0; i < n_bands; i++) {
-      Napi::Value val = bands.As<Napi::Object>().Get(i);
+    std::shared_ptr<int[]> o(new int[n_overviews]);
+    std::shared_ptr<int[]> b;
+    for (i = 0; i < n_overviews; i++) {
+      Napi::Value val = overviews.As<Napi::Object>().Get(i);
       if (!val.IsNumber()) {
-        Napi::Error::New(node_gdal::napi_env(), "band array must only contain numbers").ThrowAsJavaScriptException();
+        Napi::Error::New(node_gdal::napi_env(), "overviews array must only contain numbers").ThrowAsJavaScriptException();
         return node_gdal::napi_env().Undefined();
       }
-      b.get()[i] = val.As<Napi::Number>().Int32Value();
+      o.get()[i] = val.As<Napi::Number>().Int32Value();
     }
-  }
 
-  GDALAsyncableJob<CPLErr> job(ds->uid);
-
-  Napi::FunctionReference *progress_cb;
-  NODE_PROGRESS_CB_OPT(3, progress_cb, job);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible, the
-  // trampoline has to be installed even without a progress callback
-  const bool interruptible = job.interruptible();
-  // Alas one cannot capture-move a unique_ptr and assign the lambda to a variable
-  // because the lambda becomes non-copyable
-  // But we can use a shared_ptr because the lifetime of the lambda is limited by the lifetime
-  // of the async worker
-  job.main = [raw, resampling, n_overviews, o, n_bands, b, interruptible](const GDALExecutionProgress &progress) {
-    if (b != nullptr) {
-      for (int i = 0; i < n_bands; i++) {
-        if (b.get()[i] > raw->GetRasterCount() || b.get()[i] < 1) { throw GDALError("invalid band id"); }
+    if (!bands.IsEmpty()) {
+      n_bands = bands.Length();
+      b = std::shared_ptr<int[]>(new int[n_bands]);
+      for (i = 0; i < n_bands; i++) {
+        Napi::Value val = bands.As<Napi::Object>().Get(i);
+        if (!val.IsNumber()) {
+          Napi::Error::New(node_gdal::napi_env(), "band array must only contain numbers").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+        b.get()[i] = val.As<Napi::Number>().Int32Value();
       }
     }
-    CPLErrorReset();
-    CPLErr err = raw->BuildOverviews(
-      resampling.c_str(),
-      n_overviews,
-      o.get(),
-      n_bands,
-      b.get(),
-      interruptible ? ProgressTrampoline : nullptr,
-      interruptible ? (void *)&progress : nullptr);
-    if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
 
-  return job.run(info, async, 4);
-}
+    GDALAsyncableJob<CPLErr> job(ds->uid);
+
+    Napi::FunctionReference *progress_cb;
+    NODE_PROGRESS_CB_OPT(3, progress_cb, job);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible, the
+    // trampoline has to be installed even without a progress callback
+    const bool interruptible = job.interruptible();
+    // Alas one cannot capture-move a unique_ptr and assign the lambda to a variable
+    // because the lambda becomes non-copyable
+    // But we can use a shared_ptr because the lifetime of the lambda is limited by the lifetime
+    // of the async worker
+    job.main = [raw, resampling, n_overviews, o, n_bands, b, interruptible](const GDALExecutionProgress &progress) {
+      if (b != nullptr) {
+        for (int i = 0; i < n_bands; i++) {
+          if (b.get()[i] > raw->GetRasterCount() || b.get()[i] < 1) { throw GDALError("invalid band id"); }
+        }
+      }
+      CPLErrorReset();
+      CPLErr err = raw->BuildOverviews(
+        resampling.c_str(),
+        n_overviews,
+        o.get(),
+        n_bands,
+        b.get(),
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr);
+      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Dataset::buildOverviews, buildOverviewsBody)
 
 /**
  * @readonly
@@ -735,47 +817,49 @@ NAPI_GETTER(Dataset::descriptionGetter) {
  * @memberof Dataset
  * @type {Promise<xyz>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(Dataset::rasterSizeGetter) {
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
-  struct xy {
-    int x, y;
-    bool null;
-  };
+namespace {
+struct rasterSizeGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto ds = node_gdal::unwrapThis<Dataset>(info, "Dataset", async);
+    if (!ds) { return ds.failure; }
+    struct xy {
+      int x, y;
+      bool null;
+    };
 
-  if (!ds->isAlive()) {
-    THROW_OR_REJECT("Dataset object has already been destroyed")
-    return node_gdal::napi_env().Undefined();
-  }
+    GDALDataset *raw = ds->get();
 
-  GDALDataset *raw = ds->get();
+    GDALAsyncableJob<xy> job(ds->uid);
 
-  GDALAsyncableJob<xy> job(ds->uid);
-
-  job.main = [raw](const GDALExecutionProgress &) {
-    xy result;
-    // GDAL 2.x will return 512x512 for vector datasets... which doesn't really make
-    // sense in JS where we can return null instead of a number
-    // https://github.com/OSGeo/gdal/blob/beef45c130cc2778dcc56d85aed1104a9b31f7e6/gdal/gcore/gdaldataset.cpp#L173-L174
-    if (raw->GetDriver() == nullptr || !raw->GetDriver()->GetMetadataItem(GDAL_DCAP_RASTER)) {
-      result.null = true;
+    job.main = [raw](const GDALExecutionProgress &) {
+      xy result;
+      // GDAL 2.x will return 512x512 for vector datasets... which doesn't really make
+      // sense in JS where we can return null instead of a number
+      // https://github.com/OSGeo/gdal/blob/beef45c130cc2778dcc56d85aed1104a9b31f7e6/gdal/gcore/gdaldataset.cpp#L173-L174
+      if (raw->GetDriver() == nullptr || !raw->GetDriver()->GetMetadataItem(GDAL_DCAP_RASTER)) {
+        result.null = true;
+        return result;
+      }
+      result.x = raw->GetRasterXSize();
+      result.y = raw->GetRasterYSize();
+      result.null = false;
       return result;
-    }
-    result.x = raw->GetRasterXSize();
-    result.y = raw->GetRasterYSize();
-    result.null = false;
-    return result;
-  };
+    };
 
-  job.rval = [](xy xy, const GetFromPersistentFunc &) {
-    if (xy.null) return node_gdal::napi_env().Null().As<Napi::Value>();
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), xy.x));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), xy.y));
-    return result.As<Napi::Value>();
-  };
+    job.rval = [](xy xy, const GetFromPersistentFunc &) {
+      if (xy.null) return node_gdal::napi_env().Null().As<Napi::Value>();
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), xy.x));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), xy.y));
+      return result.As<Napi::Value>();
+    };
 
-  return job.run(info, async);
-}
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(Dataset::rasterSizeGetter, rasterSizeGetterBody)
 
 /**
  * Spatial reference associated with raster dataset.
@@ -800,39 +884,41 @@ GDAL_ASYNCABLE_GETTER_DEFINE(Dataset::rasterSizeGetter) {
  * @readonly
  * @type {Promise<SpatialReference|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(Dataset::srsGetter) {
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
+namespace {
+struct srsGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto ds = node_gdal::unwrapThis<Dataset>(info, "Dataset", async);
+    if (!ds) { return ds.failure; }
 
-  if (!ds->isAlive()) {
-    THROW_OR_REJECT("Dataset object has already been destroyed");
-    return node_gdal::napi_env().Undefined();
+    GDALDataset *raw = ds->get();
+
+    GDALAsyncableJob<OGRSpatialReference *> job(ds->uid);
+
+    job.main = [raw](const GDALExecutionProgress &) -> OGRSpatialReference * {
+      // The pointer returned references an ephemere object
+      // We immediately copy it in order to avoid storing
+      // it in the Object Store.
+      // Alternatively, this could have been stored as
+      // children in the Object Store Dataset object, but
+      // an SRS is a standalone object and does not have a parent
+      // (unlike a RasterBand).
+      auto *srs = raw->GetSpatialRef();
+      if (srs == nullptr) return nullptr;
+      return srs->Clone();
+    };
+
+    job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) {
+      if (srs != nullptr)
+        return SpatialReference::New(srs, true);
+      else
+        return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
   }
+};
+} // namespace
 
-  GDALDataset *raw = ds->get();
-
-  GDALAsyncableJob<OGRSpatialReference *> job(ds->uid);
-
-  job.main = [raw](const GDALExecutionProgress &) -> OGRSpatialReference * {
-    // The pointer returned references an ephemere object
-    // We immediately copy it in order to avoid storing
-    // it in the Object Store.
-    // Alternatively, this could have been stored as
-    // children in the Object Store Dataset object, but
-    // an SRS is a standalone object and does not have a parent
-    // (unlike a RasterBand).
-    auto *srs = raw->GetSpatialRef();
-    if (srs == nullptr) return nullptr;
-    return srs->Clone();
-  };
-
-  job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) {
-    if (srs != nullptr)
-      return SpatialReference::New(srs, true);
-    else
-      return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+GDAL_ASYNC_GETTER(Dataset::srsGetter, srsGetterBody)
 
 /**
  * An affine transform which maps pixel/line coordinates into georeferenced
@@ -869,41 +955,43 @@ GDAL_ASYNCABLE_GETTER_DEFINE(Dataset::srsGetter) {
  * @memberof Dataset
  * @type {Promise<number[]|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(Dataset::geoTransformGetter) {
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(info.This().As<Napi::Object>());
+namespace {
+struct geoTransformGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto ds = node_gdal::unwrapThis<Dataset>(info, "Dataset", async);
+    if (!ds) { return ds.failure; }
 
-  if (!ds->isAlive()) {
-    THROW_OR_REJECT("Dataset object has already been destroyed");
-    return node_gdal::napi_env().Undefined();
+    GDALDataset *raw = ds->get();
+
+    GDALAsyncableJob<std::shared_ptr<double[]>> job(ds->uid);
+
+    job.main = [raw](const GDALExecutionProgress &) {
+      auto transform = std::shared_ptr<double[]>(new double[6]);
+      CPLErr err = raw->GetGeoTransform(transform.get());
+      // This is mostly (always?) a sign that it has not been set
+      if (err) { return std::shared_ptr<double[]>(nullptr); }
+      return transform;
+    };
+
+    job.rval = [](std::shared_ptr<double[]> transform, const GetFromPersistentFunc &) -> Napi::Value {
+      if (transform == nullptr) return node_gdal::napi_env().Null();
+      Napi::Array result = Napi::Array::New(node_gdal::napi_env(), 6);
+      result.Set(static_cast<uint32_t>(0), Napi::Number::New(node_gdal::napi_env(), transform.get()[0]));
+      result.Set(static_cast<uint32_t>(1), Napi::Number::New(node_gdal::napi_env(), transform.get()[1]));
+      result.Set(static_cast<uint32_t>(2), Napi::Number::New(node_gdal::napi_env(), transform.get()[2]));
+      result.Set(static_cast<uint32_t>(3), Napi::Number::New(node_gdal::napi_env(), transform.get()[3]));
+      result.Set(static_cast<uint32_t>(4), Napi::Number::New(node_gdal::napi_env(), transform.get()[4]));
+      result.Set(static_cast<uint32_t>(5), Napi::Number::New(node_gdal::napi_env(), transform.get()[5]));
+
+      return result;
+    };
+
+    return job.run(info, node_gdal::is_async<Async>);
   }
+};
+} // namespace
 
-  GDALDataset *raw = ds->get();
-
-  GDALAsyncableJob<std::shared_ptr<double[]>> job(ds->uid);
-
-  job.main = [raw](const GDALExecutionProgress &) {
-    auto transform = std::shared_ptr<double[]>(new double[6]);
-    CPLErr err = raw->GetGeoTransform(transform.get());
-    // This is mostly (always?) a sign that it has not been set
-    if (err) { return std::shared_ptr<double[]>(nullptr); }
-    return transform;
-  };
-
-  job.rval = [](std::shared_ptr<double[]> transform, const GetFromPersistentFunc &) -> Napi::Value {
-    if (transform == nullptr) return node_gdal::napi_env().Null();
-    Napi::Array result = Napi::Array::New(node_gdal::napi_env(), 6);
-    result.Set(static_cast<uint32_t>(0), Napi::Number::New(node_gdal::napi_env(), transform.get()[0]));
-    result.Set(static_cast<uint32_t>(1), Napi::Number::New(node_gdal::napi_env(), transform.get()[1]));
-    result.Set(static_cast<uint32_t>(2), Napi::Number::New(node_gdal::napi_env(), transform.get()[2]));
-    result.Set(static_cast<uint32_t>(3), Napi::Number::New(node_gdal::napi_env(), transform.get()[3]));
-    result.Set(static_cast<uint32_t>(4), Napi::Number::New(node_gdal::napi_env(), transform.get()[4]));
-    result.Set(static_cast<uint32_t>(5), Napi::Number::New(node_gdal::napi_env(), transform.get()[5]));
-
-    return result;
-  };
-
-  return job.run(info, async);
-}
+GDAL_ASYNC_GETTER(Dataset::geoTransformGetter, geoTransformGetterBody)
 
 /**
  * @readonly

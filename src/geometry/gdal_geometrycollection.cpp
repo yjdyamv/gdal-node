@@ -52,7 +52,18 @@ NAPI_METHOD(GeometryCollection::toString) {
  * @memberof GeometryCollection
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(GeometryCollection, getArea, Number, get_Area);
+namespace {
+// GeometryCollection::getArea()
+struct getAreaBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<GeometryCollection>(info, "GeometryCollection");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Area());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(GeometryCollection::getArea, getAreaBody)
 
 /**
  * Compute the length of a multicurve.
@@ -62,7 +73,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(GeometryCollection, getArea, Number, get_Area);
  * @memberof GeometryCollection
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(GeometryCollection, getLength, Number, get_Length);
+namespace {
+// GeometryCollection::getLength()
+struct getLengthBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<GeometryCollection>(info, "GeometryCollection");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Length());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(GeometryCollection::getLength, getLengthBody)
 
 /**
  * All geometries represented by this collection.

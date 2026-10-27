@@ -182,54 +182,62 @@ auto DatasetRval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return D
  * @throws {Error}
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Driver::create) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+namespace {
 
-  std::string filename;
-  unsigned int x_size = 0, y_size = 0, n_bands = 0;
-  GDALDataType type = GDT_Byte;
-  std::string type_name = "";
-  StringList *options = new StringList;
+struct createBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
-  if (!args.get(0, "filename", filename)) return args.failed();
+    std::string filename;
+    unsigned int x_size = 0, y_size = 0, n_bands = 0;
+    GDALDataType type = GDT_Byte;
+    std::string type_name = "";
+    StringList *options = new StringList;
 
-  if (info.Length() < 3) {
-    if (info.Length() > 1 && options->parse(info[1])) {
-      node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
-      return info.Env().Undefined(); // error parsing string list
+    if (!args.get(0, "filename", filename)) return args.failed();
+
+    if (info.Length() < 3) {
+      if (info.Length() > 1 && options->parse(info[1])) {
+        node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
+        return info.Env().Undefined(); // error parsing string list
+      }
+    } else {
+      if (!args.get(1, "x size", x_size)) return args.failed();
+      if (!args.get(2, "y size", y_size)) return args.failed();
+      if (!args.optional(3, "number of bands", n_bands)) return args.failed();
+      if (!args.optional(4, "data type", type_name)) return args.failed();
+      if (info.Length() > 5 && options->parse(info[5])) {
+        node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
+        return info.Env().Undefined(); // error parsing string list
+      }
+      if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
     }
-  } else {
-    if (!args.get(1, "x size", x_size)) return args.failed();
-    if (!args.get(2, "y size", y_size)) return args.failed();
-    if (!args.optional(3, "number of bands", n_bands)) return args.failed();
-    if (!args.optional(4, "data type", type_name)) return args.failed();
-    if (info.Length() > 5 && options->parse(info[5])) {
-      node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
-      return info.Env().Undefined(); // error parsing string list
-    }
-    if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
+
+    if (x_size == 0 && y_size == 0 && type_name.empty()) { type = GDT_Unknown; }
+
+    GDALDriver *raw = driver->getGDALDriver();
+
+    // Very careful here
+    // we can't reference automatic variables, thus the *options object
+    GDALAsyncableJob<GDALDataset *> job(0);
+    job.persist(driver->Value());
+    job.main = [raw, filename, x_size, y_size, n_bands, type, options](const GDALExecutionProgress &) {
+      std::unique_ptr<StringList> options_ptr(options);
+      CPLErrorReset();
+      GDALDataset *ds = raw->Create(filename.c_str(), x_size, y_size, n_bands, type, options->get());
+      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      return ds;
+    };
+    job.rval = DatasetRval;
+
+    return job.run(info, node_gdal::is_async<Async>, 6);
   }
+};
 
-  if (x_size == 0 && y_size == 0 && type_name.empty()) { type = GDT_Unknown; }
+} // namespace
 
-  GDALDriver *raw = driver->getGDALDriver();
-
-  // Very careful here
-  // we can't reference automatic variables, thus the *options object
-  GDALAsyncableJob<GDALDataset *> job(0);
-  job.persist(driver->Value());
-  job.main = [raw, filename, x_size, y_size, n_bands, type, options](const GDALExecutionProgress &) {
-    std::unique_ptr<StringList> options_ptr(options);
-    CPLErrorReset();
-    GDALDataset *ds = raw->Create(filename.c_str(), x_size, y_size, n_bands, type, options->get());
-    if (!ds) throw GDALError(CPLGetLastErrorMsg());
-    return ds;
-  };
-  job.rval = DatasetRval;
-
-  return job.run(info, async, 6);
-}
+GDAL_ASYNC_METHOD(Driver::create, createBody)
 
 /**
  * @typedef {object} CreateOptions
@@ -271,70 +279,78 @@ GDAL_ASYNCABLE_DEFINE(Driver::create) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Driver::createCopy) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+namespace {
 
-  if (!driver->isAlive()) {
-    Napi::Error::New(info.Env(), "Driver object has already been destroyed").ThrowAsJavaScriptException();
-    return info.Env().Undefined();
+struct createCopyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+
+    if (!driver->isAlive()) {
+      Napi::Error::New(info.Env(), "Driver object has already been destroyed").ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
+
+    std::string filename;
+    Dataset *src_dataset;
+    StringList *options;
+
+    if (!args.get(0, "filename", filename)) return args.failed();
+
+    if (info.Length() < 2) {
+      Napi::Error::New(info.Env(), "source dataset must be provided").ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
+    if (IS_WRAPPED(info[1], Dataset)) {
+      src_dataset = node_gdal::UnwrapWrapped<Dataset>(info[1].As<Napi::Object>());
+    } else {
+      Napi::Error::New(info.Env(), "source dataset must be a Dataset object").ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
+
+    options = new StringList;
+    if (info.Length() > 2 && options->parse(info[2])) {
+      node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
+      return info.Env().Undefined(); // error parsing string list
+    }
+
+    bool strict = false;
+    if (!args.optional(3, "strict", strict)) return args.failed();
+
+    Napi::Object jsoptions;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(4, "jsoptions", jsoptions)) return args.failed();
+    if (!jsoptions.IsEmpty()) if (!args.fromCallback(jsoptions, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(jsoptions, "abort_signal", abort_signal)) return args.failed();
+
+    GDALDriver *raw = driver->getGDALDriver();
+    GDALDataset *raw_ds = src_dataset->get();
+    GDALAsyncableJob<GDALDataset *> job(src_dataset->uid);
+    job.rval = DatasetRval;
+    job.persist(driver->Value());
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+
+    job.main = [raw, filename, raw_ds, strict, options, interruptible](const GDALExecutionProgress &progress) {
+      std::unique_ptr<StringList> options_ptr(options);
+      CPLErrorReset();
+      GDALDataset *ds = raw->CreateCopy(
+        filename.c_str(), raw_ds, strict, options->get(), interruptible ? ProgressTrampoline : nullptr, (void *)&progress);
+      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      return ds;
+    };
+    return job.run(info, node_gdal::is_async<Async>, 5);
   }
+};
 
-  std::string filename;
-  Dataset *src_dataset;
-  StringList *options;
+} // namespace
 
-  if (!args.get(0, "filename", filename)) return args.failed();
-
-  if (info.Length() < 2) {
-    Napi::Error::New(info.Env(), "source dataset must be provided").ThrowAsJavaScriptException();
-    return info.Env().Undefined();
-  }
-  if (IS_WRAPPED(info[1], Dataset)) {
-    src_dataset = node_gdal::UnwrapWrapped<Dataset>(info[1].As<Napi::Object>());
-  } else {
-    Napi::Error::New(info.Env(), "source dataset must be a Dataset object").ThrowAsJavaScriptException();
-    return info.Env().Undefined();
-  }
-
-  options = new StringList;
-  if (info.Length() > 2 && options->parse(info[2])) {
-    node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
-    return info.Env().Undefined(); // error parsing string list
-  }
-
-  bool strict = false;
-  if (!args.optional(3, "strict", strict)) return args.failed();
-
-  Napi::Object jsoptions;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(4, "jsoptions", jsoptions)) return args.failed();
-  if (!jsoptions.IsEmpty()) if (!args.fromCallback(jsoptions, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(jsoptions, "abort_signal", abort_signal)) return args.failed();
-
-  GDALDriver *raw = driver->getGDALDriver();
-  GDALDataset *raw_ds = src_dataset->get();
-  GDALAsyncableJob<GDALDataset *> job(src_dataset->uid);
-  job.rval = DatasetRval;
-  job.persist(driver->Value());
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-
-  job.main = [raw, filename, raw_ds, strict, options, interruptible](const GDALExecutionProgress &progress) {
-    std::unique_ptr<StringList> options_ptr(options);
-    CPLErrorReset();
-    GDALDataset *ds = raw->CreateCopy(
-      filename.c_str(), raw_ds, strict, options->get(), interruptible ? ProgressTrampoline : nullptr, (void *)&progress);
-    if (!ds) throw GDALError(CPLGetLastErrorMsg());
-    return ds;
-  };
-  return job.run(info, async, 5);
-}
+GDAL_ASYNC_METHOD(Driver::createCopy, createCopyBody)
 
 /**
  * Copy the files of a dataset.
@@ -445,45 +461,53 @@ NAPI_METHOD(Driver::getMetadata) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Driver::open) {
-  Args args(info);
-  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+namespace {
 
-  std::string path;
-  std::string mode = "r";
-  GDALAccess access = GA_ReadOnly;
+struct openBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
 
-  if (!args.get(0, "path", path)) return args.failed();
-  if (!args.optional(1, "mode", mode)) return args.failed();
+    std::string path;
+    std::string mode = "r";
+    GDALAccess access = GA_ReadOnly;
 
-  if (mode == "r+") {
-    access = GA_Update;
-  } else if (mode != "r") {
-    Napi::Error::New(info.Env(), "Invalid open mode. Must be \"r\" or \"r+\"").ThrowAsJavaScriptException();
-    return info.Env().Undefined();
+    if (!args.get(0, "path", path)) return args.failed();
+    if (!args.optional(1, "mode", mode)) return args.failed();
+
+    if (mode == "r+") {
+      access = GA_Update;
+    } else if (mode != "r") {
+      Napi::Error::New(info.Env(), "Invalid open mode. Must be \"r\" or \"r+\"").ThrowAsJavaScriptException();
+      return info.Env().Undefined();
+    }
+
+    StringList *options = new StringList;
+    if (info.Length() > 2 && options->parse(info[2])) {
+      node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
+      return info.Env().Undefined(); // error parsing string list
+    }
+
+    GDALDriver *raw = driver->getGDALDriver();
+
+    GDALAsyncableJob<GDALDataset *> job(0);
+    job.persist(driver->Value());
+    job.main = [raw, path, access, options](const GDALExecutionProgress &) {
+      std::unique_ptr<StringList> options_ptr(options);
+      const char *driver_list[2] = {raw->GetDescription(), nullptr};
+      CPLErrorReset();
+      GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), NULL);
+      if (!ds) throw GDALError(CPLGetLastErrorMsg());
+      return ds;
+    };
+    job.rval = DatasetRval;
+
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  StringList *options = new StringList;
-  if (info.Length() > 2 && options->parse(info[2])) {
-    node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
-    return info.Env().Undefined(); // error parsing string list
-  }
+} // namespace
 
-  GDALDriver *raw = driver->getGDALDriver();
-
-  GDALAsyncableJob<GDALDataset *> job(0);
-  job.persist(driver->Value());
-  job.main = [raw, path, access, options](const GDALExecutionProgress &) {
-    std::unique_ptr<StringList> options_ptr(options);
-    const char *driver_list[2] = {raw->GetDescription(), nullptr};
-    CPLErrorReset();
-    GDALDataset *ds = (GDALDataset *)GDALOpenEx(path.c_str(), access, driver_list, options->get(), NULL);
-    if (!ds) throw GDALError(CPLGetLastErrorMsg());
-    return ds;
-  };
-  job.rval = DatasetRval;
-
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(Driver::open, openBody)
 
 } // namespace node_gdal

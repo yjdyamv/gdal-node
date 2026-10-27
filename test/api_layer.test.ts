@@ -125,6 +125,20 @@ describe('gdal.Layer', () => {
             assert.equal(srs1, srs2)
           })
         })
+        it('should return a read-only SpatialReference', () => {
+          prepare_dataset_layer_test('r', (dataset, layer) => {
+            assert.throws(() => {
+              layer.srs?.setWellKnownGeogCS('WGS84')
+            }, /read-only/)
+            assert.throws(() => {
+              layer.srs?.morphToESRI()
+            }, /read-only/)
+            // a clone is a free-standing object and can be modified
+            assert.doesNotThrow(() => {
+              layer.srs?.clone().setWellKnownGeogCS('WGS84')
+            })
+          })
+        })
         // NOTE: geojson has a default projection: EPSG 4326
         // it('should return null when dataset doesn\'t have projection', function() {
         // 	var ds = gdal.open(__dirname + "/data/park.geo.json");
@@ -749,6 +763,14 @@ describe('gdal.Layer', () => {
               const field = layer.fields.get('fips_num')
               assert.instanceOf(field, gdal.FieldDefn)
               assert.equal(field.name, 'fips_num')
+            })
+          })
+          it('should return a read-only FieldDefn', () => {
+            prepare_dataset_layer_test('r', (dataset, layer) => {
+              const field = layer.fields.get('fips_num')
+              assert.throws(() => {
+                field.width = 100
+              }, /read-only/)
             })
           })
         })

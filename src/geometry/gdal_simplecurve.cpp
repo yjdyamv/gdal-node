@@ -87,7 +87,18 @@ NAPI_METHOD(SimpleCurve::value) {
  * @memberof SimpleCurve
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SimpleCurve, getLength, Number, get_Length);
+namespace {
+// SimpleCurve::getLength()
+struct getLengthBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SimpleCurve>(info, "SimpleCurve");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Length());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SimpleCurve::getLength, getLengthBody)
 
 /**
  * The points that make up the SimpleCurve geometry.

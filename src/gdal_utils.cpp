@@ -75,50 +75,58 @@ void Utils::Initialize(Napi::Object target) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::translate) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
+namespace {
 
-  std::string dst;
-  Napi::Object src, options;
-  Napi::Array cli_args;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!(args.get(0, "dst", dst) && args.get(1, "src", src) && args.optional(2, "args", cli_args) &&
-        args.optional(3, "options", options) && args.fromCallback(options, "progress_cb", progress_cb) &&
-        args.from(options, "abort_signal", abort_signal))) {
-    return args.failed();
-  }
-  NODE_UNWRAP_CHECK(Dataset, src, ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+struct translateBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
 
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+    std::string dst;
+    Napi::Object src, options;
+    Napi::Array cli_args;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!(args.get(0, "dst", dst) && args.get(1, "src", src) && args.optional(2, "args", cli_args) &&
+          args.optional(3, "options", options) && args.fromCallback(options, "progress_cb", progress_cb) &&
+          args.from(options, "abort_signal", abort_signal))) {
+      return args.failed();
     }
+    NODE_UNWRAP_CHECK(Dataset, src, ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
-  GDALAsyncableJob<GDALDataset *> job(ds->uid);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main = [raw, dst, aosOptions, interruptible](const GDALExecutionProgress &progress) {
-    CPLErrorReset();
-    auto b = aosOptions;
-    auto psOptions = GDALTranslateOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    if (interruptible) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
-    GDALDataset *r = GDALDatasetFromHandle(GDALTranslate(dst.c_str(), GDALDatasetToHandle(raw), psOptions, nullptr));
-    GDALTranslateOptionsFree(psOptions);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
 
-  return job.run(info, async, 4);
-}
+    GDALAsyncableJob<GDALDataset *> job(ds->uid);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main = [raw, dst, aosOptions, interruptible](const GDALExecutionProgress &progress) {
+      CPLErrorReset();
+      auto b = aosOptions;
+      auto psOptions = GDALTranslateOptionsNew(aosOptions->List(), nullptr);
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (interruptible) GDALTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+      GDALDataset *r = GDALDatasetFromHandle(GDALTranslate(dst.c_str(), GDALDatasetToHandle(raw), psOptions, nullptr));
+      GDALTranslateOptionsFree(psOptions);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Utils::translate, translateBody)
 
 /**
  * Library version of ogr2ogr.
@@ -159,78 +167,86 @@ GDAL_ASYNCABLE_DEFINE(Utils::translate) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::vectorTranslate) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
+namespace {
 
-  std::string dst_filename("");
-  Dataset *dst_ds = nullptr;
-  if (info.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "\"dst\" must be given").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+struct vectorTranslateBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
 
-  GDALDataset *dst_raw = nullptr;
-  if (info[0].IsString()) {
-    if (!args.get(0, "dst", dst_filename)) return args.failed();
-  } else if (info[0].IsObject()) {
-    if (!args.getWrapped(0, "dst", "Dataset", dst_ds)) return args.failed();
-    GDAL_RAW_CHECK(GDALDataset *, dst_ds, _dst_raw);
-    dst_raw = _dst_raw;
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "\"dst\" must be an object or a gdal.Dataset").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  Napi::Object src;
-  if (!args.get(1, "src", src)) return args.failed();
-  NODE_UNWRAP_CHECK(Dataset, src, ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
-
-  Napi::Array cli_args;
-  if (!args.optional(2, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+    std::string dst_filename("");
+    Dataset *dst_ds = nullptr;
+    if (info.Length() < 1) {
+      Napi::Error::New(node_gdal::napi_env(), "\"dst\" must be given").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
 
-  Napi::Object options;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(3, "options", options)) return args.failed();
-  if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+    GDALDataset *dst_raw = nullptr;
+    if (info[0].IsString()) {
+      if (!args.get(0, "dst", dst_filename)) return args.failed();
+    } else if (info[0].IsObject()) {
+      if (!args.getWrapped(0, "dst", "Dataset", dst_ds)) return args.failed();
+      GDAL_RAW_CHECK(GDALDataset *, dst_ds, _dst_raw);
+      dst_raw = _dst_raw;
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "\"dst\" must be an object or a gdal.Dataset").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
 
-  std::vector<long> uids = {ds->uid};
-  if (dst_ds != nullptr) uids.push_back(dst_ds->uid);
-  GDALAsyncableJob<GDALDataset *> job(uids);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
+    Napi::Object src;
+    if (!args.get(1, "src", src)) return args.failed();
+    NODE_UNWRAP_CHECK(Dataset, src, ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
 
-  job.main = [src_raw, dst_filename, dst_raw, aosOptions, progress_cb, interruptible](const GDALExecutionProgress &progress) {
-    CPLErrorReset();
-    if (progress_cb) aosOptions->AddString("-progress");
-    auto psOptions = GDALVectorTranslateOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+    Napi::Array cli_args;
+    if (!args.optional(2, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
 
-    if (interruptible) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    Napi::Object options;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(3, "options", options)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
 
-    auto srcH = GDALDatasetToHandle(src_raw);
-    GDALDataset *r = GDALDatasetFromHandle(
-      GDALVectorTranslate(dst_filename.c_str(), GDALDatasetToHandle(dst_raw), 1, &srcH, psOptions, nullptr));
+    std::vector<long> uids = {ds->uid};
+    if (dst_ds != nullptr) uids.push_back(dst_ds->uid);
+    GDALAsyncableJob<GDALDataset *> job(uids);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
 
-    GDALVectorTranslateOptionsFree(psOptions);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+    job.main = [src_raw, dst_filename, dst_raw, aosOptions, progress_cb, interruptible](const GDALExecutionProgress &progress) {
+      CPLErrorReset();
+      if (progress_cb) aosOptions->AddString("-progress");
+      auto psOptions = GDALVectorTranslateOptionsNew(aosOptions->List(), nullptr);
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
 
-  return job.run(info, async, 4);
-}
+      if (interruptible) GDALVectorTranslateOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+
+      auto srcH = GDALDatasetToHandle(src_raw);
+      GDALDataset *r = GDALDatasetFromHandle(
+        GDALVectorTranslate(dst_filename.c_str(), GDALDatasetToHandle(dst_raw), 1, &srcH, psOptions, nullptr));
+
+      GDALVectorTranslateOptionsFree(psOptions);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Utils::vectorTranslate, vectorTranslateBody)
 
 /**
  * Library version of gdalinfo.
@@ -263,38 +279,46 @@ GDAL_ASYNCABLE_DEFINE(Utils::vectorTranslate) {
  * @param {callback<string>} [callback=undefined]
  * @return {Promise<string>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::info) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
+namespace {
 
-  Napi::Object src;
-  if (!args.get(0, "src", src)) return args.failed();
-  NODE_UNWRAP_CHECK(Dataset, src, ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+struct infoBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
 
-  Napi::Array cli_args;
-  if (!args.optional(1, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
-    }
+    Napi::Object src;
+    if (!args.get(0, "src", src)) return args.failed();
+    NODE_UNWRAP_CHECK(Dataset, src, ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
-  GDALAsyncableJob<std::string> job(ds->uid);
-  job.main = [raw, aosOptions](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto psOptions = GDALInfoOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    char *r = GDALInfo(GDALDatasetToHandle(raw), psOptions);
-    GDALInfoOptionsFree(psOptions);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    std::string s(r);
-    CPLFree(r);
-    return s;
-  };
-  job.rval = [](std::string s, const GetFromPersistentFunc &) { return SafeString::New(s.c_str()); };
+    Napi::Array cli_args;
+    if (!args.optional(1, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
 
-  return job.run(info, async, 2);
-}
+    GDALAsyncableJob<std::string> job(ds->uid);
+    job.main = [raw, aosOptions](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto psOptions = GDALInfoOptionsNew(aosOptions->List(), nullptr);
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      char *r = GDALInfo(GDALDatasetToHandle(raw), psOptions);
+      GDALInfoOptionsFree(psOptions);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      std::string s(r);
+      CPLFree(r);
+      return s;
+    };
+    job.rval = [](std::string s, const GetFromPersistentFunc &) { return SafeString::New(s.c_str()); };
+
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Utils::info, infoBody)
 
 /**
  * Library version of gdalwarp.
@@ -337,87 +361,95 @@ GDAL_ASYNCABLE_DEFINE(Utils::info) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::warp) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
-  std::vector<long> uids;
+namespace {
 
-  std::string dst_path("");
-  Napi::Object dst_ds;
+struct warpBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
+    std::vector<long> uids;
 
-  if (!args.optional(0, "dst_path", dst_path)) return args.failed();
+    std::string dst_path("");
+    Napi::Object dst_ds;
 
-  if (!args.optional(1, "dst_ds", dst_ds)) return args.failed();
-  GDALDatasetH gdal_dst_ds = nullptr;
-  if (!dst_ds.IsEmpty()) {
-    NODE_UNWRAP_CHECK(Dataset, dst_ds, ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
-    gdal_dst_ds = GDALDatasetToHandle(raw);
-    uids.push_back(ds->uid);
-  }
+    if (!args.optional(0, "dst_path", dst_path)) return args.failed();
 
-  if (dst_path.length() == 0 && gdal_dst_ds == nullptr) {
-    Napi::Error::New(node_gdal::napi_env(), "Either \"dst_path\" or \"dst_ds\" must be given").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  Napi::Array src_ds;
-  if (!args.get(2, "src_ds", src_ds)) return args.failed();
-  if (src_ds.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "\"src_ds\" must contain at least one element").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  auto gdal_src_ds = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
-  for (unsigned i = 0; i < src_ds.Length(); ++i) {
-    NODE_UNWRAP_CHECK(Dataset, src_ds.As<Napi::Object>().Get(i).As<Napi::Object>(), ds);
-    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
-    gdal_src_ds.get()[i] = GDALDatasetToHandle(raw);
-    uids.push_back(ds->uid);
-  }
-
-  Napi::Array cli_args;
-  if (!args.optional(3, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+    if (!args.optional(1, "dst_ds", dst_ds)) return args.failed();
+    GDALDatasetH gdal_dst_ds = nullptr;
+    if (!dst_ds.IsEmpty()) {
+      NODE_UNWRAP_CHECK(Dataset, dst_ds, ds);
+      GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+      gdal_dst_ds = GDALDatasetToHandle(raw);
+      uids.push_back(ds->uid);
     }
 
-  Napi::Object options;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(4, "options", options)) return args.failed();
-  if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+    if (dst_path.length() == 0 && gdal_dst_ds == nullptr) {
+      Napi::Error::New(node_gdal::napi_env(), "Either \"dst_path\" or \"dst_ds\" must be given").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
 
-  GDALAsyncableJob<GDALDataset *> job(uids);
-  int src_count = src_ds.Length();
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main =
-    [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, interruptible](const GDALExecutionProgress &progress) {
-      CPLErrorReset();
-      auto psOptions = GDALWarpAppOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-      if (interruptible) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
-      GDALDatasetH r = GDALWarp(
-        dst_path.length() > 0 ? dst_path.c_str() : nullptr,
-        gdal_dst_ds,
-        src_count,
-        gdal_src_ds.get(),
-        psOptions,
-        nullptr);
-      GDALWarpAppOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-      return GDALDatasetFromHandle(r);
-    };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+    Napi::Array src_ds;
+    if (!args.get(2, "src_ds", src_ds)) return args.failed();
+    if (src_ds.Length() < 1) {
+      Napi::Error::New(node_gdal::napi_env(), "\"src_ds\" must contain at least one element").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    auto gdal_src_ds = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
+    for (unsigned i = 0; i < src_ds.Length(); ++i) {
+      NODE_UNWRAP_CHECK(Dataset, src_ds.As<Napi::Object>().Get(i).As<Napi::Object>(), ds);
+      GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+      gdal_src_ds.get()[i] = GDALDatasetToHandle(raw);
+      uids.push_back(ds->uid);
+    }
 
-  return job.run(info, async, 5);
-}
+    Napi::Array cli_args;
+    if (!args.optional(3, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
+
+    Napi::Object options;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(4, "options", options)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+
+    GDALAsyncableJob<GDALDataset *> job(uids);
+    int src_count = src_ds.Length();
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main =
+      [dst_path, gdal_dst_ds, src_count, gdal_src_ds, aosOptions, interruptible](const GDALExecutionProgress &progress) {
+        CPLErrorReset();
+        auto psOptions = GDALWarpAppOptionsNew(aosOptions->List(), nullptr);
+        if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (interruptible) GDALWarpAppOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+        GDALDatasetH r = GDALWarp(
+          dst_path.length() > 0 ? dst_path.c_str() : nullptr,
+          gdal_dst_ds,
+          src_count,
+          gdal_src_ds.get(),
+          psOptions,
+          nullptr);
+        GDALWarpAppOptionsFree(psOptions);
+        if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        return GDALDatasetFromHandle(r);
+      };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 5);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Utils::warp, warpBody)
 
 /**
  * Library version of gdalbuildvrt.
@@ -469,90 +501,98 @@ GDAL_ASYNCABLE_DEFINE(Utils::warp) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
-  std::vector<long> uids;
+namespace {
 
-  std::string dst_path("");
+struct buildvrtBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
+    std::vector<long> uids;
 
-  if (!args.get(0, "dst_path", dst_path)) return args.failed();
+    std::string dst_path("");
 
-  Napi::Array src_ds;
-  if (!args.get(1, "src_ds", src_ds)) return args.failed();
-  if (src_ds.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "\"src_ds\" must contain at least one element").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+    if (!args.get(0, "dst_path", dst_path)) return args.failed();
 
-  std::shared_ptr<CPLStringList> aosSrcDs = nullptr;
-  std::shared_ptr<GDALDatasetH[]> gdalSrcDs = nullptr;
-  if (src_ds.As<Napi::Object>().Get(static_cast<uint32_t>(0)).IsString()) {
-    aosSrcDs = std::make_shared<CPLStringList>();
-    for (unsigned i = 0; i < src_ds.Length(); ++i) {
-      if (!src_ds.As<Napi::Object>().Get(i).IsString()) {
-        Napi::Error::New(node_gdal::napi_env(), "All \"src_ds\" elements must have the same type").ThrowAsJavaScriptException();
-        return node_gdal::napi_env().Undefined();
+    Napi::Array src_ds;
+    if (!args.get(1, "src_ds", src_ds)) return args.failed();
+    if (src_ds.Length() < 1) {
+      Napi::Error::New(node_gdal::napi_env(), "\"src_ds\" must contain at least one element").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    std::shared_ptr<CPLStringList> aosSrcDs = nullptr;
+    std::shared_ptr<GDALDatasetH[]> gdalSrcDs = nullptr;
+    if (src_ds.As<Napi::Object>().Get(static_cast<uint32_t>(0)).IsString()) {
+      aosSrcDs = std::make_shared<CPLStringList>();
+      for (unsigned i = 0; i < src_ds.Length(); ++i) {
+        if (!src_ds.As<Napi::Object>().Get(i).IsString()) {
+          Napi::Error::New(node_gdal::napi_env(), "All \"src_ds\" elements must have the same type").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+        aosSrcDs->AddString(node_gdal::Stringify(src_ds.As<Napi::Object>().Get(i)).c_str());
       }
-      aosSrcDs->AddString(node_gdal::Stringify(src_ds.As<Napi::Object>().Get(i)).c_str());
+      uids.push_back(0);
+    } else {
+      gdalSrcDs = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
+      for (unsigned i = 0; i < src_ds.Length(); ++i) {
+        Napi::Value v = src_ds.As<Napi::Object>().Get(i);
+        NODE_UNWRAP_CHECK(Dataset, v, ds);
+        GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+        gdalSrcDs.get()[i] = GDALDatasetToHandle(raw);
+        uids.push_back(ds->uid);
+      }
     }
-    uids.push_back(0);
-  } else {
-    gdalSrcDs = std::shared_ptr<GDALDatasetH[]>(new GDALDatasetH[src_ds.Length()]);
-    for (unsigned i = 0; i < src_ds.Length(); ++i) {
-      Napi::Value v = src_ds.As<Napi::Object>().Get(i);
-      NODE_UNWRAP_CHECK(Dataset, v, ds);
-      GDAL_RAW_CHECK(GDALDataset *, ds, raw);
-      gdalSrcDs.get()[i] = GDALDatasetToHandle(raw);
-      uids.push_back(ds->uid);
-    }
+
+    Napi::Array cli_args;
+    if (!args.optional(2, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
+
+    Napi::Object options;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(3, "options", options)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+
+    GDALAsyncableJob<GDALDataset *> job(uids);
+    int src_count = src_ds.Length();
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main =
+      [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, interruptible](const GDALExecutionProgress &progress) {
+        CPLErrorReset();
+        auto psOptions = GDALBuildVRTOptionsNew(aosOptions->List(), nullptr);
+        if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        if (interruptible) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+
+        GDALDatasetH r = GDALBuildVRT(
+          dst_path.c_str(),
+          src_count,
+          gdalSrcDs.get(),
+          aosSrcDs.get() != nullptr ? aosSrcDs->List() : nullptr,
+          psOptions,
+          nullptr);
+
+        GDALBuildVRTOptionsFree(psOptions);
+        if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+        return GDALDatasetFromHandle(r);
+      };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
   }
+};
 
-  Napi::Array cli_args;
-  if (!args.optional(2, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
-    }
+} // namespace
 
-  Napi::Object options;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(3, "options", options)) return args.failed();
-  if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
-
-  GDALAsyncableJob<GDALDataset *> job(uids);
-  int src_count = src_ds.Length();
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main =
-    [dst_path, src_count, gdalSrcDs, aosSrcDs, aosOptions, interruptible](const GDALExecutionProgress &progress) {
-      CPLErrorReset();
-      auto psOptions = GDALBuildVRTOptionsNew(aosOptions->List(), nullptr);
-      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-      if (interruptible) GDALBuildVRTOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
-
-      GDALDatasetH r = GDALBuildVRT(
-        dst_path.c_str(),
-        src_count,
-        gdalSrcDs.get(),
-        aosSrcDs.get() != nullptr ? aosSrcDs->List() : nullptr,
-        psOptions,
-        nullptr);
-
-      GDALBuildVRTOptionsFree(psOptions);
-      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-      return GDALDatasetFromHandle(r);
-    };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
-
-  return job.run(info, async, 4);
-}
+GDAL_ASYNC_METHOD(Utils::buildvrt, buildvrtBody)
 
 /**
  * Library version of gdal_rasterize.
@@ -603,73 +643,81 @@ GDAL_ASYNCABLE_DEFINE(Utils::buildvrt) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
+namespace {
 
-  std::string dst_path("");
-  Napi::Object dst_ds;
+struct rasterizeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
 
-  GDALDataset *dst_raw = nullptr;
-  if (info.Length() > 1 && info[0].IsString()) {
-    if (!args.get(0, "dst", dst_path)) return args.failed();
-  } else if (info.Length() > 1 && info[0].IsObject()) {
-    if (!args.get(0, "dst", dst_ds)) return args.failed();
-    NODE_UNWRAP_CHECK(Dataset, dst_ds, dst_obj);
-    GDAL_RAW_CHECK(GDALDataset *, dst_obj, _dst_raw);
-    dst_raw = _dst_raw;
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "dst must be given").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+    std::string dst_path("");
+    Napi::Object dst_ds;
 
-  Napi::Object src;
-  if (!args.get(1, "src", src)) return args.failed();
-  NODE_UNWRAP_CHECK(Dataset, src, ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
-
-  Napi::Array cli_args;
-  if (!args.optional(2, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty())
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+    GDALDataset *dst_raw = nullptr;
+    if (info.Length() > 1 && info[0].IsString()) {
+      if (!args.get(0, "dst", dst_path)) return args.failed();
+    } else if (info.Length() > 1 && info[0].IsObject()) {
+      if (!args.get(0, "dst", dst_ds)) return args.failed();
+      NODE_UNWRAP_CHECK(Dataset, dst_ds, dst_obj);
+      GDAL_RAW_CHECK(GDALDataset *, dst_obj, _dst_raw);
+      dst_raw = _dst_raw;
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "dst must be given").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
 
-  Napi::Object options;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(3, "options", options)) return args.failed();
-  if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+    Napi::Object src;
+    if (!args.get(1, "src", src)) return args.failed();
+    NODE_UNWRAP_CHECK(Dataset, src, ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, src_raw);
 
-  GDALAsyncableJob<GDALDataset *> job(ds->uid);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main = [dst_path, dst_raw, src_raw, aosOptions, interruptible](const GDALExecutionProgress &progress) {
-    CPLErrorReset();
-    auto psOptions = GDALRasterizeOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    if (interruptible) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+    Napi::Array cli_args;
+    if (!args.optional(2, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty())
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
 
-    GDALDatasetH r = GDALRasterize(
-      dst_path.length() > 0 ? dst_path.c_str() : nullptr,
-      dst_raw != nullptr ? dst_raw : nullptr,
-      src_raw,
-      psOptions,
-      nullptr);
+    Napi::Object options;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(3, "options", options)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
 
-    GDALRasterizeOptionsFree(psOptions);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return GDALDatasetFromHandle(r);
-  };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+    GDALAsyncableJob<GDALDataset *> job(ds->uid);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main = [dst_path, dst_raw, src_raw, aosOptions, interruptible](const GDALExecutionProgress &progress) {
+      CPLErrorReset();
+      auto psOptions = GDALRasterizeOptionsNew(aosOptions->List(), nullptr);
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (interruptible) GDALRasterizeOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
 
-  return job.run(info, async, 4);
-}
+      GDALDatasetH r = GDALRasterize(
+        dst_path.length() > 0 ? dst_path.c_str() : nullptr,
+        dst_raw != nullptr ? dst_raw : nullptr,
+        src_raw,
+        psOptions,
+        nullptr);
+
+      GDALRasterizeOptionsFree(psOptions);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return GDALDatasetFromHandle(r);
+    };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 4);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Utils::rasterize, rasterizeBody)
 
 /**
  * Library version of gdaldem.
@@ -714,66 +762,74 @@ GDAL_ASYNCABLE_DEFINE(Utils::rasterize) {
  * @param {callback<Dataset>} [callback=undefined]
  * @return {Promise<Dataset>}
  */
-GDAL_ASYNCABLE_DEFINE(Utils::dem) {
-  Args args(info);
-  auto aosOptions = std::make_shared<CPLStringList>();
+namespace {
 
-  std::string dst_path;
-  if (!args.get(0, "dst_path", dst_path)) return args.failed();
+struct demBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    auto aosOptions = std::make_shared<CPLStringList>();
 
-  Napi::Object src;
-  if (!args.get(1, "src", src)) return args.failed();
-  NODE_UNWRAP_CHECK(Dataset, src, ds);
-  GDAL_RAW_CHECK(GDALDataset *, ds, raw);
+    std::string dst_path;
+    if (!args.get(0, "dst_path", dst_path)) return args.failed();
 
-  std::string mode;
-  if (!args.get(2, "mode", mode)) return args.failed();
+    Napi::Object src;
+    if (!args.get(1, "src", src)) return args.failed();
+    NODE_UNWRAP_CHECK(Dataset, src, ds);
+    GDAL_RAW_CHECK(GDALDataset *, ds, raw);
 
-  Napi::Array cli_args;
-  if (!args.optional(3, "args", cli_args)) return args.failed();
-  if (!cli_args.IsEmpty()) {
-    for (unsigned i = 0; i < cli_args.Length(); ++i) {
-      aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+    std::string mode;
+    if (!args.get(2, "mode", mode)) return args.failed();
+
+    Napi::Array cli_args;
+    if (!args.optional(3, "args", cli_args)) return args.failed();
+    if (!cli_args.IsEmpty()) {
+      for (unsigned i = 0; i < cli_args.Length(); ++i) {
+        aosOptions->AddString(node_gdal::Stringify(cli_args.Get(i)).c_str());
+      }
     }
+
+    std::string colorFilename = "";
+    if (!args.optional(4, "colorFilename", colorFilename)) return args.failed();
+
+    Napi::Object options;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
+    if (!args.optional(5, "options", options)) return args.failed();
+    if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+
+    GDALAsyncableJob<GDALDataset *> job(ds->uid);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main = [dst_path, mode, raw, colorFilename, aosOptions, interruptible](const GDALExecutionProgress &progress) {
+      CPLErrorReset();
+      auto psOptions = GDALDEMProcessingOptionsNew(aosOptions->List(), nullptr);
+      if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      if (interruptible) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
+      GDALDataset *r = GDALDatasetFromHandle(GDALDEMProcessing(
+        dst_path.c_str(),
+        GDALDatasetToHandle(raw),
+        mode.c_str(),
+        colorFilename.size() > 0 ? colorFilename.c_str() : nullptr,
+        psOptions,
+        nullptr));
+
+      GDALDEMProcessingOptionsFree(psOptions);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return GDALDatasetFromHandle(r);
+    };
+    job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
+
+    return job.run(info, node_gdal::is_async<Async>, 6);
   }
+};
 
-  std::string colorFilename = "";
-  if (!args.optional(4, "colorFilename", colorFilename)) return args.failed();
+} // namespace
 
-  Napi::Object options;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
-  if (!args.optional(5, "options", options)) return args.failed();
-  if (!args.fromCallback(options, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
-
-  GDALAsyncableJob<GDALDataset *> job(ds->uid);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main = [dst_path, mode, raw, colorFilename, aosOptions, interruptible](const GDALExecutionProgress &progress) {
-    CPLErrorReset();
-    auto psOptions = GDALDEMProcessingOptionsNew(aosOptions->List(), nullptr);
-    if (psOptions == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    if (interruptible) GDALDEMProcessingOptionsSetProgress(psOptions, ProgressTrampoline, (void *)&progress);
-    GDALDataset *r = GDALDatasetFromHandle(GDALDEMProcessing(
-      dst_path.c_str(),
-      GDALDatasetToHandle(raw),
-      mode.c_str(),
-      colorFilename.size() > 0 ? colorFilename.c_str() : nullptr,
-      psOptions,
-      nullptr));
-
-    GDALDEMProcessingOptionsFree(psOptions);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return GDALDatasetFromHandle(r);
-  };
-  job.rval = [](GDALDataset *ds, const GetFromPersistentFunc &) { return Dataset::New(ds); };
-
-  return job.run(info, async, 6);
-}
+GDAL_ASYNC_METHOD(Utils::dem, demBody)
 
 } // namespace node_gdal

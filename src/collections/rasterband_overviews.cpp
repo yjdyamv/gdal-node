@@ -79,30 +79,38 @@ NAPI_METHOD(RasterBandOverviews::toString) {
  * @param {callback<RasterBand>} [callback=undefined]
  * @return {Promise<RasterBand>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+struct getBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  NODE_UNWRAP_CHECK(RasterBand, parent, band);
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
 
-  int id;
-  if (!args.get(0, "id", id)) return args.failed();
+    NODE_UNWRAP_CHECK(RasterBand, parent, band);
 
-  GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
-  job.persist(parent);
-  job.main = [band, id](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    GDALRasterBand *result = band->get()->GetOverview(id);
-    if (result == nullptr) { throw GDALError("Specified overview not found"); }
-    return result;
-  };
-  job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {
-    return RasterBand::New(result, band->getParent());
-  };
-  return job.run(info, async, 1);
-}
+    int id;
+    if (!args.get(0, "id", id)) return args.failed();
+
+    GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
+    job.persist(parent);
+    job.main = [band, id](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      GDALRasterBand *result = band->get()->GetOverview(id);
+      if (result == nullptr) { throw GDALError("Specified overview not found"); }
+      return result;
+    };
+    job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {
+      return RasterBand::New(result, band->getParent());
+    };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandOverviews::get, getBody)
 
 /**
  * Fetch best sampling overview.
@@ -137,29 +145,37 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::get) {
  * @param {callback<RasterBand>} [callback=undefined]
  * @return {Promise<RasterBand>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::getBySampleCount) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  NODE_UNWRAP_CHECK(RasterBand, parent, band);
+struct getBySampleCountBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int n_samples;
-  if (!args.get(0, "minimum number of samples", n_samples)) return args.failed();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    NODE_UNWRAP_CHECK(RasterBand, parent, band);
 
-  GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
-  job.persist(parent);
-  job.main = [band, n_samples](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    GDALRasterBand *result = band->get()->GetRasterSampleOverview(n_samples);
-    if (result == nullptr) { throw GDALError("Specified overview not found"); }
-    return result;
-  };
-  job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {
-    return RasterBand::New(result, band->getParent());
-  };
-  return job.run(info, async, 1);
-}
+    int n_samples;
+    if (!args.get(0, "minimum number of samples", n_samples)) return args.failed();
+
+    GDALAsyncableJob<GDALRasterBand *> job(band->parent_uid);
+    job.persist(parent);
+    job.main = [band, n_samples](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      GDALRasterBand *result = band->get()->GetRasterSampleOverview(n_samples);
+      if (result == nullptr) { throw GDALError("Specified overview not found"); }
+      return result;
+    };
+    job.rval = [band](GDALRasterBand *result, const GetFromPersistentFunc &) {
+      return RasterBand::New(result, band->getParent());
+    };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandOverviews::getBySampleCount, getBySampleCountBody)
 
 /**
  * Returns the number of overviews.
@@ -180,20 +196,28 @@ GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::getBySampleCount) {
  * @param {callback<number>} [callback=undefined]
  * @return {Promise<number>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandOverviews::count) {
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  NODE_UNWRAP_CHECK(RasterBand, parent, band);
+struct countBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  GDALAsyncableJob<int> job(band->parent_uid);
-  job.persist(parent);
-  job.main = [band](const GDALExecutionProgress &) {
-    int count = band->get()->GetOverviewCount();
-    return count;
-  };
-  job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
-  return job.run(info, async, 0);
-}
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    NODE_UNWRAP_CHECK(RasterBand, parent, band);
+
+    GDALAsyncableJob<int> job(band->parent_uid);
+    job.persist(parent);
+    job.main = [band](const GDALExecutionProgress &) {
+      int count = band->get()->GetOverviewCount();
+      return count;
+    };
+    job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandOverviews::count, countBody)
 
 } // namespace node_gdal

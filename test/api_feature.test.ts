@@ -63,6 +63,17 @@ describe('gdal.Feature', () => {
       assert.equal(fields[0].name, 'newname')
       fields[0].name = 'id'
     })
+
+    it('should be read-only when retrieved from a collection', () => {
+      const field = defn.fields.get(0)
+      assert.instanceOf(field, gdal.FieldDefn)
+      assert.throws(() => {
+        field.name = 'newname'
+      }, /read-only/)
+      assert.throws(() => {
+        field.width = 3
+      }, /read-only/)
+    })
   })
 
   describe('gdal.FeatureDefn', () => {
@@ -86,6 +97,28 @@ describe('gdal.Feature', () => {
       defn.styleIgnored = true
       assert.strictEqual(defn.styleIgnored, true)
       defn.styleIgnored = false
+    })
+
+    it('should be read-only when retrieved from a feature', () => {
+      const feature = new gdal.Feature(defn)
+      const copy = feature.defn
+      assert.instanceOf(copy, gdal.FeatureDefn)
+      assert.throws(() => {
+        copy.geomIgnored = true
+      }, /read-only/)
+      assert.throws(() => {
+        copy.fields.add(new gdal.FieldDefn('extra', gdal.OFTInteger))
+      }, /read-only/)
+      assert.throws(() => {
+        copy.fields.remove(0)
+      }, /read-only/)
+    })
+
+    it('clone should not be read-only', () => {
+      const feature = new gdal.Feature(defn)
+      const writable = feature.defn.clone()
+      writable.geomIgnored = true
+      assert.isTrue(writable.geomIgnored)
     })
   })
 

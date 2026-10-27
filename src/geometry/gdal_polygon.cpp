@@ -56,7 +56,18 @@ NAPI_METHOD(Polygon::toString) {
  * @memberof Polygon
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(Polygon, getArea, Number, get_Area);
+namespace {
+// Polygon::getArea()
+struct getAreaBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<Polygon>(info, "Polygon");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Area());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(Polygon::getArea, getAreaBody)
 
 /**
  * The rings that make up the polygon geometry.

@@ -78,15 +78,15 @@ FieldDefn::~FieldDefn() {
   LOG("Disposed FieldDefn [%p]", this_.get());
 }
 
-// Currently read-only field definitions are copied.
-// Modifying a field definition that should have been
-// read-only modifies a shadow copy without any real effect.
-// TODO: Implement proper read-only objects that throw
-
+// The field definition of a layer or of a feature cannot be handed out: it
+// belongs to its parent and modifying it would modify the parent without the
+// parent knowing about it. The factory hands out a copy which is read-only
 Napi::Value FieldDefn::New(const OGRFieldDefn *def) {
   if (!def) { return node_gdal::napi_env().Null(); }
   OGRFieldDefn *copy = new OGRFieldDefn(def);
-  return FieldDefn::New(copy, true);
+  Napi::Value obj = FieldDefn::New(copy, true);
+  node_gdal::set_read_only(obj.As<Napi::Object>());
+  return obj;
 }
 
 Napi::Value FieldDefn::New(OGRFieldDefn *def, bool owned) {
@@ -192,6 +192,10 @@ NAPI_GETTER(FieldDefn::precisionGetter) {
 
 NAPI_SETTER(FieldDefn::nameSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
   if (!value.IsString()) {
     Napi::Error::New(node_gdal::napi_env(), "Name must be string").ThrowAsJavaScriptException();
     return;
@@ -202,6 +206,10 @@ NAPI_SETTER(FieldDefn::nameSetter) {
 
 NAPI_SETTER(FieldDefn::typeSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
   if (!value.IsString()) {
     Napi::Error::New(node_gdal::napi_env(), "type must be a string").ThrowAsJavaScriptException();
     return;
@@ -217,6 +225,10 @@ NAPI_SETTER(FieldDefn::typeSetter) {
 
 NAPI_SETTER(FieldDefn::justificationSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
 
   OGRJustification justification;
   if (value.IsString()) {
@@ -243,6 +255,10 @@ NAPI_SETTER(FieldDefn::justificationSetter) {
 
 NAPI_SETTER(FieldDefn::widthSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
   if (!value.IsNumber()) {
     Napi::Error::New(node_gdal::napi_env(), "width must be an integer").ThrowAsJavaScriptException();
     return;
@@ -252,6 +268,10 @@ NAPI_SETTER(FieldDefn::widthSetter) {
 
 NAPI_SETTER(FieldDefn::precisionSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
   if (!value.IsNumber()) {
     Napi::Error::New(node_gdal::napi_env(), "precision must be an integer").ThrowAsJavaScriptException();
     return;
@@ -261,6 +281,10 @@ NAPI_SETTER(FieldDefn::precisionSetter) {
 
 NAPI_SETTER(FieldDefn::ignoredSetter) {
   FieldDefn *def = node_gdal::UnwrapWrapped<FieldDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FieldDefn retrieved from a layer, a feature definition or a feature");
+    return;
+  }
   if (!value.IsBoolean()) {
     Napi::Error::New(node_gdal::napi_env(), "ignored must be a boolean").ThrowAsJavaScriptException();
     return;

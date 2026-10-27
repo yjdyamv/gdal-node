@@ -236,115 +236,123 @@ findHighest(int dimensions, std::shared_ptr<size_t[]> span, std::shared_ptr<GPtr
  * @param {callback<T>} [callback=undefined]
  * @return {Promise<T>} A `TypedArray` of values.
  */
-GDAL_ASYNCABLE_DEFINE(MDArray::read) {
-  Args args(info);
+namespace {
 
-  NODE_UNWRAP_CHECK(MDArray, info.This(), self);
+struct readBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  Napi::Object options;
-  Napi::Array origin, span, stride;
-  std::string type_name;
-  GDALDataType type = GDT_Byte;
-  GPtrDiff_t offset = 0;
+    NODE_UNWRAP_CHECK(MDArray, info.This(), self);
 
-  if (!args.get(0, "options", options)) return args.failed();
-  if (!args.from(options, "origin", origin)) return args.failed();
-  if (!args.from(options, "span", span)) return args.failed();
-  if (!args.from(options, "stride", stride)) return args.failed();
-  if (!args.from(options, "data_type", type_name)) return args.failed();
-  NODE_INT64_FROM_OBJ_OPT(options, "_offset", offset);
-  if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
+    Napi::Object options;
+    Napi::Array origin, span, stride;
+    std::string type_name;
+    GDALDataType type = GDT_Byte;
+    GPtrDiff_t offset = 0;
 
-  std::shared_ptr<GUInt64[]> gdal_origin;
-  std::shared_ptr<size_t[]> gdal_span;
-  std::shared_ptr<GPtrDiff_t[]> gdal_stride;
-  try {
-    gdal_origin = NumberArrayToSharedPtr<int64_t, GUInt64>(origin, self->dimensions);
-    gdal_span = NumberArrayToSharedPtr<int64_t, size_t>(span, self->dimensions);
-    gdal_stride = NumberArrayToSharedPtr<int64_t, GPtrDiff_t>(stride, self->dimensions);
-  } catch (const char *e) {
-    Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  GPtrDiff_t highest = findHighest(self->dimensions, gdal_span, gdal_stride, offset);
-  GPtrDiff_t lowest = findLowest(self->dimensions, gdal_span, gdal_stride, offset);
-  size_t length = (highest - (lowest < 0 ? lowest : 0)) + 1;
+    if (!args.get(0, "options", options)) return args.failed();
+    if (!args.from(options, "origin", origin)) return args.failed();
+    if (!args.from(options, "span", span)) return args.failed();
+    if (!args.from(options, "stride", stride)) return args.failed();
+    if (!args.from(options, "data_type", type_name)) return args.failed();
+    NODE_INT64_FROM_OBJ_OPT(options, "_offset", offset);
+    if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
 
-  Napi::String sym = Napi::String::New(node_gdal::napi_env(), "data");
-  Napi::Value data;
-  Napi::Object array;
-  if (options.As<Napi::Object>().HasOwnProperty(sym)) {
-    data = options.As<Napi::Object>().Get(sym);
-    if (!data.IsUndefined() && !data.IsNull()) {
+    std::shared_ptr<GUInt64[]> gdal_origin;
+    std::shared_ptr<size_t[]> gdal_span;
+    std::shared_ptr<GPtrDiff_t[]> gdal_stride;
+    try {
+      gdal_origin = NumberArrayToSharedPtr<int64_t, GUInt64>(origin, self->dimensions);
+      gdal_span = NumberArrayToSharedPtr<int64_t, size_t>(span, self->dimensions);
+      gdal_stride = NumberArrayToSharedPtr<int64_t, GPtrDiff_t>(stride, self->dimensions);
+    } catch (const char *e) {
+      Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    GPtrDiff_t highest = findHighest(self->dimensions, gdal_span, gdal_stride, offset);
+    GPtrDiff_t lowest = findLowest(self->dimensions, gdal_span, gdal_stride, offset);
+    size_t length = (highest - (lowest < 0 ? lowest : 0)) + 1;
+
+    Napi::String sym = Napi::String::New(node_gdal::napi_env(), "data");
+    Napi::Value data;
+    Napi::Object array;
+    if (options.As<Napi::Object>().HasOwnProperty(sym)) {
+      data = options.As<Napi::Object>().Get(sym);
+      if (!data.IsUndefined() && !data.IsNull()) {
+        array = data.As<Napi::Object>();
+        type = node_gdal::TypedArray::Identify(array);
+        if (type == GDT_Unknown) {
+          Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+      }
+    }
+
+    GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, self, gdal_mdarray);
+
+    // create array if no array was passed
+    if (data.IsEmpty()) {
+      if (type_name.empty()) {
+        auto exType = gdal_mdarray->GetDataType();
+        if (exType.GetClass() != GEDTC_NUMERIC) {
+          Napi::TypeError::New(node_gdal::napi_env(), "Reading of extended data types is not supported yet").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+        type = exType.GetNumericDataType();
+      }
+      data = node_gdal::TypedArray::New(type, length);
+      if (data.IsEmpty() || !data.IsObject()) {
+        node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed to allocate array");
+        return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+      }
       array = data.As<Napi::Object>();
-      type = node_gdal::TypedArray::Identify(array);
-      if (type == GDT_Unknown) {
-        Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
-        return node_gdal::napi_env().Undefined();
-      }
     }
-  }
 
-  GDAL_RAW_CHECK(std::shared_ptr<GDALMDArray>, self, gdal_mdarray);
-
-  // create array if no array was passed
-  if (data.IsEmpty()) {
-    if (type_name.empty()) {
-      auto exType = gdal_mdarray->GetDataType();
-      if (exType.GetClass() != GEDTC_NUMERIC) {
-        Napi::TypeError::New(node_gdal::napi_env(), "Reading of extended data types is not supported yet").ThrowAsJavaScriptException();
-        return node_gdal::napi_env().Undefined();
-      }
-      type = exType.GetNumericDataType();
+    if (lowest < 0) {
+      Napi::RangeError::New(node_gdal::napi_env(), "Will have to read before the start of the array").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
-    data = node_gdal::TypedArray::New(type, length);
-    if (data.IsEmpty() || !data.IsObject()) {
+
+    void *buffer = node_gdal::TypedArray::Validate(array, type, length);
+    if (!buffer) {
       node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed to allocate array");
-      return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+      return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
     }
-    array = data.As<Napi::Object>();
+
+    GDALAsyncableJob<bool> job(self->parent_uid);
+    job.persist("array", array);
+    // GDALMDArray::Read() takes no progress callback, so an operation which is
+    // already aborted can only be refused before it is started
+    Napi::Value abort_signal;
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+    if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+
+    job.main =
+      [buffer, gdal_mdarray, gdal_origin, gdal_span, gdal_stride, type, length, offset](const GDALExecutionProgress &) {
+        int bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
+        if (bytes_per_pixel == 0) { throw GDALError("Invalid GDAL data type"); }
+        CPLErrorReset();
+        GDALExtendedDataType gdal_type = GDALExtendedDataType::Create(type);
+        bool success = gdal_mdarray->Read(
+          gdal_origin.get(),
+          gdal_span.get(),
+          nullptr,
+          gdal_stride.get(),
+          gdal_type,
+          (void *)((uint8_t *)buffer + offset * bytes_per_pixel),
+          buffer,
+          length * bytes_per_pixel);
+        if (!success) { throw GDALError(CPLGetLastErrorMsg()); }
+        return success;
+      };
+    job.rval = [](bool success, const GetFromPersistentFunc &getter) { return getter("array"); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  if (lowest < 0) {
-    Napi::RangeError::New(node_gdal::napi_env(), "Will have to read before the start of the array").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+} // namespace
 
-  void *buffer = node_gdal::TypedArray::Validate(array, type, length);
-  if (!buffer) {
-    node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed to allocate array");
-    return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
-  }
-
-  GDALAsyncableJob<bool> job(self->parent_uid);
-  job.persist("array", array);
-  // GDALMDArray::Read() takes no progress callback, so an operation which is
-  // already aborted can only be refused before it is started
-  Napi::Value abort_signal;
-  if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
-  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
-
-  job.main =
-    [buffer, gdal_mdarray, gdal_origin, gdal_span, gdal_stride, type, length, offset](const GDALExecutionProgress &) {
-      int bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
-      if (bytes_per_pixel == 0) { throw GDALError("Invalid GDAL data type"); }
-      CPLErrorReset();
-      GDALExtendedDataType gdal_type = GDALExtendedDataType::Create(type);
-      bool success = gdal_mdarray->Read(
-        gdal_origin.get(),
-        gdal_span.get(),
-        nullptr,
-        gdal_stride.get(),
-        gdal_type,
-        (void *)((uint8_t *)buffer + offset * bytes_per_pixel),
-        buffer,
-        length * bytes_per_pixel);
-      if (!success) { throw GDALError(CPLGetLastErrorMsg()); }
-      return success;
-    };
-  job.rval = [](bool success, const GetFromPersistentFunc &getter) { return getter("array"); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(MDArray::read, readBody)
 
 /**
  * Get a partial view of the MDArray.
@@ -621,7 +629,19 @@ NAPI_GETTER(MDArray::descriptionGetter) {
  * @memberof MDArray
  * @type {number}
  */
-NODE_WRAPPED_GETTER_WITH_RESULT_LOCKED(MDArray, lengthGetter, Number, GetTotalElementsCount);
+namespace {
+// MDArray::lengthGetter()
+struct lengthGetterBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<MDArray>(info, "MDArray");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    return Number::New(info.Env(), obj->get()->GetTotalElementsCount());
+  }
+};
+} // namespace
+
+GDAL_SYNC_GETTER(MDArray::lengthGetter, lengthGetterBody)
 
 NAPI_GETTER(MDArray::uidGetter) {
   MDArray *ds = node_gdal::UnwrapWrapped<MDArray>(info.This().As<Napi::Object>());

@@ -44,15 +44,29 @@ void Feature::Initialize(Napi::Object target) {
 
   // METHOD(setGeometryDirectly);
   // METHOD(stealGeometry);
-  // METHOD(equals);
   // METHOD(getFieldDefn); (use defn.fields.get() instead)
   // Note: This is used mainly for testing
-  // TODO: Give node more info on the amount of memory a feature is using
-  //      Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), )
 
   target.Set("Feature", lcons);
 
   constructor() = Napi::Persistent(lcons);
+}
+
+//
+// What a feature costs, as far as it can be told from the outside: the object
+// itself, the geometries it holds and a guess at the fields. It is deliberately
+// on the low side, the point is to give the garbage collector a reason to run,
+// not to be exact.
+//
+static int64_t feature_memory(OGRFeature *feature) {
+  int64_t size = sizeof(OGRFeature);
+
+  for (int i = 0; i < feature->GetGeomFieldCount(); i++) {
+    OGRGeometry *geometry = feature->GetGeomFieldRef(i);
+    if (geometry != nullptr) size += geometry->WkbSize();
+  }
+
+  return size + static_cast<int64_t>(feature->GetFieldCount()) * 16;
 }
 
 /**
@@ -100,6 +114,8 @@ Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info) {
     LOG("Created Feature[%p]", this_);
   }
 
+  setExternalMemory(feature_memory(this_));
+
   Napi::Value fields = FeatureFields::New(info.This());
   GDAL_SET_PRIVATE(info.This(), "fields_", fields);
 }
@@ -112,6 +128,15 @@ void Feature::dispose() {
   // The handle destroys the feature, if this wrapper owns it
   LOG("Disposed Feature [%p]", this_.get());
   this_.reset();
+  setExternalMemory(0);
+}
+
+void Feature::updateMemory() {
+  if (!this_) {
+    setExternalMemory(0);
+    return;
+  }
+  setExternalMemory(feature_memory(this_));
 }
 
 // Currently read-only feature definitions are copied.
@@ -187,9 +212,6 @@ NAPI_METHOD(Feature::getFieldDefn) {
 }
 #endif
 
-// NODE_WRAPPED_METHOD_WITH_RESULT(Feature, stealGeometry, Geometry,
-// StealGeometry);
-
 /**
  * Sets the feature's geometry.
  *
@@ -214,19 +236,10 @@ NAPI_METHOD(Feature::setGeometry) {
   OGRErr err = feature->this_->SetGeometry(geom ? geom->get() : NULL);
   if (err) { NODE_THROW_OGRERR(err); }
 
+  feature->updateMemory();
+
   return node_gdal::napi_env().Undefined();
 }
-
-/**
- * Determines if the features are the same.
- *
- * @method equals
- * @instance
- * @memberof Feature
- * @param {Feature} feature
- * @return {boolean} `true` if the features are the same, `false` if different
- */
-NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(Feature, equals, Boolean, Equal, Feature, "feature");
 
 /**
  * Clones the feature.
@@ -339,6 +352,9 @@ NAPI_METHOD(Feature::setFrom) {
     NODE_THROW_OGRERR(err);
     return node_gdal::napi_env().Undefined();
   }
+
+  feature->updateMemory();
+
   return node_gdal::napi_env().Undefined();
 }
 

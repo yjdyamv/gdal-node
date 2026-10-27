@@ -110,32 +110,40 @@ NAPI_METHOD(RasterBandPixels::toString) {
  * @param {callback<number>} [callback=undefined]
  * @return {Promise<number>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::get) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct getBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y;
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  if (!args.get(0, "x", x)) return args.failed();
-  if (!args.get(1, "y", y)) return args.failed();
-  GDALRasterBand *raw = band->get();
+    int x, y;
 
-  GDALAsyncableJob<double> job(band->parent_uid);
-  job.persist(band->Value());
+    if (!args.get(0, "x", x)) return args.failed();
+    if (!args.get(1, "y", y)) return args.failed();
+    GDALRasterBand *raw = band->get();
 
-  job.main = [raw, x, y](const GDALExecutionProgress &) {
-    double val;
-    CPLErrorReset();
-    CPLErr err = raw->RasterIO(GF_Read, x, y, 1, 1, &val, 1, 1, GDT_Float64, 0, 0);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return val;
-  };
+    GDALAsyncableJob<double> job(band->parent_uid);
+    job.persist(band->Value());
 
-  job.rval = [](double val, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), val); };
-  return job.run(info, async, 2);
-}
+    job.main = [raw, x, y](const GDALExecutionProgress &) {
+      double val;
+      CPLErrorReset();
+      CPLErr err = raw->RasterIO(GF_Read, x, y, 1, 1, &val, 1, 1, GDT_Float64, 0, 0);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return val;
+    };
+
+    job.rval = [](double val, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), val); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandPixels::get, getBody)
 
 /**
  * Sets the value at the x, y coordinate.
@@ -161,33 +169,41 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::get) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::set) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct setBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y;
-  double val;
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  if (!args.get(0, "x", x)) return args.failed();
-  if (!args.get(1, "y", y)) return args.failed();
-  if (!args.get(2, "val", val)) return args.failed();
-  GDALRasterBand *raw = band->get();
+    int x, y;
+    double val;
 
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.persist(band->Value());
+    if (!args.get(0, "x", x)) return args.failed();
+    if (!args.get(1, "y", y)) return args.failed();
+    if (!args.get(2, "val", val)) return args.failed();
+    GDALRasterBand *raw = band->get();
 
-  job.main = [raw, x, y, val](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = raw->RasterIO(GF_Write, x, y, 1, 1, (void *)&val, 1, 1, GDT_Float64, 0, 0);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.persist(band->Value());
 
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
-  return job.run(info, async, 3);
-}
+    job.main = [raw, x, y, val](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = raw->RasterIO(GF_Write, x, y, 1, 1, (void *)&val, 1, 1, GDT_Float64, 0, 0);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 3);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandPixels::set, setBody)
 
 inline GDALRIOResampleAlg parseResamplingAlg(Napi::Value value) {
   if (value.IsUndefined() || value.IsNull()) { return GRIORA_NearestNeighbour; }
@@ -309,126 +325,134 @@ static inline int64_t findHighest(int64_t w, int64_t h, int64_t px, int64_t ln, 
  * @param {callback<T>} [callback=undefined]
  * @return {Promise<T>} A `TypedArray` of values.
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
-  Args args(info);
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+namespace {
 
-  int x, y, w, h;
-  int buffer_w, buffer_h;
-  int bytes_per_pixel;
-  int pixel_space, line_space;
-  int64_t size, length, offset;
-  void *data;
-  Napi::Value array;
-  Napi::Object obj;
-  Napi::FunctionReference *cb = nullptr;
-  // An internal argument, appended by the argument mangling in lib/gdal.js
-  Napi::Value abort_signal;
-  GDALDataType type;
+struct readBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  if (!args.get(0, "x_offset", x)) return args.failed();
-  if (!args.get(1, "y_offset", y)) return args.failed();
-  if (!args.get(2, "x_size", w)) return args.failed();
-  if (!args.get(3, "y_size", h)) return args.failed();
+    int x, y, w, h;
+    int buffer_w, buffer_h;
+    int bytes_per_pixel;
+    int pixel_space, line_space;
+    int64_t size, length, offset;
+    void *data;
+    Napi::Value array;
+    Napi::Object obj;
+    Napi::FunctionReference *cb = nullptr;
+    // An internal argument, appended by the argument mangling in lib/gdal.js
+    Napi::Value abort_signal;
+    GDALDataType type;
 
-  std::string type_name = "";
+    if (!args.get(0, "x_offset", x)) return args.failed();
+    if (!args.get(1, "y_offset", y)) return args.failed();
+    if (!args.get(2, "x_size", w)) return args.failed();
+    if (!args.get(3, "y_size", h)) return args.failed();
 
-  buffer_w = w;
-  buffer_h = h;
-  type = band->get()->GetRasterDataType();
-  if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
-  if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
-  if (!args.optional(7, "data_type", type_name)) return args.failed();
-  if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
+    std::string type_name = "";
 
-  if (!info[4].IsUndefined() && !info[4].IsNull()) {
-    if (!args.get(4, "data", obj)) return args.failed();
-    type = TypedArray::Identify(obj);
-    if (type == GDT_Unknown) {
-      Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
+    buffer_w = w;
+    buffer_h = h;
+    type = band->get()->GetRasterDataType();
+    if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
+    if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
+    if (!args.optional(7, "data_type", type_name)) return args.failed();
+    if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
+
+    if (!info[4].IsUndefined() && !info[4].IsNull()) {
+      if (!args.get(4, "data", obj)) return args.failed();
+      type = TypedArray::Identify(obj);
+      if (type == GDT_Unknown) {
+        Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
+        return node_gdal::napi_env().Undefined();
+      }
+    }
+
+    bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
+    if (bytes_per_pixel == 0) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid GDAL data type").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
-  }
-
-  bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
-  if (bytes_per_pixel == 0) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid GDAL data type").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  pixel_space = bytes_per_pixel;
-  if (!args.optional(8, "pixel_space", pixel_space)) return args.failed();
-  line_space = pixel_space * buffer_w;
-  if (!args.optional(9, "line_space", line_space)) return args.failed();
-  if (!args.optionalCallback(11, "progress_cb", cb)) return args.failed();
-  GDALRIOResampleAlg resampling;
-  try {
-    resampling = parseResamplingAlg(info[10]);
-  } catch (const char *e) {
-    Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  offset = 0;
-  if (!args.optional(12, "offset", offset)) return args.failed();
-  NODE_ABORT_SIGNAL_FROM_ARG_OPT(13, abort_signal);
-
-  if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
-    Napi::Error::New(node_gdal::napi_env(), "has to write before the start of the TypedArray").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  size = findHighest(buffer_w, buffer_h, pixel_space, line_space, offset) + 1;
-  // length (elements) = size / bytes_per_pixel + 1 more if it is not a perfect fit
-  length = size / bytes_per_pixel + ((size % bytes_per_pixel) ? 1 : 0);
-
-  // create array if no array was passed
-  if (obj.IsEmpty()) {
-    array = TypedArray::New(type, length);
-    if (array.IsEmpty() || !array.IsObject()) {
-      return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+    pixel_space = bytes_per_pixel;
+    if (!args.optional(8, "pixel_space", pixel_space)) return args.failed();
+    line_space = pixel_space * buffer_w;
+    if (!args.optional(9, "line_space", line_space)) return args.failed();
+    if (!args.optionalCallback(11, "progress_cb", cb)) return args.failed();
+    GDALRIOResampleAlg resampling;
+    try {
+      resampling = parseResamplingAlg(info[10]);
+    } catch (const char *e) {
+      Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
-    obj = array.As<Napi::Object>();
-  }
+    offset = 0;
+    if (!args.optional(12, "offset", offset)) return args.failed();
+    NODE_ABORT_SIGNAL_FROM_ARG_OPT(13, abort_signal);
 
-  data = TypedArray::Validate(obj, type, length);
-  if (!data) {
-    return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
-  }
+    if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
+      Napi::Error::New(node_gdal::napi_env(), "has to write before the start of the TypedArray").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    size = findHighest(buffer_w, buffer_h, pixel_space, line_space, offset) + 1;
+    // length (elements) = size / bytes_per_pixel + 1 more if it is not a perfect fit
+    length = size / bytes_per_pixel + ((size % bytes_per_pixel) ? 1 : 0);
 
-  GDALRasterBand *gdal_band = band->get();
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.persist("array", obj);
-  job.persist(band->Value());
-  job.progress = cb;
-  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  const bool interruptible = job.interruptible();
-
-  data = (uint8_t *)data + offset * bytes_per_pixel;
-  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, resampling, interruptible](
-               const GDALExecutionProgress &progress) {
-    std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
-    INIT_RASTERIO_EXTRA_ARG(*extra);
-    extra->eResampleAlg = resampling;
-    if (interruptible) {
-      extra->pfnProgress = ProgressTrampoline;
-      extra->pProgressData = (void *)&progress;
+    // create array if no array was passed
+    if (obj.IsEmpty()) {
+      array = TypedArray::New(type, length);
+      if (array.IsEmpty() || !array.IsObject()) {
+        return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+      }
+      obj = array.As<Napi::Object>();
     }
 
-    CPLErrorReset();
-    CPLErr err =
-      gdal_band->RasterIO(GF_Read, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
+    data = TypedArray::Validate(obj, type, length);
+    if (!data) {
+      return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
+    }
 
-    if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
-    return err;
-  };
+    GDALRasterBand *gdal_band = band->get();
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.persist("array", obj);
+    job.persist(band->Value());
+    job.progress = cb;
+    if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    const bool interruptible = job.interruptible();
 
-  job.rval = [](CPLErr err, const GetFromPersistentFunc &getter) {
-    return getter("array");
-  };
-  return job.run(info, async, 14);
-}
+    data = (uint8_t *)data + offset * bytes_per_pixel;
+    job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, resampling, interruptible](
+                 const GDALExecutionProgress &progress) {
+      std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
+      INIT_RASTERIO_EXTRA_ARG(*extra);
+      extra->eResampleAlg = resampling;
+      if (interruptible) {
+        extra->pfnProgress = ProgressTrampoline;
+        extra->pProgressData = (void *)&progress;
+      }
+
+      CPLErrorReset();
+      CPLErr err =
+        gdal_band->RasterIO(GF_Read, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
+
+      if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
+      return err;
+    };
+
+    job.rval = [](CPLErr err, const GetFromPersistentFunc &getter) {
+      return getter("array");
+    };
+    return job.run(info, node_gdal::is_async<Async>, 14);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandPixels::read, readBody)
 
 /**
  * @typedef {object} WriteOptions
@@ -485,102 +509,110 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::read) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct writeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y, w, h;
-  int buffer_w, buffer_h;
-  int bytes_per_pixel;
-  int pixel_space, line_space;
-  int64_t size, length, offset;
-  void *data;
-  Napi::Object passed_array;
-  GDALDataType type;
-  Napi::FunctionReference *cb = nullptr;
-  // An internal argument, appended by the argument mangling in lib/gdal.js
-  Napi::Value abort_signal;
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  if (!args.get(0, "x_offset", x)) return args.failed();
-  if (!args.get(1, "y_offset", y)) return args.failed();
-  if (!args.get(2, "x_size", w)) return args.failed();
-  if (!args.get(3, "y_size", h)) return args.failed();
-  if (!args.get(4, "data", passed_array)) return args.failed();
+    int x, y, w, h;
+    int buffer_w, buffer_h;
+    int bytes_per_pixel;
+    int pixel_space, line_space;
+    int64_t size, length, offset;
+    void *data;
+    Napi::Object passed_array;
+    GDALDataType type;
+    Napi::FunctionReference *cb = nullptr;
+    // An internal argument, appended by the argument mangling in lib/gdal.js
+    Napi::Value abort_signal;
 
-  buffer_w = w;
-  buffer_h = h;
-  if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
-  if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
+    if (!args.get(0, "x_offset", x)) return args.failed();
+    if (!args.get(1, "y_offset", y)) return args.failed();
+    if (!args.get(2, "x_size", w)) return args.failed();
+    if (!args.get(3, "y_size", h)) return args.failed();
+    if (!args.get(4, "data", passed_array)) return args.failed();
 
-  type = TypedArray::Identify(passed_array);
-  if (type == GDT_Unknown) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+    buffer_w = w;
+    buffer_h = h;
+    if (!args.optional(5, "buffer_width", buffer_w)) return args.failed();
+    if (!args.optional(6, "buffer_height", buffer_h)) return args.failed();
 
-  bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
-  if (bytes_per_pixel == 0) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid GDAL data type").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  pixel_space = bytes_per_pixel;
-  if (!args.optional(7, "pixel_space", pixel_space)) return args.failed();
-  line_space = pixel_space * buffer_w;
-  if (!args.optional(8, "line_space", line_space)) return args.failed();
-  if (!args.optionalCallback(9, "progress_cb", cb)) return args.failed();
-  offset = 0;
-  if (!args.optional(10, "offset", offset)) return args.failed();
-  NODE_ABORT_SIGNAL_FROM_ARG_OPT(11, abort_signal);
-
-  if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
-    Napi::Error::New(node_gdal::napi_env(), "has to read before the start of the TypedArray").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  size = findHighest(buffer_w, buffer_h, pixel_space, line_space, offset) + 1;
-  // length (elements) = size / bytes_per_pixel + 1 more if it is not a perfect fit
-  length = size / bytes_per_pixel + ((size % bytes_per_pixel) ? 1 : 0);
-
-  data = TypedArray::Validate(passed_array, type, length);
-  if (!data) {
-    return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
-  }
-
-  GDALRasterBand *gdal_band = band->get();
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.persist("array", passed_array);
-  job.persist(band->Value());
-  if (cb) {
-    job.persist(cb->Value());
-    job.progress = cb;
-  }
-  if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  const bool interruptible = job.interruptible();
-
-  data = (uint8_t *)data + offset * bytes_per_pixel;
-  job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, interruptible](
-               const GDALExecutionProgress &progress) {
-    std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
-    INIT_RASTERIO_EXTRA_ARG(*extra);
-    if (interruptible) {
-      extra->pfnProgress = ProgressTrampoline;
-      extra->pProgressData = (void *)&progress;
+    type = TypedArray::Identify(passed_array);
+    if (type == GDT_Unknown) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
 
-    CPLErrorReset();
-    CPLErr err =
-      gdal_band->RasterIO(GF_Write, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
-    if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
-    return err;
-  };
-  job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
+    bytes_per_pixel = GDALGetDataTypeSizeBytes(type);
+    if (bytes_per_pixel == 0) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid GDAL data type").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    pixel_space = bytes_per_pixel;
+    if (!args.optional(7, "pixel_space", pixel_space)) return args.failed();
+    line_space = pixel_space * buffer_w;
+    if (!args.optional(8, "line_space", line_space)) return args.failed();
+    if (!args.optionalCallback(9, "progress_cb", cb)) return args.failed();
+    offset = 0;
+    if (!args.optional(10, "offset", offset)) return args.failed();
+    NODE_ABORT_SIGNAL_FROM_ARG_OPT(11, abort_signal);
 
-  return job.run(info, async, 12);
-}
+    if (findLowest(buffer_w, buffer_h, pixel_space, line_space, offset) < 0) {
+      Napi::Error::New(node_gdal::napi_env(), "has to read before the start of the TypedArray").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    size = findHighest(buffer_w, buffer_h, pixel_space, line_space, offset) + 1;
+    // length (elements) = size / bytes_per_pixel + 1 more if it is not a perfect fit
+    length = size / bytes_per_pixel + ((size % bytes_per_pixel) ? 1 : 0);
+
+    data = TypedArray::Validate(passed_array, type, length);
+    if (!data) {
+      return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
+    }
+
+    GDALRasterBand *gdal_band = band->get();
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.persist("array", passed_array);
+    job.persist(band->Value());
+    if (cb) {
+      job.persist(cb->Value());
+      job.progress = cb;
+    }
+    if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    const bool interruptible = job.interruptible();
+
+    data = (uint8_t *)data + offset * bytes_per_pixel;
+    job.main = [gdal_band, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, interruptible](
+                 const GDALExecutionProgress &progress) {
+      std::shared_ptr<GDALRasterIOExtraArg> extra(new GDALRasterIOExtraArg);
+      INIT_RASTERIO_EXTRA_ARG(*extra);
+      if (interruptible) {
+        extra->pfnProgress = ProgressTrampoline;
+        extra->pProgressData = (void *)&progress;
+      }
+
+      CPLErrorReset();
+      CPLErr err =
+        gdal_band->RasterIO(GF_Write, x, y, w, h, data, buffer_w, buffer_h, type, pixel_space, line_space, extra.get());
+      if (err != CE_None) throw GDALError(CPLGetLastErrorMsg());
+      return err;
+    };
+    job.rval = [](CPLErr, const GetFromPersistentFunc &getter) { return getter("array"); };
+
+    return job.run(info, node_gdal::is_async<Async>, 12);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandPixels::write, writeBody)
 
 /**
  * Reads a block of pixels.
@@ -610,54 +642,62 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::write) {
  * @return {Promise<T>} A `TypedArray` of values.
  */
 
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct readBlockBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y, w = 0, h = 0;
-  if (!args.get(0, "block_x_offset", x)) return args.failed();
-  if (!args.get(1, "block_y_offset", y)) return args.failed();
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  band->get()->GetBlockSize(&w, &h);
-  int64_t size = w * h;
+    int x, y, w = 0, h = 0;
+    if (!args.get(0, "block_x_offset", x)) return args.failed();
+    if (!args.get(1, "block_y_offset", y)) return args.failed();
 
-  GDALDataType type = band->get()->GetRasterDataType();
+    band->get()->GetBlockSize(&w, &h);
+    int64_t size = w * h;
 
-  Napi::Value array;
-  Napi::Object obj;
+    GDALDataType type = band->get()->GetRasterDataType();
 
-  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
-    if (!args.get(2, "data", obj)) return args.failed();
-    array = obj;
-  } else {
-    array = TypedArray::New(type, size);
-    if (array.IsEmpty() || !array.IsObject()) {
-      return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+    Napi::Value array;
+    Napi::Object obj;
+
+    if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
+      if (!args.get(2, "data", obj)) return args.failed();
+      array = obj;
+    } else {
+      array = TypedArray::New(type, size);
+      if (array.IsEmpty() || !array.IsObject()) {
+        return node_gdal::napi_env().Undefined(); // TypedArray::New threw an error
+      }
+      obj = array.As<Napi::Object>();
     }
-    obj = array.As<Napi::Object>();
+
+    void *data = TypedArray::Validate(obj, type, size);
+    if (!data) {
+      return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
+    }
+
+    GDALRasterBand *gdal_band = band->get();
+
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.persist("array", obj);
+    job.persist(band->Value());
+    job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = gdal_band->ReadBlock(x, y, data);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &getter) { return getter("array"); };
+    return job.run(info, node_gdal::is_async<Async>, 3);
   }
+};
 
-  void *data = TypedArray::Validate(obj, type, size);
-  if (!data) {
-    return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
-  }
+} // namespace
 
-  GDALRasterBand *gdal_band = band->get();
-
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.persist("array", obj);
-  job.persist(band->Value());
-  job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = gdal_band->ReadBlock(x, y, data);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &getter) { return getter("array"); };
-  return job.run(info, async, 3);
-}
+GDAL_ASYNC_METHOD(RasterBandPixels::readBlock, readBlockBody)
 
 /**
  * Writes a block of pixels.
@@ -685,42 +725,50 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::readBlock) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct writeBlockBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y, w = 0, h = 0;
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  band->get()->GetBlockSize(&w, &h);
-  int64_t size = w * h;
+    int x, y, w = 0, h = 0;
 
-  if (!args.get(0, "block_x_offset", x)) return args.failed();
-  if (!args.get(1, "block_y_offset", y)) return args.failed();
+    band->get()->GetBlockSize(&w, &h);
+    int64_t size = w * h;
 
-  Napi::Object obj;
-  if (!args.get(2, "data", obj)) return args.failed();
+    if (!args.get(0, "block_x_offset", x)) return args.failed();
+    if (!args.get(1, "block_y_offset", y)) return args.failed();
 
-  // validate array
-  void *data = TypedArray::Validate(obj, band->get()->GetRasterDataType(), size);
-  if (!data) {
-    return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
+    Napi::Object obj;
+    if (!args.get(2, "data", obj)) return args.failed();
+
+    // validate array
+    void *data = TypedArray::Validate(obj, band->get()->GetRasterDataType(), size);
+    if (!data) {
+      return node_gdal::napi_env().Undefined(); // TypedArray::Validate threw an error
+    }
+
+    GDALRasterBand *gdal_band = band->get();
+
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.persist(obj, band->Value());
+    job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = gdal_band->WriteBlock(x, y, data);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 3);
   }
+};
 
-  GDALRasterBand *gdal_band = band->get();
+} // namespace
 
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.persist(obj, band->Value());
-  job.main = [gdal_band, x, y, data](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = gdal_band->WriteBlock(x, y, data);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
-  return job.run(info, async, 3);
-}
+GDAL_ASYNC_METHOD(RasterBandPixels::writeBlock, writeBlockBody)
 
 /**
  * Clamp the block size for a given block offset.
@@ -750,37 +798,45 @@ GDAL_ASYNCABLE_DEFINE(RasterBandPixels::writeBlock) {
  * @return {Promise<xyz>} A size object.
  */
 
-GDAL_ASYNCABLE_DEFINE(RasterBandPixels::clampBlock) {
-  Args args(info);
+namespace {
 
-  RasterBand *band;
-  if ((band = parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
+struct clampBlockBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  int x, y;
-  if (!args.get(0, "block_x_offset", x)) return args.failed();
-  if (!args.get(1, "block_y_offset", y)) return args.failed();
+    RasterBand *band;
+    if ((band = RasterBandPixels::parent(info)) == nullptr) return node_gdal::napi_env().Undefined();
 
-  struct xy {
     int x, y;
-  };
-  GDALRasterBand *gdal_band = band->get();
-  GDALAsyncableJob<xy> job(band->parent_uid);
-  job.persist(band->Value());
-  job.main = [gdal_band, x, y](const GDALExecutionProgress &) {
-    xy r;
-    CPLErrorReset();
-    CPLErr err = gdal_band->GetActualBlockSize(x, y, &r.x, &r.y);
-    if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
-    return r;
-  };
-  job.rval = [](xy r, const GetFromPersistentFunc &) {
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
-    return result.As<Napi::Value>();
-  };
-  return job.run(info, async, 2);
-}
+    if (!args.get(0, "block_x_offset", x)) return args.failed();
+    if (!args.get(1, "block_y_offset", y)) return args.failed();
+
+    struct xy {
+      int x, y;
+    };
+    GDALRasterBand *gdal_band = band->get();
+    GDALAsyncableJob<xy> job(band->parent_uid);
+    job.persist(band->Value());
+    job.main = [gdal_band, x, y](const GDALExecutionProgress &) {
+      xy r;
+      CPLErrorReset();
+      CPLErr err = gdal_band->GetActualBlockSize(x, y, &r.x, &r.y);
+      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      return r;
+    };
+    job.rval = [](xy r, const GetFromPersistentFunc &) {
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
+      return result.As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBandPixels::clampBlock, clampBlockBody)
 
 /**
  * Returns the parent raster band.

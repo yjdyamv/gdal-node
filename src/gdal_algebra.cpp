@@ -92,107 +92,116 @@ void Initialize(Napi::Object target) {
   }
 
 #define GDAL_ALGEBRA_UNARY_OP(NAME, OPERATOR)                                                                          \
-  GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
-    Args args(info);                                                                                                   \
-    RasterBand *arg;                                                                                                   \
+  struct NAME##Body : node_gdal::AsyncMethodBody {                                                                     \
+    template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {                       \
+      Args args(info);                                                                                                 \
+      RasterBand *arg;                                                                                                 \
                                                                                                                        \
-    if (!args.getWrapped(0, "Argument", "RasterBand", arg)) { return args.failed(); }                                  \
+      if (!args.getWrapped(0, "Argument", "RasterBand", arg)) { return args.failed(); }                                \
                                                                                                                        \
-    GDALAsyncableJob<GDALRasterBand *> job(arg->parent_uid);                                                           \
-    job.persist(arg->Value());                                                                                        \
+      GDALAsyncableJob<GDALRasterBand *> job(arg->parent_uid);                                                         \
+      job.persist(arg->Value());                                                                                       \
                                                                                                                        \
-    GDALRasterBand *raw = arg->get();                                                                                  \
-    GDALDataset *source_ds = raw->GetDataset();                                                                        \
-    job.main = [raw](const GDALExecutionProgress &) { return new GDALComputedRasterBand(OPERATOR(*raw)); };            \
-    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
-      return WrapComputedBand(r, source_ds);                                                                           \
-    };                                                                                                                 \
-    return job.run(info, async, 1);                                                                                           \
-  }
+      GDALRasterBand *raw = arg->get();                                                                                \
+      GDALDataset *source_ds = raw->GetDataset();                                                                      \
+      job.main = [raw](const GDALExecutionProgress &) { return new GDALComputedRasterBand(OPERATOR(*raw)); };          \
+      job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                       \
+        return WrapComputedBand(r, source_ds);                                                                         \
+      };                                                                                                               \
+      return job.run(info, node_gdal::is_async<Async>, 1);                                                             \
+    }                                                                                                                  \
+  };                                                                                                                   \
+GDAL_ASYNC_METHOD(NAME, NAME##Body)
 
 #define GDAL_ALGEBRA_BINARY_OP(NAME, OPERATOR)                                                                         \
-  GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
-    Args args(info);                                                                                                   \
-    RasterBand *arg1_band, *arg2_band;                                                                                 \
-    double arg1_number, arg2_number;                                                                                   \
+  struct NAME##Body : node_gdal::AsyncMethodBody {                                                                     \
+    template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {                       \
+      Args args(info);                                                                                                 \
+      RasterBand *arg1_band, *arg2_band;                                                                               \
+      double arg1_number, arg2_number;                                                                                 \
                                                                                                                        \
-    NODE_ALGEBRA_ARG(0, arg1);                                                                                         \
-    NODE_ALGEBRA_ARG(1, arg2);                                                                                         \
+      NODE_ALGEBRA_ARG(0, arg1);                                                                                       \
+      NODE_ALGEBRA_ARG(1, arg2);                                                                                       \
                                                                                                                        \
-    std::vector<long> ds_uids = {};                                                                                    \
-    if (arg1_band) ds_uids.push_back(arg1_band->parent_uid);                                                           \
-    if (arg2_band) ds_uids.push_back(arg2_band->parent_uid);                                                           \
-    GDALAsyncableJob<GDALRasterBand *> job(ds_uids);                                                                   \
-    if (arg1_band) job.persist(arg1_band->Value());                                                                   \
-    if (arg2_band) job.persist(arg2_band->Value());                                                                   \
+      std::vector<long> ds_uids = {};                                                                                  \
+      if (arg1_band) ds_uids.push_back(arg1_band->parent_uid);                                                         \
+      if (arg2_band) ds_uids.push_back(arg2_band->parent_uid);                                                         \
+      GDALAsyncableJob<GDALRasterBand *> job(ds_uids);                                                                 \
+      if (arg1_band) job.persist(arg1_band->Value());                                                                  \
+      if (arg2_band) job.persist(arg2_band->Value());                                                                  \
                                                                                                                        \
-    RasterBand *first_band = arg1_band ? arg1_band : arg2_band;                                                        \
-    GDALDataset *source_ds = first_band ? first_band->get()->GetDataset() : nullptr;                                   \
-    if (arg1_band && arg2_band) {                                                                                      \
-      GDALRasterBand *arg1 = arg1_band->get();                                                                         \
-      GDALRasterBand *arg2 = arg2_band->get();                                                                         \
-      job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                         \
-        return new GDALComputedRasterBand(OPERATOR(*arg1, *arg2));                                                     \
+      RasterBand *first_band = arg1_band ? arg1_band : arg2_band;                                                      \
+      GDALDataset *source_ds = first_band ? first_band->get()->GetDataset() : nullptr;                                 \
+      if (arg1_band && arg2_band) {                                                                                    \
+        GDALRasterBand *arg1 = arg1_band->get();                                                                       \
+        GDALRasterBand *arg2 = arg2_band->get();                                                                       \
+        job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                       \
+          return new GDALComputedRasterBand(OPERATOR(*arg1, *arg2));                                                   \
+        };                                                                                                             \
+      } else if (arg1_band) {                                                                                          \
+        GDALRasterBand *arg1 = arg1_band->get();                                                                       \
+        double arg2 = arg2_number;                                                                                     \
+        job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                       \
+          return new GDALComputedRasterBand(OPERATOR(*arg1, arg2));                                                    \
+        };                                                                                                             \
+      } else if (arg2_band) {                                                                                          \
+        double arg1 = arg1_number;                                                                                     \
+        GDALRasterBand *arg2 = arg2_band->get();                                                                       \
+        job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                       \
+          return new GDALComputedRasterBand(OPERATOR(arg1, *arg2));                                                    \
+        };                                                                                                             \
+      } else {                                                                                                         \
+        Napi::Error::New(node_gdal::napi_env(), "At least one RasterBand must be given").ThrowAsJavaScriptException(); \
+        return node_gdal::napi_env().Undefined();                                                                      \
+      }                                                                                                                \
+                                                                                                                       \
+      job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                       \
+        return WrapComputedBand(r, source_ds);                                                                         \
       };                                                                                                               \
-    } else if (arg1_band) {                                                                                            \
-      GDALRasterBand *arg1 = arg1_band->get();                                                                         \
-      double arg2 = arg2_number;                                                                                       \
-      job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                         \
-        return new GDALComputedRasterBand(OPERATOR(*arg1, arg2));                                                      \
-      };                                                                                                               \
-    } else if (arg2_band) {                                                                                            \
-      double arg1 = arg1_number;                                                                                       \
-      GDALRasterBand *arg2 = arg2_band->get();                                                                         \
-      job.main = [arg1, arg2](const GDALExecutionProgress &) {                                                         \
-        return new GDALComputedRasterBand(OPERATOR(arg1, *arg2));                                                      \
-      };                                                                                                               \
-    } else {                                                                                                           \
-      Napi::Error::New(node_gdal::napi_env(), "At least one RasterBand must be given").ThrowAsJavaScriptException();                                                        \
-      return node_gdal::napi_env().Undefined();                                                                        \
+      return job.run(info, node_gdal::is_async<Async>, 2);                                                             \
     }                                                                                                                  \
-                                                                                                                       \
-    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
-      return WrapComputedBand(r, source_ds);                                                                           \
-    };                                                                                                                 \
-    return job.run(info, async, 2);                                                                                           \
-  }
+  };                                                                                                                   \
+GDAL_ASYNC_METHOD(NAME, NAME##Body)
 
 #define GDAL_ALGEBRA_VARIADIC_BANDONLY_OP(NAME, OPERATOR)                                                              \
-  GDAL_ASYNCABLE_DEFINE(NAME) {                                                                                        \
-    Args args(info);                                                                                                   \
-    std::vector<RasterBand *> args_band;                                                                               \
-    std::vector<long> uids;                                                                                            \
+  struct NAME##Body : node_gdal::AsyncMethodBody {                                                                     \
+    template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {                       \
+      Args args(info);                                                                                                 \
+      std::vector<RasterBand *> args_band;                                                                             \
+      std::vector<long> uids;                                                                                          \
                                                                                                                        \
-    for (int i = 0; i < info.Length(); i++) {                                                                          \
-      if (info[i].IsFunction()) break;                                                                                \
-      RasterBand *arg_band;                                                                                            \
-      if (!args.getWrapped(i, "Argument", "RasterBand", arg_band)) { return args.failed(); }                           \
-      args_band.push_back(arg_band);                                                                                   \
-      uids.push_back(arg_band->parent_uid);                                                                            \
-    }                                                                                                                  \
-    if (args_band.size() < 2) {                                                                                        \
-      Napi::Error::New(node_gdal::napi_env(), "At least two arguments must be given").ThrowAsJavaScriptException();                                                         \
-      return node_gdal::napi_env().Undefined();                                                                        \
-    }                                                                                                                  \
-    GDALDataset *source_ds = args_band[0]->get()->GetDataset();                                                        \
-    GDALAsyncableJob<GDALRasterBand *> job(uids);                                                                      \
-    GDALRasterBandH *handles = new GDALRasterBandH[args_band.size()];                                                  \
-    size_t i = 0;                                                                                                      \
-    for (auto arg : args_band) {                                                                                       \
-      job.persist(arg->Value());                                                                                      \
-      handles[i++] = GDALRasterBand::ToHandle(arg->get());                                                             \
-    }                                                                                                                  \
-    auto band_handles = std::shared_ptr<GDALRasterBandH[]>{handles};                                                   \
+      for (int i = 0; i < info.Length(); i++) {                                                                        \
+        if (info[i].IsFunction()) break;                                                                               \
+        RasterBand *arg_band;                                                                                          \
+        if (!args.getWrapped(i, "Argument", "RasterBand", arg_band)) { return args.failed(); }                         \
+        args_band.push_back(arg_band);                                                                                 \
+        uids.push_back(arg_band->parent_uid);                                                                          \
+      }                                                                                                                \
+      if (args_band.size() < 2) {                                                                                      \
+        Napi::Error::New(node_gdal::napi_env(), "At least two arguments must be given").ThrowAsJavaScriptException();  \
+        return node_gdal::napi_env().Undefined();                                                                      \
+      }                                                                                                                \
+      GDALDataset *source_ds = args_band[0]->get()->GetDataset();                                                      \
+      GDALAsyncableJob<GDALRasterBand *> job(uids);                                                                    \
+      GDALRasterBandH *handles = new GDALRasterBandH[args_band.size()];                                                \
+      size_t i = 0;                                                                                                    \
+      for (auto arg : args_band) {                                                                                     \
+        job.persist(arg->Value());                                                                                     \
+        handles[i++] = GDALRasterBand::ToHandle(arg->get());                                                           \
+      }                                                                                                                \
+      auto band_handles = std::shared_ptr<GDALRasterBandH[]>{handles};                                                 \
                                                                                                                        \
-    job.main = [band_handles, i](const GDALExecutionProgress &) {                                                      \
-      return GDALRasterBand::FromHandle(OPERATOR(i, band_handles.get()));                                              \
-    };                                                                                                                 \
+      job.main = [band_handles, i](const GDALExecutionProgress &) {                                                    \
+        return GDALRasterBand::FromHandle(OPERATOR(i, band_handles.get()));                                            \
+      };                                                                                                               \
                                                                                                                        \
-    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                         \
-      return WrapComputedBand(r, source_ds);                                                                           \
-    };                                                                                                                 \
-    return job.run(info, async, i);                                                                                           \
-  }
+      job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {                                       \
+        return WrapComputedBand(r, source_ds);                                                                         \
+      };                                                                                                               \
+      return job.run(info, node_gdal::is_async<Async>, i);                                                             \
+    }                                                                                                                  \
+  };                                                                                                                   \
+GDAL_ASYNC_METHOD(NAME, NAME##Body)
 
 /**
  * Create a RasterBand that is the absolute value of the argument.
@@ -776,55 +785,63 @@ GDAL_ALGEBRA_VARIADIC_BANDONLY_OP(gdal_mean, GDALMeanOfNBands)
  * @param {RasterBand | number} arg3 Else value.
  * @return {Promise<RasterBand>}
  */
-GDAL_ASYNCABLE_DEFINE(ifThenElse) {
-  Args args(info);
-  RasterBand *arg1_band, *arg2_band, *arg3_band;
-  double arg2_number, arg3_number;
+namespace {
 
-  if (!args.getWrapped(0, "First argument", "RasterBand", arg1_band)) return args.failed();
-  NODE_ALGEBRA_ARG(1, arg2);
-  NODE_ALGEBRA_ARG(2, arg3);
+struct ifThenElseBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    RasterBand *arg1_band, *arg2_band, *arg3_band;
+    double arg2_number, arg3_number;
 
-  std::vector<long> ds_uids = {arg1_band->parent_uid};
-  if (arg2_band) ds_uids.push_back(arg2_band->parent_uid);
-  if (arg3_band) ds_uids.push_back(arg3_band->parent_uid);
-  GDALAsyncableJob<GDALRasterBand *> job(ds_uids);
-  job.persist(arg1_band->Value());
-  if (arg2_band) job.persist(arg2_band->Value());
-  if (arg3_band) job.persist(arg3_band->Value());
+    if (!args.getWrapped(0, "First argument", "RasterBand", arg1_band)) return args.failed();
+    NODE_ALGEBRA_ARG(1, arg2);
+    NODE_ALGEBRA_ARG(2, arg3);
 
-  GDALRasterBand *arg1 = arg1_band->get();
-  GDALDataset *source_ds = arg1->GetDataset();
-  if (arg2_band && arg3_band) {
-    GDALRasterBand *arg2 = arg2_band->get();
-    GDALRasterBand *arg3 = arg3_band->get();
-    job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
-      return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, *arg2, *arg3));
+    std::vector<long> ds_uids = {arg1_band->parent_uid};
+    if (arg2_band) ds_uids.push_back(arg2_band->parent_uid);
+    if (arg3_band) ds_uids.push_back(arg3_band->parent_uid);
+    GDALAsyncableJob<GDALRasterBand *> job(ds_uids);
+    job.persist(arg1_band->Value());
+    if (arg2_band) job.persist(arg2_band->Value());
+    if (arg3_band) job.persist(arg3_band->Value());
+
+    GDALRasterBand *arg1 = arg1_band->get();
+    GDALDataset *source_ds = arg1->GetDataset();
+    if (arg2_band && arg3_band) {
+      GDALRasterBand *arg2 = arg2_band->get();
+      GDALRasterBand *arg3 = arg3_band->get();
+      job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
+        return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, *arg2, *arg3));
+      };
+    } else if (arg2_band) {
+      GDALRasterBand *arg2 = arg2_band->get();
+      double arg3 = arg3_number;
+      job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
+        return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, *arg2, arg3));
+      };
+    } else if (arg3_band) {
+      double arg2 = arg2_number;
+      GDALRasterBand *arg3 = arg3_band->get();
+      job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
+        return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, arg2, *arg3));
+      };
+    } else {
+      double arg2 = arg2_number;
+      double arg3 = arg3_number;
+      job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
+        return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, arg2, arg3));
+      };
+    }
+    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
+      return WrapComputedBand(r, source_ds);
     };
-  } else if (arg2_band) {
-    GDALRasterBand *arg2 = arg2_band->get();
-    double arg3 = arg3_number;
-    job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
-      return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, *arg2, arg3));
-    };
-  } else if (arg3_band) {
-    double arg2 = arg2_number;
-    GDALRasterBand *arg3 = arg3_band->get();
-    job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
-      return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, arg2, *arg3));
-    };
-  } else {
-    double arg2 = arg2_number;
-    double arg3 = arg3_number;
-    job.main = [arg1, arg2, arg3](const GDALExecutionProgress &) {
-      return new GDALComputedRasterBand(gdal::IfThenElse(*arg1, arg2, arg3));
-    };
+    return job.run(info, node_gdal::is_async<Async>, 3);
   }
-  job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
-    return WrapComputedBand(r, source_ds);
-  };
-  return job.run(info, async, 3);
-}
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(ifThenElse, ifThenElseBody)
 
 /**
  * Create a RasterBand with data converted to a new type.
@@ -850,33 +867,41 @@ GDAL_ASYNCABLE_DEFINE(ifThenElse) {
  * @param {string} type GDAL data type
  * @return {Promise<RasterBand>}
  */
-GDAL_ASYNCABLE_DEFINE(asType) {
-  Args args(info);
-  RasterBand *arg_band;
-  std::string type_name;
-  GDALDataType type;
+namespace {
 
-  if (!args.getWrapped(0, "Argument", "RasterBand", arg_band)) return args.failed();
+struct asTypeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    RasterBand *arg_band;
+    std::string type_name;
+    GDALDataType type;
 
-  if (!args.get(1, "Data Type", type_name)) return args.failed();
-  type = GDALGetDataTypeByName(type_name.c_str());
-  if (type == GDT_Unknown) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid data type").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    if (!args.getWrapped(0, "Argument", "RasterBand", arg_band)) return args.failed();
+
+    if (!args.get(1, "Data Type", type_name)) return args.failed();
+    type = GDALGetDataTypeByName(type_name.c_str());
+    if (type == GDT_Unknown) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid data type").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALAsyncableJob<GDALRasterBand *> job(arg_band->parent_uid);
+    job.persist(arg_band->Value());
+    GDALRasterBand *arg = arg_band->get();
+    GDALDataset *source_ds = arg->GetDataset();
+
+    job.main = [arg, type](const GDALExecutionProgress &) { return new GDALComputedRasterBand(arg->AsType(type)); };
+
+    job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
+      return WrapComputedBand(r, source_ds);
+    };
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  GDALAsyncableJob<GDALRasterBand *> job(arg_band->parent_uid);
-  job.persist(arg_band->Value());
-  GDALRasterBand *arg = arg_band->get();
-  GDALDataset *source_ds = arg->GetDataset();
+} // namespace
 
-  job.main = [arg, type](const GDALExecutionProgress &) { return new GDALComputedRasterBand(arg->AsType(type)); };
-
-  job.rval = [source_ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
-    return WrapComputedBand(r, source_ds);
-  };
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(asType, asTypeBody)
 
 } // namespace Algebra
 } // namespace node_gdal

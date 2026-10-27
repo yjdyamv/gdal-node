@@ -71,6 +71,17 @@ NAPI_METHOD(MultiPolygon::unionCascaded) {
  * @memberof MultiPolygon
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(MultiPolygon, getArea, Number, get_Area);
+namespace {
+// MultiPolygon::getArea()
+struct getAreaBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<MultiPolygon>(info, "MultiPolygon");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Area());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(MultiPolygon::getArea, getAreaBody)
 
 } // namespace node_gdal

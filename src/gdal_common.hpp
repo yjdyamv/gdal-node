@@ -344,7 +344,7 @@ inline void ThrowOverPending(Napi::Env env, const char *message) {
 }
 
 //
-// The NODE_WRAPPED_*_WITH_RESULT macros name the JS type the result has to be
+// The result_type of a method body names the JS type the result has to be
 // converted to. The old binding returned a v8 local from each of them, so the
 // names are kept - but they cannot be resolved through ToNapi, which
 // dispatches on the C++ type: OGRBoolean is an int, and every method returning
@@ -432,13 +432,15 @@ template <typename T> inline bool IsInstanceOf(const Napi::Value &obj) {
 
 //
 // Every JS-visible class derives from this instead of Napi::ObjectWrap<T>
-// directly, for two reasons:
+// directly, for three reasons:
 //
 //  * the message thrown by a constructor called without `new` is asserted by
 //    the test suite (test/api_classes.test.ts), and node-addon-api's own
 //    wording ("Class constructors cannot be invoked without 'new'") does not
 //    match what the old binding used to throw;
-//  * it gives the classes a single place for the shared constructor plumbing.
+//  * it gives the classes a single place for the shared constructor plumbing;
+//  * the memory which the wrapped object holds is memory V8 knows nothing
+//    about, so the wrapper needs a place where it can report it.
 //
 template <typename T> class GDALObject : public Napi::ObjectWrap<T> {
     public:
@@ -450,6 +452,31 @@ template <typename T> class GDALObject : public Napi::ObjectWrap<T> {
       .ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
+
+  //
+  // GDAL allocates memory on our behalf which V8 cannot see - a dataset keeps
+  // the blocks of its bands, a feature keeps its geometries - so a process which
+  // holds a few hundred wrapped objects looks idle to the garbage collector,
+  // which then has no reason to run and collect the wrappers which nobody uses.
+  // Every wrapper reports what it holds when that changes, and the base class
+  // gives back whatever is left once the wrapper is gone.
+  //
+  void setExternalMemory(int64_t size) {
+    if (size == size_) return;
+    Napi::MemoryManagement::AdjustExternalMemory(this->Env(), size - size_);
+    size_ = size;
+  }
+
+  int64_t externalMemory() const {
+    return size_;
+  }
+
+  virtual ~GDALObject() {
+    setExternalMemory(0);
+  }
+
+    private:
+  int64_t size_ = 0;
 };
 
 // ----- private property keys -------
@@ -507,6 +534,33 @@ inline Napi::Symbol PrivateKey(Napi::Env env, const char *name) {
 #define GDAL_SET_PRIVATE(obj, name, value)                                                                             \
   (obj).As<Napi::Object>().Set(node_gdal::PrivateKey((obj).Env(), name), value)
 #define GDAL_GET_PRIVATE(obj, name) (obj).As<Napi::Object>().Get(node_gdal::PrivateKey((obj).Env(), name))
+
+namespace node_gdal {
+
+//
+// The getters which hand out the object of a parent hand out a copy of it, so
+// that the object of the parent cannot be modified behind its back. A write to
+// the copy would succeed and change nothing, so the copy is marked read-only and
+// refuses to be modified, which is the only way the user can find out that the
+// write did not do what it looked like it did.
+//
+inline void set_read_only(Napi::Value obj) {
+  GDAL_SET_PRIVATE(obj, "read_only_", Napi::Boolean::New(obj.Env(), true));
+}
+
+inline bool is_read_only(Napi::Value obj) {
+  Napi::Value flag = GDAL_GET_PRIVATE(obj, "read_only_");
+  return flag.IsBoolean() && flag.As<Napi::Boolean>().Value();
+}
+
+// `what` says where the object came from, e.g.
+// "A FieldDefn retrieved from a collection"
+inline void throw_read_only(Napi::Env env, const char *what) {
+  Napi::Error::New(env, std::string(what) + " is read-only, create a new one to modify it")
+    .ThrowAsJavaScriptException();
+}
+
+} // namespace node_gdal
 
 // ----- shared_ptr payloads -------
 
@@ -651,18 +705,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
     }                                                                                                                  \
   }
 
-#define NODE_ARG_CB(num, name, var)                                                                                    \
-  if (info.Length() < num + 1) {                                                                                       \
-    Napi::Error::New(info.Env(), name " must be given").ThrowAsJavaScriptException();                                  \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  if (!info[num].IsFunction()) {                                                                                       \
-    Napi::TypeError::New(info.Env(), name " must be a function").ThrowAsJavaScriptException();                         \
-    return info.Env().Undefined();                                                                                      \
-  }                                                                                                                    \
-  var = new Napi::FunctionReference(Napi::Persistent(info[num].As<Napi::Function>()));                                 \
-  var->SuppressDestruct()
-
 // ----- optional argument conversion -------
 
 // ----- special case: AbortSignal in an [options] argument -----
@@ -707,177 +749,6 @@ inline void Inherit(Napi::Function derived, Napi::Function base) {
       }                                                                                                                 \
     }                                                                                                                  \
     if (progress_cb) { job.progress = progress_cb; }                                                                   \
-  }
-
-// ----- wrapped methods w/ results-------
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT(klass, method, result_type, wrapped_method)                                    \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method());                                    \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_ENUM_PARAM(                                                                  \
-  klass, method, result_type, wrapped_method, enum_type, param_name)                                                   \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    enum_type param;                                                                                                   \
-    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param));                               \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_INTEGER_PARAM(klass, method, result_type, wrapped_method, param_name)        \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    int param;                                                                                                         \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param));                               \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_DOUBLE_PARAM(klass, method, result_type, wrapped_method, param_name)         \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    double param;                                                                                                      \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param));                               \
-  }
-
-// ----- wrapped methods w/ lock -------
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_LOCKED(klass, method, result_type, wrapped_method)                             \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    return result_type::New(info.Env(), obj->this_->wrapped_method());                                    \
-  }
-
-#define NODE_WRAPPED_GETTER_WITH_STRING_LOCKED(klass, method, wrapped_method)                                          \
-  NAPI_GETTER(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    auto r = obj->this_->wrapped_method();                                                                             \
-    return SafeString::New(info.Env(), r.c_str());                                                                     \
-  }
-
-#define NODE_WRAPPED_GETTER_WITH_RESULT_LOCKED(klass, method, result_type, wrapped_method)                             \
-  NAPI_GETTER(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    return result_type::New(info.Env(), obj->this_->wrapped_method());                                    \
-  }
-
-// ----- wrapped methods -------
-
-#define NODE_WRAPPED_METHOD(klass, method, wrapped_method)                                                             \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method();                                                                                      \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)                            \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    int param;                                                                                                         \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param);                                                                                 \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)                             \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    double param;                                                                                                      \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param);                                                                                 \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_BOOLEAN_PARAM(klass, method, wrapped_method, param_name)                            \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    bool param;                                                                                                        \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param);                                                                                 \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_ENUM_PARAM(klass, method, wrapped_method, enum_type, param_name)                    \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    enum_type param;                                                                                                   \
-    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param);                                                                                 \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_STRING_PARAM(klass, method, wrapped_method, param_name)                             \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    std::string param;                                                                                                 \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param.c_str());                                                                         \
-    return info.Env().Undefined();                                                                                     \
   }
 
 #define MEASURE_EXECUTION_TIME(msg, op)                                                                                \
@@ -996,355 +867,6 @@ std::shared_ptr<RETURN[]> NumberArrayToSharedPtr(Napi::Array array, size_t count
 #define GDAL_RAW_CHECK_ASYNC(type, obj, var)                                                                           \
   type var = obj->get();                                                                                               \
   if (!obj) { THROW_OR_REJECT(#type " object has already been destroyed"); }
-
-// ----- wrapped methods w/ results + wrapped params -------
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(                                                               \
-  klass, method, result_type, wrapped_method, param_type, param_name)                                                  \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param->get()));                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM(klass, method, result_type, wrapped_method, param_name)         \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    std::string param;                                                                                                 \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param.c_str()));                                    \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM_LOCKED(klass, method, result_type, wrapped_method, param_name)  \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    std::string param;                                                                                                 \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    return result_type::New(info.Env(), obj->this_->wrapped_method(param.c_str()));                                    \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)                \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    obj->this_->wrapped_method(param->get());                                                                          \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-// ----- wrapped methods w/ CPLErr result (throws) -------
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT(klass, method, wrapped_method)                                          \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method();                                                                            \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)  \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param->get());                                                                \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_STRING_PARAM(klass, method, wrapped_method, param_name)               \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    std::string param;                                                                                                 \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param.c_str());                                                               \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)              \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    int param;                                                                                                         \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param);                                                                       \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM_LOCKED(klass, method, wrapped_method, param_name)       \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    int param;                                                                                                         \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param);                                                                       \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)               \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    double param;                                                                                                      \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    int err = obj->this_->wrapped_method(param);                                                                       \
-    if (err) { NODE_THROW_LAST_CPLERR; }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-// ----- wrapped methods w/ OGRErr result (throws) -------
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(klass, method, wrapped_method)                                          \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method();                                                                            \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(klass, method, wrapped_method, param_type, param_name)  \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param->get());                                                                \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_STRING_PARAM(klass, method, wrapped_method, param_name)               \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    std::string param;                                                                                                 \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param.c_str());                                                               \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_INTEGER_PARAM(klass, method, wrapped_method, param_name)              \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    int param;                                                                                                         \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param);                                                                       \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_DOUBLE_PARAM(klass, method, wrapped_method, param_name)               \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    Args args(info);                                                                                                   \
-    double param;                                                                                                      \
-    if (!args.get(0, #param_name, param)) { return args.failed(); }                                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    int err = obj->this_->wrapped_method(param);                                                                       \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-#define NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_LOCKED(klass, method, wrapped_method)                                   \
-  NAPI_METHOD(klass::method) {                                                                                          \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    GDAL_LOCK_PARENT(obj);                                                                                             \
-    int err = obj->this_->wrapped_method();                                                                            \
-    if (err) { NODE_THROW_OGRERR(err); }                                                                               \
-    return info.Env().Undefined();                                                                                     \
-  }
-
-// ----- wrapped asyncable methods -------
-
-#define NODE_WRAPPED_ASYNC_METHOD(klass, method, wrapped_method)                                                       \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
-    GDALAsyncableJob<int> job(0);                                                                                      \
-    job.main = [gdal_obj](const GDALExecutionProgress &) {                                                             \
-      gdal_obj->wrapped_method();                                                                                      \
-      return 0;                                                                                                        \
-    };                                                                                                                 \
-    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };                                      \
-    return job.run(info, async, 0);                                                                                    \
-  }
-
-#define NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(klass, async_type, method, result_type, wrapped_method)                  \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
-    GDALAsyncableJob<async_type> job(0);                                                                               \
-    job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->wrapped_method(); };                       \
-    job.rval = [](async_type r, const GetFromPersistentFunc &) { return result_type::New(node_gdal::napi_env(), r); };              \
-    return job.run(info, async, 0);                                                                                    \
-  }
-
-#define NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(                                                         \
-  klass, async_type, method, result_type, wrapped_method, param_type, param_name)                                      \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
-    auto *gdal_param = param->get();                                                                                   \
-    GDALAsyncableJob<async_type> job(0);                                                                               \
-    job.persist(info[0].As<Napi::Object>());                                                                           \
-    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {                                                 \
-      return gdal_obj->wrapped_method(gdal_param);                                                                     \
-    };                                                                                                                 \
-    job.rval = [](async_type r, const GetFromPersistentFunc &) { return result_type::New(node_gdal::napi_env(), r); };              \
-    return job.run(info, async, 1);                                                                                    \
-  }
-
-#define NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_ENUM_PARAM(                                                            \
-  klass, async_type, method, result_type, wrapped_method, enum_type, param_name)                                       \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    Args args(info);                                                                                                   \
-    enum_type param;                                                                                                   \
-    if (!args.getEnum(0, #param_name, #enum_type, param)) { return args.failed(); }                                    \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                       \
-    GDALAsyncableJob<async_type> job(0);                                                                               \
-    job.main = [gdal_obj, param](const GDALExecutionProgress &) { return gdal_obj->wrapped_method(param); };           \
-    job.rval = [](async_type r, const GetFromPersistentFunc &) { return result_type::New(node_gdal::napi_env(), r); };              \
-    return job.run(info, async, 1);                                                                                    \
-  }
-
-#define NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_LOCKED(klass, method, wrapped_method)                             \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                        \
-    GDALAsyncableJob<OGRErr> job(obj->parent_uid);                                                                     \
-    job.main = [gdal_obj](const GDALExecutionProgress &) {                                                             \
-      int err = gdal_obj->wrapped_method();                                                                            \
-      if (err) throw GDALError(getOGRErrMsg(err));                                                                                \
-      return err;                                                                                                      \
-    };                                                                                                                 \
-    job.rval = [](OGRErr, const GetFromPersistentFunc &) { return v8_undefined(); };                                   \
-    return job.run(info, async, 0);                                                                                    \
-  }
-
-#define NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(                                                  \
-  klass, async_type, method, wrapped_method, param_type, param_name)                                                   \
-  GDAL_ASYNCABLE_DEFINE(klass::method) {                                                                               \
-    Args args(info);                                                                                                   \
-    param_type *param;                                                                                                 \
-    if (!args.getWrapped(0, #param_name, #param_type, param)) { return args.failed(); }                                \
-    klass *obj = node_gdal::UnwrapWrapped<klass>(info.This().As<Napi::Object>());                                      \
-    if (!obj->isAlive()) {                                                                                             \
-      Napi::Error::New(info.Env(), #klass " object has already been destroyed").ThrowAsJavaScriptException();          \
-      return info.Env().Undefined();                                                                                    \
-    }                                                                                                                  \
-    auto *gdal_obj = node_gdal::ptr_of(obj->this_);                                                                                        \
-    auto gdal_param = param->get();                                                                                    \
-    GDALAsyncableJob<async_type> job(0);                                                                               \
-    job.persist(info[0].As<Napi::Object>());                                                                           \
-    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {                                                 \
-      int err = gdal_obj->wrapped_method(gdal_param);                                                                  \
-      if (err) throw GDALError(getOGRErrMsg(err));                                                                                \
-      return err;                                                                                                      \
-    };                                                                                                                 \
-    job.rval = [](async_type, const GetFromPersistentFunc &) { return v8_undefined(); };                               \
-    return job.run(info, async, 1);                                                                                    \
-  }
 
 // ----- constants -------
 

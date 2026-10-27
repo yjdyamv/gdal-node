@@ -63,58 +63,64 @@ class GroupCollection : public GDALObject<SELF> {
     return 0;
   };
 
-  GDAL_ASYNCABLE_TEMPLATE(get) {
-    Args args(info);
+  struct getBody : node_gdal::AsyncMethodBody {
+    template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+      Args args(info);
 
-    Napi::Object this_obj = info.This().As<Napi::Object>();
-    Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
-    Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
-    NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
-    NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
+      Napi::Object this_obj = info.This().As<Napi::Object>();
+      Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
+      Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
+      NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
+      NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
 
-    std::shared_ptr<GDALPARENT> raw = parent->get();
-    GDALDataset *gdal_ds = ds->get();
-    std::string name = "";
-    int idx = 0;
-    bool isString = false;
-    if (!args.getStringOrInt(0, "id", name, idx, isString)) return args.failed();
+      std::shared_ptr<GDALPARENT> raw = parent->get();
+      GDALDataset *gdal_ds = ds->get();
+      std::string name = "";
+      int idx = 0;
+      bool isString = false;
+      if (!args.getStringOrInt(0, "id", name, idx, isString)) return args.failed();
 
-    GDALAsyncableJob<std::shared_ptr<GDALOBJ>> job(ds->uid);
-    job.persist(parent_obj);
-    job.main = [raw, name, idx, isString](const GDALExecutionProgress &) {
-      std::shared_ptr<GDALOBJ> r = nullptr;
-      if (!isString)
-        r = SELF::__get(raw, idx);
-      else
-        r = SELF::__get(raw, name);
-      if (r == nullptr) throw GDALError("Invalid element");
-      return r;
-    };
-    job.rval = [gdal_ds](std::shared_ptr<GDALOBJ> r, const GetFromPersistentFunc &) {
-      return NODEOBJ::New(r, gdal_ds);
-    };
-    return job.run(info, async, 1);
-  }
+      GDALAsyncableJob<std::shared_ptr<GDALOBJ>> job(ds->uid);
+      job.persist(parent_obj);
+      job.main = [raw, name, idx, isString](const GDALExecutionProgress &) {
+        std::shared_ptr<GDALOBJ> r = nullptr;
+        if (!isString)
+          r = SELF::__get(raw, idx);
+        else
+          r = SELF::__get(raw, name);
+        if (r == nullptr) throw GDALError("Invalid element");
+        return r;
+      };
+      job.rval = [gdal_ds](std::shared_ptr<GDALOBJ> r, const GetFromPersistentFunc &) {
+        return NODEOBJ::New(r, gdal_ds);
+      };
+      return job.run(info, node_gdal::is_async<Async>, 1);
+    }
+  };
+  GDAL_ASYNC_METHOD_STATIC(get, getBody)
 
-  GDAL_ASYNCABLE_TEMPLATE(count) {
+  struct countBody : node_gdal::AsyncMethodBody {
+    template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-    Napi::Object this_obj = info.This().As<Napi::Object>();
-    Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
-    Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
-    NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
-    NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
+      Napi::Object this_obj = info.This().As<Napi::Object>();
+      Napi::Object parent_ds = GDAL_GET_PRIVATE(this_obj, "parent_ds_").As<Napi::Object>();
+      Napi::Object parent_obj = GDAL_GET_PRIVATE(this_obj, "parent_").As<Napi::Object>();
+      NODE_UNWRAP_CHECK(Dataset, parent_ds, ds);
+      NODE_UNWRAP_CHECK(NODEPARENT, parent_obj, parent);
 
-    std::shared_ptr<GDALPARENT> raw = parent->get();
+      std::shared_ptr<GDALPARENT> raw = parent->get();
 
-    GDALAsyncableJob<int> job(ds->uid);
-    job.persist(parent_obj);
-    job.main = [raw](const GDALExecutionProgress &) {
-      int r = SELF::__count(raw);
-      return r;
-    };
-    job.rval = [](int r, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), r); };
-    return job.run(info, async, 0);
-  }
+      GDALAsyncableJob<int> job(ds->uid);
+      job.persist(parent_obj);
+      job.main = [raw](const GDALExecutionProgress &) {
+        int r = SELF::__count(raw);
+        return r;
+      };
+      job.rval = [](int r, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), r); };
+      return job.run(info, node_gdal::is_async<Async>, 0);
+    }
+  };
+  GDAL_ASYNC_METHOD_STATIC(count, countBody)
 
   static NAPI_GETTER(namesGetter) {
 

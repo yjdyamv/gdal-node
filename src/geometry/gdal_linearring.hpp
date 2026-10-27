@@ -26,7 +26,6 @@ class LinearRing : public CurveBase<LinearRing, OGRLinearRing, LineStringPoints>
   static Napi::Value New(OGRLinearRing *geom, bool owned);
   static NAPI_METHOD(toString);
   static NAPI_METHOD(getArea);
-  static NAPI_METHOD(addSubLineString);
 };
 
 } // namespace node_gdal

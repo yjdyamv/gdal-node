@@ -246,104 +246,112 @@ CPLErr GDALReprojectImageMulti(
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
-  Args args(info);
+namespace {
 
-  Napi::Object obj;
+struct reprojectImageBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  auto options = std::make_shared<WarpOptions>();
-  GDALWarpOptions *opts;
-  std::string s_srs_str;
-  std::string t_srs_str;
-  SpatialReference *s_srs;
-  SpatialReference *t_srs;
-  double maxError = 0;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
+    Napi::Object obj;
 
-  if (!args.get(0, "Warp options", obj)) return args.failed();
+    auto options = std::make_shared<WarpOptions>();
+    GDALWarpOptions *opts;
+    std::string s_srs_str;
+    std::string t_srs_str;
+    SpatialReference *s_srs;
+    SpatialReference *t_srs;
+    double maxError = 0;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
 
-  if (options->parse(obj)) {
-    return node_gdal::napi_env().Undefined(); // error parsing options object
-  } else {
-    opts = options->get();
+    if (!args.get(0, "Warp options", obj)) return args.failed();
+
+    if (options->parse(obj)) {
+      return node_gdal::napi_env().Undefined(); // error parsing options object
+    } else {
+      opts = options->get();
+    }
+    if (!opts->hDstDS) {
+      Napi::TypeError::New(node_gdal::napi_env(), "dst Dataset must be provided").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
+    if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
+    if (!args.from(obj, "maxError", maxError)) return args.failed();
+    if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+
+    char *s_srs_wkt, *t_srs_wkt;
+    if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
+      Napi::Error::New(node_gdal::napi_env(), "Error converting s_srs to WKT").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    s_srs_str = std::string(s_srs_wkt);
+    CPLFree(s_srs_wkt);
+    if (t_srs->get()->exportToWkt(&t_srs_wkt)) {
+      Napi::Error::New(node_gdal::napi_env(), "Error converting t_srs to WKT").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    t_srs_str = std::string(t_srs_wkt);
+    CPLFree(t_srs_wkt);
+
+    std::vector<long> uids = options->datasetUids();
+    GDALAsyncableJob<CPLErr> job(uids);
+
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+
+    // opts is a pointer inside options memory space
+    // the lifetime of the options shared_ptr is limited by the lifetime of the lambda
+    if (options->useMultithreading()) {
+      job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
+        CPLErrorReset();
+        CPLErr err = GDALReprojectImageMulti(
+          opts->hSrcDS,
+          s_srs_str.c_str(),
+          opts->hDstDS,
+          t_srs_str.c_str(),
+          opts->eResampleAlg,
+          opts->dfWarpMemoryLimit,
+          maxError,
+          interruptible ? ProgressTrampoline : nullptr,
+          interruptible ? (void *)&progress : nullptr,
+          opts);
+        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        return err;
+      };
+    } else {
+      job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
+        CPLErrorReset();
+        CPLErr err = GDALReprojectImage(
+          opts->hSrcDS,
+          s_srs_str.c_str(),
+          opts->hDstDS,
+          t_srs_str.c_str(),
+          opts->eResampleAlg,
+          opts->dfWarpMemoryLimit,
+          maxError,
+          interruptible ? ProgressTrampoline : nullptr,
+          interruptible ? (void *)&progress : nullptr,
+          opts);
+        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        return err;
+      };
+    }
+
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
-  if (!opts->hDstDS) {
-    Napi::TypeError::New(node_gdal::napi_env(), "dst Dataset must be provided").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+};
 
-  if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
-  if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
-  if (!args.from(obj, "maxError", maxError)) return args.failed();
-  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+} // namespace
 
-  char *s_srs_wkt, *t_srs_wkt;
-  if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
-    Napi::Error::New(node_gdal::napi_env(), "Error converting s_srs to WKT").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  s_srs_str = std::string(s_srs_wkt);
-  CPLFree(s_srs_wkt);
-  if (t_srs->get()->exportToWkt(&t_srs_wkt)) {
-    Napi::Error::New(node_gdal::napi_env(), "Error converting t_srs to WKT").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  t_srs_str = std::string(t_srs_wkt);
-  CPLFree(t_srs_wkt);
-
-  std::vector<long> uids = options->datasetUids();
-  GDALAsyncableJob<CPLErr> job(uids);
-
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-
-  // opts is a pointer inside options memory space
-  // the lifetime of the options shared_ptr is limited by the lifetime of the lambda
-  if (options->useMultithreading()) {
-    job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
-      CPLErrorReset();
-      CPLErr err = GDALReprojectImageMulti(
-        opts->hSrcDS,
-        s_srs_str.c_str(),
-        opts->hDstDS,
-        t_srs_str.c_str(),
-        opts->eResampleAlg,
-        opts->dfWarpMemoryLimit,
-        maxError,
-        interruptible ? ProgressTrampoline : nullptr,
-        interruptible ? (void *)&progress : nullptr,
-        opts);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-      return err;
-    };
-  } else {
-    job.main = [options, opts, s_srs_str, t_srs_str, maxError, interruptible](const GDALExecutionProgress &progress) {
-      CPLErrorReset();
-      CPLErr err = GDALReprojectImage(
-        opts->hSrcDS,
-        s_srs_str.c_str(),
-        opts->hDstDS,
-        t_srs_str.c_str(),
-        opts->eResampleAlg,
-        opts->dfWarpMemoryLimit,
-        maxError,
-        interruptible ? ProgressTrampoline : nullptr,
-        interruptible ? (void *)&progress : nullptr,
-        opts);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-      return err;
-    };
-  }
-
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined(); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(Warper::reprojectImage, reprojectImageBody)
 
 /**
  * @typedef {object} WarpOptions
@@ -391,121 +399,129 @@ GDAL_ASYNCABLE_DEFINE(Warper::reprojectImage) {
  * @param {callback<WarpOutput>} [callback=undefined]
  * @return {Promise<WarpOutput>}
  */
-GDAL_ASYNCABLE_DEFINE(Warper::suggestedWarpOutput) {
-  Args args(info);
+namespace {
 
-  Napi::Object obj;
-  Napi::Value prop;
+struct suggestedWarpOutputBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  Dataset *ds;
-  SpatialReference *s_srs;
-  SpatialReference *t_srs;
-  double maxError = 0;
+    Napi::Object obj;
+    Napi::Value prop;
 
-  if (!args.get(0, "Warp options", obj)) return args.failed();
+    Dataset *ds;
+    SpatialReference *s_srs;
+    SpatialReference *t_srs;
+    double maxError = 0;
 
-  if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "src"))) {
-    prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "src"));
-    if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
-      ds = node_gdal::UnwrapWrapped<Dataset>(prop.As<Napi::Object>());
-      if (!ds->get()) {
-        Napi::Error::New(node_gdal::napi_env(), "src dataset already closed").ThrowAsJavaScriptException();
+    if (!args.get(0, "Warp options", obj)) return args.failed();
+
+    if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "src"))) {
+      prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "src"));
+      if (prop.IsObject() && !prop.IsNull() && prop.As<Napi::Object>().InstanceOf(Dataset::constructor().Value())) {
+        ds = node_gdal::UnwrapWrapped<Dataset>(prop.As<Napi::Object>());
+        if (!ds->get()) {
+          Napi::Error::New(node_gdal::napi_env(), "src dataset already closed").ThrowAsJavaScriptException();
+          return node_gdal::napi_env().Undefined();
+        }
+      } else {
+        Napi::TypeError::New(node_gdal::napi_env(), "src property must be a Dataset object").ThrowAsJavaScriptException();
         return node_gdal::napi_env().Undefined();
       }
     } else {
-      Napi::TypeError::New(node_gdal::napi_env(), "src property must be a Dataset object").ThrowAsJavaScriptException();
+      Napi::Error::New(node_gdal::napi_env(), "src dataset must be provided").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
     }
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "src dataset must be provided").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
 
-  if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
-  if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
-  if (!args.from(obj, "maxError", maxError)) return args.failed();
+    if (!args.fromWrapped(obj, "s_srs", "SpatialReference", s_srs)) return args.failed();
+    if (!args.fromWrapped(obj, "t_srs", "SpatialReference", t_srs)) return args.failed();
+    if (!args.from(obj, "maxError", maxError)) return args.failed();
 
-  char *s_srs_wkt, *t_srs_wkt;
-  if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
-    Napi::Error::New(node_gdal::napi_env(), "Error converting s_srs to WKT").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  std::string s_srs_str = std::string(s_srs_wkt);
-  CPLFree(s_srs_wkt);
-  if (t_srs->get()->exportToWkt(&t_srs_wkt)) {
-    Napi::Error::New(node_gdal::napi_env(), "Error converting t_srs to WKT").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  std::string t_srs_str = std::string(t_srs_wkt);
-  CPLFree(t_srs_wkt);
-
-  struct warpOutputResult {
-    double geotransform[6];
-    int w, h;
-  };
-
-#if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
-  GDALDatasetH gdal_ds = static_cast<GDALDatasetH>(ds->get());
-#else
-  GDALDatasetH gdal_ds = GDALDataset::ToHandle(ds->get());
-#endif
-  GDALAsyncableJob<warpOutputResult> job(ds->uid);
-
-  job.main = [gdal_ds, s_srs_str, t_srs_str, maxError](const GDALExecutionProgress &) {
-    struct warpOutputResult r;
-    CPLErrorReset();
-
-    void *hTransformArg;
-    void *hGenTransformArg =
-      GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), NULL, t_srs_str.c_str(), TRUE, 1000.0, 0);
-
-    if (!hGenTransformArg) { throw GDALError(CPLGetLastErrorMsg()); }
-
-    GDALTransformerFunc pfnTransformer;
-
-    if (maxError > 0.0) {
-      hTransformArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, hGenTransformArg, maxError);
-      pfnTransformer = GDALApproxTransform;
-
-      if (!hTransformArg) {
-        GDALDestroyGenImgProjTransformer(hGenTransformArg);
-        throw GDALError(CPLGetLastErrorMsg());
-      }
-    } else {
-      hTransformArg = hGenTransformArg;
-      pfnTransformer = GDALGenImgProjTransform;
+    char *s_srs_wkt, *t_srs_wkt;
+    if (s_srs->get()->exportToWkt(&s_srs_wkt)) {
+      Napi::Error::New(node_gdal::napi_env(), "Error converting s_srs to WKT").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
+    std::string s_srs_str = std::string(s_srs_wkt);
+    CPLFree(s_srs_wkt);
+    if (t_srs->get()->exportToWkt(&t_srs_wkt)) {
+      Napi::Error::New(node_gdal::napi_env(), "Error converting t_srs to WKT").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    std::string t_srs_str = std::string(t_srs_wkt);
+    CPLFree(t_srs_wkt);
 
-    CPLErr err = GDALSuggestedWarpOutput(gdal_ds, pfnTransformer, hTransformArg, r.geotransform, &r.w, &r.h);
+    struct warpOutputResult {
+      double geotransform[6];
+      int w, h;
+    };
 
-    GDALDestroyGenImgProjTransformer(hGenTransformArg);
-    if (maxError > 0.0) { GDALDestroyApproxTransformer(hTransformArg); }
+  #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
+    GDALDatasetH gdal_ds = static_cast<GDALDatasetH>(ds->get());
+  #else
+    GDALDatasetH gdal_ds = GDALDataset::ToHandle(ds->get());
+  #endif
+    GDALAsyncableJob<warpOutputResult> job(ds->uid);
 
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return r;
-  };
+    job.main = [gdal_ds, s_srs_str, t_srs_str, maxError](const GDALExecutionProgress &) {
+      struct warpOutputResult r;
+      CPLErrorReset();
 
-  job.rval = [](warpOutputResult r, const GetFromPersistentFunc &) {
-    Napi::Array result_geotransform = Napi::Array::New(node_gdal::napi_env());
-    result_geotransform.Set(static_cast<uint32_t>(0), Napi::Number::New(node_gdal::napi_env(), r.geotransform[0]));
-    result_geotransform.Set(static_cast<uint32_t>(1), Napi::Number::New(node_gdal::napi_env(), r.geotransform[1]));
-    result_geotransform.Set(static_cast<uint32_t>(2), Napi::Number::New(node_gdal::napi_env(), r.geotransform[2]));
-    result_geotransform.Set(static_cast<uint32_t>(3), Napi::Number::New(node_gdal::napi_env(), r.geotransform[3]));
-    result_geotransform.Set(static_cast<uint32_t>(4), Napi::Number::New(node_gdal::napi_env(), r.geotransform[4]));
-    result_geotransform.Set(static_cast<uint32_t>(5), Napi::Number::New(node_gdal::napi_env(), r.geotransform[5]));
+      void *hTransformArg;
+      void *hGenTransformArg =
+        GDALCreateGenImgProjTransformer(gdal_ds, s_srs_str.c_str(), NULL, t_srs_str.c_str(), TRUE, 1000.0, 0);
 
-    Napi::Object result_size = Napi::Object::New(node_gdal::napi_env());
-    result_size.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.w));
-    result_size.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.h));
+      if (!hGenTransformArg) { throw GDALError(CPLGetLastErrorMsg()); }
 
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "rasterSize"), result_size);
-    result.Set( Napi::String::New(node_gdal::napi_env(), "geoTransform"), result_geotransform);
+      GDALTransformerFunc pfnTransformer;
 
-    return result;
-  };
+      if (maxError > 0.0) {
+        hTransformArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, hGenTransformArg, maxError);
+        pfnTransformer = GDALApproxTransform;
 
-  return job.run(info, async, 1);
-}
+        if (!hTransformArg) {
+          GDALDestroyGenImgProjTransformer(hGenTransformArg);
+          throw GDALError(CPLGetLastErrorMsg());
+        }
+      } else {
+        hTransformArg = hGenTransformArg;
+        pfnTransformer = GDALGenImgProjTransform;
+      }
+
+      CPLErr err = GDALSuggestedWarpOutput(gdal_ds, pfnTransformer, hTransformArg, r.geotransform, &r.w, &r.h);
+
+      GDALDestroyGenImgProjTransformer(hGenTransformArg);
+      if (maxError > 0.0) { GDALDestroyApproxTransformer(hTransformArg); }
+
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return r;
+    };
+
+    job.rval = [](warpOutputResult r, const GetFromPersistentFunc &) {
+      Napi::Array result_geotransform = Napi::Array::New(node_gdal::napi_env());
+      result_geotransform.Set(static_cast<uint32_t>(0), Napi::Number::New(node_gdal::napi_env(), r.geotransform[0]));
+      result_geotransform.Set(static_cast<uint32_t>(1), Napi::Number::New(node_gdal::napi_env(), r.geotransform[1]));
+      result_geotransform.Set(static_cast<uint32_t>(2), Napi::Number::New(node_gdal::napi_env(), r.geotransform[2]));
+      result_geotransform.Set(static_cast<uint32_t>(3), Napi::Number::New(node_gdal::napi_env(), r.geotransform[3]));
+      result_geotransform.Set(static_cast<uint32_t>(4), Napi::Number::New(node_gdal::napi_env(), r.geotransform[4]));
+      result_geotransform.Set(static_cast<uint32_t>(5), Napi::Number::New(node_gdal::napi_env(), r.geotransform[5]));
+
+      Napi::Object result_size = Napi::Object::New(node_gdal::napi_env());
+      result_size.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.w));
+      result_size.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.h));
+
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "rasterSize"), result_size);
+      result.Set( Napi::String::New(node_gdal::napi_env(), "geoTransform"), result_geotransform);
+
+      return result;
+    };
+
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Warper::suggestedWarpOutput, suggestedWarpOutputBody)
 
 } // namespace node_gdal

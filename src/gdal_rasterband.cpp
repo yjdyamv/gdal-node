@@ -169,7 +169,26 @@ NAPI_METHOD(RasterBand::toString) {
  * @return {Promise<void>}
  *
  */
-NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_LOCKED(RasterBand, flush, FlushCache);
+namespace {
+// RasterBand.flush()
+struct flushBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<RasterBand>(info, "RasterBand", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRErr> job(obj->parent_uid);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      int err = gdal_obj->FlushCache();
+      if (err) { throw GDALError(getOGRErrMsg(err)); }
+      return err;
+    };
+    job.rval = [](OGRErr, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBand::flush, flushBody)
 
 /**
  * Return the status flags of the mask band associated with the band.
@@ -191,7 +210,19 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_LOCKED(RasterBand, flush, FlushCach
  * @memberof RasterBand
  * @return {number} Mask flags
  */
-NODE_WRAPPED_METHOD_WITH_RESULT_LOCKED(RasterBand, getMaskFlags, Integer, GetMaskFlags);
+namespace {
+// RasterBand::getMaskFlags()
+struct getMaskFlagsBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<RasterBand>(info, "RasterBand");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    return Integer::New(info.Env(), obj->get()->GetMaskFlags());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(RasterBand::getMaskFlags, getMaskFlagsBody)
 // TODO: expose GMF constants in API
 // ({@link GMF|see flags})
 
@@ -205,7 +236,23 @@ NODE_WRAPPED_METHOD_WITH_RESULT_LOCKED(RasterBand, getMaskFlags, Integer, GetMas
 
  * @param {number} flags Mask flags
  */
-NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM_LOCKED(RasterBand, createMaskBand, CreateMaskBand, "mask flags");
+namespace {
+// RasterBand::createMaskBand()
+struct createMaskBandBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    int param;
+    if (!args.get(0, "mask flags", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<RasterBand>(info, "RasterBand");
+    if (!obj) { return obj.failure; }
+    int err = obj->get()->CreateMaskBand(param);
+    if (err) { NODE_THROW_LAST_CPLERR; }
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(RasterBand::createMaskBand, createMaskBandBody)
 // TODO: expose GMF constants in API
 // ({@link GMF|see flags})
 
@@ -220,7 +267,7 @@ NODE_WRAPPED_METHOD_WITH_CPLERR_RESULT_1_INTEGER_PARAM_LOCKED(RasterBand, create
 NAPI_METHOD(RasterBand::getMaskBand) {
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_LOCK_PARENT(band);
-  GDALRasterBand *mask_band = band->this_->GetMaskBand();
+  GDALRasterBand *mask_band = band->get()->GetMaskBand();
 
   if (!mask_band) {
     return node_gdal::napi_env().Null();
@@ -256,27 +303,35 @@ NAPI_METHOD(RasterBand::getMaskBand) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBand::fill) {
-  Args args(info);
-  double real, imaginary = 0;
-  if (!args.get(0, "real value", real)) return args.failed();
-  if (!args.optional(1, "imaginary value", real)) return args.failed();
+namespace {
 
-  NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
+struct fillBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    double real, imaginary = 0;
+    if (!args.get(0, "real value", real)) return args.failed();
+    if (!args.optional(1, "imaginary value", real)) return args.failed();
 
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  GDALRasterBand *gdal_obj = band->this_;
+    NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
 
-  job.main = [gdal_obj, real, imaginary](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = gdal_obj->Fill(real, imaginary);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    GDALRasterBand *gdal_obj = band->get();
 
-  return job.run(info, async, 2);
-}
+    job.main = [gdal_obj, real, imaginary](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = gdal_obj->Fill(real, imaginary);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBand::fill, fillBody)
 
 // --- Custom error handling to handle VRT errors ---
 // see: https://github.com/mapbox/mapnik-omnivore/issues/10
@@ -355,7 +410,7 @@ NAPI_METHOD(RasterBand::getStatistics) {
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_LOCK_PARENT(band);
   pushStatsErrorHandler();
-  CPLErr err = band->this_->GetStatistics(approx, force, &min, &max, &mean, &std_dev);
+  CPLErr err = band->get()->GetStatistics(approx, force, &min, &max, &mean, &std_dev);
   popStatsErrorHandler();
   if (!stats_file_err.empty()) {
     Napi::Error::New(node_gdal::napi_env(), stats_file_err.c_str()).ThrowAsJavaScriptException();
@@ -423,47 +478,55 @@ NAPI_METHOD(RasterBand::getStatistics) {
  * @return {Promise<stats>} Statistics containing `"min"`, `"max"`, `"mean"`,
  * `"std_dev"` properties.
  */
-GDAL_ASYNCABLE_DEFINE(RasterBand::computeStatistics) {
-  Args args(info);
-  struct stats_t {
-    double min, max, mean, std_dev;
-  };
-  int approx;
+namespace {
 
-  if (!args.get(0, "allow approximation", approx)) return args.failed();
-  NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
+struct computeStatisticsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    struct stats_t {
+      double min, max, mean, std_dev;
+    };
+    int approx;
 
-  GDALAsyncableJob<stats_t> job(band->parent_uid);
-  GDALRasterBand *gdal_obj = band->this_;
+    if (!args.get(0, "allow approximation", approx)) return args.failed();
+    NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
 
-  job.main = [gdal_obj, approx](const GDALExecutionProgress &) {
-    struct stats_t stats;
-    std::lock_guard<std::mutex> guard(stats_lock);
+    GDALAsyncableJob<stats_t> job(band->parent_uid);
+    GDALRasterBand *gdal_obj = band->get();
 
-    CPLErrorReset();
-    pushStatsErrorHandler();
-    CPLErr err = gdal_obj->ComputeStatistics(approx, &stats.min, &stats.max, &stats.mean, &stats.std_dev, NULL, NULL);
-    popStatsErrorHandler();
-    if (!stats_file_err.empty()) {
-      throw GDALError(stats_file_err);
-    } else if (err != CPLE_None) {
-      throw GDALError(CPLGetLastErrorMsg());
-    }
+    job.main = [gdal_obj, approx](const GDALExecutionProgress &) {
+      struct stats_t stats;
+      std::lock_guard<std::mutex> guard(stats_lock);
 
-    return stats;
-  };
+      CPLErrorReset();
+      pushStatsErrorHandler();
+      CPLErr err = gdal_obj->ComputeStatistics(approx, &stats.min, &stats.max, &stats.mean, &stats.std_dev, NULL, NULL);
+      popStatsErrorHandler();
+      if (!stats_file_err.empty()) {
+        throw GDALError(stats_file_err);
+      } else if (err != CPLE_None) {
+        throw GDALError(CPLGetLastErrorMsg());
+      }
 
-  job.rval = [](stats_t r, const GetFromPersistentFunc &) {
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "min"), Napi::Number::New(node_gdal::napi_env(), r.min));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "max"), Napi::Number::New(node_gdal::napi_env(), r.max));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "mean"), Napi::Number::New(node_gdal::napi_env(), r.mean));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "std_dev"), Napi::Number::New(node_gdal::napi_env(), r.std_dev));
-    return result;
-  };
+      return stats;
+    };
 
-  return job.run(info, async, 1);
-}
+    job.rval = [](stats_t r, const GetFromPersistentFunc &) {
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "min"), Napi::Number::New(node_gdal::napi_env(), r.min));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "max"), Napi::Number::New(node_gdal::napi_env(), r.max));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "mean"), Napi::Number::New(node_gdal::napi_env(), r.mean));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "std_dev"), Napi::Number::New(node_gdal::napi_env(), r.std_dev));
+      return result;
+    };
+
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBand::computeStatistics, computeStatisticsBody)
 
 /**
  * Set statistics on the band. This method can be used to store
@@ -488,7 +551,7 @@ NAPI_METHOD(RasterBand::setStatistics) {
   if (!args.get(3, "standard deviation", std_dev)) return args.failed();
   NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
   GDAL_LOCK_PARENT(band);
-  CPLErr err = band->this_->SetStatistics(min, max, mean, std_dev);
+  CPLErr err = band->get()->SetStatistics(min, max, mean, std_dev);
 
   if (err) {
     NODE_THROW_LAST_CPLERR;
@@ -518,21 +581,29 @@ NAPI_METHOD(RasterBand::setStatistics) {
  * @param {callback<any>} [callback=undefined]
  * @return {Promise<any>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBand::getMetadata) {
-  Args args(info);
+namespace {
 
-  std::string domain("");
-  if (!args.optional(0, "domain", domain)) return args.failed();
-  NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
+struct getMetadataBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  GDALAsyncableJob<CSLConstList> job(band->parent_uid);
-  job.main = [raw, domain](const GDALExecutionProgress &) {
-    return raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
-  };
-  job.rval = [](CSLConstList md, const GetFromPersistentFunc &) { return MajorObject::getMetadata(md); };
-  return job.run(info, async, 1);
-}
+    std::string domain("");
+    if (!args.optional(0, "domain", domain)) return args.failed();
+    NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
+
+    GDALAsyncableJob<CSLConstList> job(band->parent_uid);
+    job.main = [raw, domain](const GDALExecutionProgress &) {
+      return raw->GetMetadata(domain.empty() ? nullptr : domain.c_str());
+    };
+    job.rval = [](CSLConstList md, const GetFromPersistentFunc &) { return MajorObject::getMetadata(md); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(RasterBand::getMetadata, getMetadataBody)
 
 /**
  * Set metadata. Can return a warning (false) for formats not supporting persistent metadata.
@@ -557,29 +628,37 @@ GDAL_ASYNCABLE_DEFINE(RasterBand::getMetadata) {
  * @param {callback<boolean>} [callback=undefined]
  * @return {Promise<boolean>}
  */
-GDAL_ASYNCABLE_DEFINE(RasterBand::setMetadata) {
-  Args args(info);
-  NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
+namespace {
 
-  auto options = make_shared<StringList>();
-  if (info.Length() == 0 || options->parse(info[0])) {
-    node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed parsing metadata");
-    return node_gdal::napi_env().Undefined();
+struct setMetadataBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    NODE_UNWRAP_CHECK(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK(GDALRasterBand *, band, raw);
+
+    auto options = make_shared<StringList>();
+    if (info.Length() == 0 || options->parse(info[0])) {
+      node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed parsing metadata");
+      return node_gdal::napi_env().Undefined();
+    }
+
+    std::string domain("");
+    if (!args.optional(1, "domain", domain)) return args.failed();
+
+    GDALAsyncableJob<CPLErr> job(band->parent_uid);
+    job.main = [raw, options, domain](const GDALExecutionProgress &) {
+      CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
+      if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  std::string domain("");
-  if (!args.optional(1, "domain", domain)) return args.failed();
+} // namespace
 
-  GDALAsyncableJob<CPLErr> job(band->parent_uid);
-  job.main = [raw, options, domain](const GDALExecutionProgress &) {
-    CPLErr r = raw->SetMetadata(options->get(), domain.empty() ? nullptr : domain.c_str());
-    if (r == CE_Failure) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r == CE_None); };
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(RasterBand::setMetadata, setMetadataBody)
 
 /**
  * @readonly
@@ -636,21 +715,27 @@ NAPI_GETTER(RasterBand::pixelsGetter) {
  * @asyncGetter
  */
 
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::idGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct idGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<int> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    return raw->GetBand();
-  };
-  job.rval = [](int id, const GetFromPersistentFunc &) {
-    if (id == 0) return node_gdal::napi_env().Null().As<Napi::Value>();
-    return Napi::Number::New(node_gdal::napi_env(), id).As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<int> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      return raw->GetBand();
+    };
+    job.rval = [](int id, const GetFromPersistentFunc &) {
+      if (id == 0) return node_gdal::napi_env().Null().As<Napi::Value>();
+      return Napi::Number::New(node_gdal::napi_env(), id).As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::idGetter, idGetterBody)
 
 /**
  * Name of of band.
@@ -674,15 +759,21 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::idGetter) {
  * @memberof RasterBand
  * @type {Promise<string>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::descriptionGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct descriptionGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<const char *> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) { return raw->GetDescription(); };
-  job.rval = [](const char *desc, const GetFromPersistentFunc &) { return SafeString::New(desc); };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<const char *> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) { return raw->GetDescription(); };
+    job.rval = [](const char *desc, const GetFromPersistentFunc &) { return SafeString::New(desc); };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::descriptionGetter, descriptionGetterBody)
 
 /**
  * Size object containing `"x"` and `"y"` properties.
@@ -706,28 +797,34 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::descriptionGetter) {
  * @memberof RasterBand
  * @type {Promise<xyz>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::sizeGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct sizeGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  struct xy {
-    int x, y;
-  };
-  GDALAsyncableJob<xy> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    xy r;
-    r.x = raw->GetXSize();
-    r.y = raw->GetYSize();
-    return r;
-  };
-  job.rval = [](xy r, const GetFromPersistentFunc &) {
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
-    return result;
-  };
-  return job.run(info, async);
-}
+    struct xy {
+      int x, y;
+    };
+    GDALAsyncableJob<xy> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      xy r;
+      r.x = raw->GetXSize();
+      r.y = raw->GetYSize();
+      return r;
+    };
+    job.rval = [](xy r, const GetFromPersistentFunc &) {
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
+      return result;
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::sizeGetter, sizeGetterBody)
 
 /**
  * Size object containing `"x"` and `"y"` properties.
@@ -751,27 +848,33 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::sizeGetter) {
  * @memberof RasterBand
  * @type {Promise<xyz>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::blockSizeGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct blockSizeGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  struct xy {
-    int x, y;
-  };
-  GDALAsyncableJob<xy> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    xy r;
-    raw->GetBlockSize(&r.x, &r.y);
-    return r;
-  };
-  job.rval = [](xy r, const GetFromPersistentFunc &) {
-    Napi::Object result = Napi::Object::New(node_gdal::napi_env());
-    result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
-    result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
-    return result;
-  };
-  return job.run(info, async);
-}
+    struct xy {
+      int x, y;
+    };
+    GDALAsyncableJob<xy> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      xy r;
+      raw->GetBlockSize(&r.x, &r.y);
+      return r;
+    };
+    job.rval = [](xy r, const GetFromPersistentFunc &) {
+      Napi::Object result = Napi::Object::New(node_gdal::napi_env());
+      result.Set( Napi::String::New(node_gdal::napi_env(), "x"), Napi::Number::New(node_gdal::napi_env(), r.x));
+      result.Set( Napi::String::New(node_gdal::napi_env(), "y"), Napi::Number::New(node_gdal::napi_env(), r.y));
+      return result;
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::blockSizeGetter, blockSizeGetterBody)
 
 template <typename T> struct MaybeResult {
   T value;
@@ -800,23 +903,29 @@ template <typename T> struct MaybeResult {
  * @memberof RasterBand
  * @type {Promise<number|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::minimumGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct minimumGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    MaybeResult<double> r;
-    CPLErrorReset();
-    r.value = raw->GetMinimum(&r.success);
-    return r;
-  };
-  job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
-    if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
-    return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      MaybeResult<double> r;
+      CPLErrorReset();
+      r.value = raw->GetMinimum(&r.success);
+      return r;
+    };
+    job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
+      if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
+      return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::minimumGetter, minimumGetterBody)
 
 /**
  * Maximum value for this band.
@@ -840,23 +949,29 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::minimumGetter) {
  * @memberof RasterBand
  * @type {Promise<number|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::maximumGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct maximumGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    MaybeResult<double> r;
-    CPLErrorReset();
-    r.value = raw->GetMaximum(&r.success);
-    return r;
-  };
-  job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
-    if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
-    return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      MaybeResult<double> r;
+      CPLErrorReset();
+      r.value = raw->GetMaximum(&r.success);
+      return r;
+    };
+    job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
+      if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
+      return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::maximumGetter, maximumGetterBody)
 
 /**
  * Raster value offset.
@@ -879,23 +994,29 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::maximumGetter) {
  * @readonly
  * @type {Promise<number|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::offsetGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct offsetGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    MaybeResult<double> r;
-    CPLErrorReset();
-    r.value = raw->GetOffset(&r.success);
-    return r;
-  };
-  job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
-    if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
-    return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      MaybeResult<double> r;
+      CPLErrorReset();
+      r.value = raw->GetOffset(&r.success);
+      return r;
+    };
+    job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
+      if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
+      return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::offsetGetter, offsetGetterBody)
 
 /**
  * Raster value scale.
@@ -918,23 +1039,29 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::offsetGetter) {
  * @readonly
  * @type {Promise<number|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::scaleGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct scaleGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    MaybeResult<double> r;
-    CPLErrorReset();
-    r.value = raw->GetScale(&r.success);
-    return r;
-  };
-  job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
-    if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
-    return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      MaybeResult<double> r;
+      CPLErrorReset();
+      r.value = raw->GetScale(&r.success);
+      return r;
+    };
+    job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
+      if (r.success) return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
+      return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::scaleGetter, scaleGetterBody)
 
 /**
  * No data value for this band.
@@ -957,25 +1084,31 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::scaleGetter) {
  * @readonly
  * @type {Promise<number|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::noDataValueGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct noDataValueGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    MaybeResult<double> r;
-    CPLErrorReset();
-    r.value = raw->GetNoDataValue(&r.success);
-    return r;
-  };
-  job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
-    if (r.success)
-      return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
-    else
-      return node_gdal::napi_env().Null().As<Napi::Value>();
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<MaybeResult<double>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      MaybeResult<double> r;
+      CPLErrorReset();
+      r.value = raw->GetNoDataValue(&r.success);
+      return r;
+    };
+    job.rval = [](MaybeResult<double> r, const GetFromPersistentFunc &) {
+      if (r.success)
+        return Napi::Number::New(node_gdal::napi_env(), r.value).As<Napi::Value>();
+      else
+        return node_gdal::napi_env().Null().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::noDataValueGetter, noDataValueGetterBody)
 
 /**
  * Raster unit type (name for the units of this raster's values).
@@ -1004,18 +1137,24 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::noDataValueGetter) {
  * @readonly
  * @type {Promise<string|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::unitTypeGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct unitTypeGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<const char *> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    return raw->GetUnitType();
-  };
-  job.rval = [](const char *r, const GetFromPersistentFunc &) { return SafeString::New(r); };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<const char *> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      return raw->GetUnitType();
+    };
+    job.rval = [](const char *r, const GetFromPersistentFunc &) { return SafeString::New(r); };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::unitTypeGetter, unitTypeGetterBody)
 
 /**
  *
@@ -1041,21 +1180,27 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::unitTypeGetter) {
  * @memberof RasterBand
  * @type {Promise<string|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::dataTypeGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct dataTypeGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<GDALDataType> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    return raw->GetRasterDataType();
-  };
-  job.rval = [](GDALDataType type, const GetFromPersistentFunc &) {
-    if (type == GDT_Unknown) return node_gdal::napi_env().Null().As<Napi::Value>();
-    return SafeString::New(GDALGetDataTypeName(type));
-  };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<GDALDataType> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      return raw->GetRasterDataType();
+    };
+    job.rval = [](GDALDataType type, const GetFromPersistentFunc &) {
+      if (type == GDT_Unknown) return node_gdal::napi_env().Null().As<Napi::Value>();
+      return SafeString::New(GDALGetDataTypeName(type));
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::dataTypeGetter, dataTypeGetterBody)
 
 /**
  * Indicates if the band is read-only.
@@ -1079,18 +1224,24 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::dataTypeGetter) {
  * @memberof RasterBand
  * @type {Promise<boolean>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::readOnlyGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct readOnlyGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<GDALAccess> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    return raw->GetAccess();
-  };
-  job.rval = [](GDALAccess r, const GetFromPersistentFunc &) { return (r == GA_Update ? Napi::Boolean::New(node_gdal::napi_env(), false) : Napi::Boolean::New(node_gdal::napi_env(), true)); };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<GDALAccess> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      return raw->GetAccess();
+    };
+    job.rval = [](GDALAccess r, const GetFromPersistentFunc &) { return (r == GA_Update ? Napi::Boolean::New(node_gdal::napi_env(), false) : Napi::Boolean::New(node_gdal::napi_env(), true)); };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::readOnlyGetter, readOnlyGetterBody)
 
 /**
  * An indicator if the underlying datastore can compute arbitrary overviews
@@ -1122,18 +1273,24 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::readOnlyGetter) {
  * @memberof RasterBand
  * @type {Promise<boolean>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::hasArbitraryOverviewsGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct hasArbitraryOverviewsGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<bool> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    return static_cast<bool>(raw->HasArbitraryOverviews());
-  };
-  job.rval = [](bool r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r); };
-  return job.run(info, async);
-}
+    GDALAsyncableJob<bool> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      return static_cast<bool>(raw->HasArbitraryOverviews());
+    };
+    job.rval = [](bool r, const GetFromPersistentFunc &) { return Napi::Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::hasArbitraryOverviewsGetter, hasArbitraryOverviewsGetterBody)
 
 /**
  * List of list of category names for this raster.
@@ -1156,35 +1313,41 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::hasArbitraryOverviewsGetter) {
  * @readonly
  * @type {Promise<string[]>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::categoryNamesGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct categoryNamesGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<std::shared_ptr<std::vector<std::string>>> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) {
-    auto names = std::make_shared<std::vector<std::string>>();
-    CPLErrorReset();
-    // Here we copy twice what we could have copied only once
-    // In practice, GetCategoryNames always returns the same buffer
-    // But in theory, a clever driver could implement some crazy lazy method
-    // So we do everything "The Right Way"
-    // This is not a performance-critical function anyway
-    char **raw_names = raw->GetCategoryNames();
-    int i = 0;
+    GDALAsyncableJob<std::shared_ptr<std::vector<std::string>>> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) {
+      auto names = std::make_shared<std::vector<std::string>>();
+      CPLErrorReset();
+      // Here we copy twice what we could have copied only once
+      // In practice, GetCategoryNames always returns the same buffer
+      // But in theory, a clever driver could implement some crazy lazy method
+      // So we do everything "The Right Way"
+      // This is not a performance-critical function anyway
+      char **raw_names = raw->GetCategoryNames();
+      int i = 0;
 
-    while (raw_names != nullptr && raw_names[i] != nullptr) {
-      names->push_back(raw_names[i]);
-      i++;
-    }
-    return names;
-  };
-  job.rval = [](std::shared_ptr<std::vector<std::string>> names, const GetFromPersistentFunc &) {
-    Napi::Array results = Napi::Array::New(node_gdal::napi_env());
-    for (std::size_t i = 0; i < names->size(); ++i) results.Set( i, SafeString::New((*names.get())[i].c_str()));
-    return results;
-  };
-  return job.run(info, async);
-}
+      while (raw_names != nullptr && raw_names[i] != nullptr) {
+        names->push_back(raw_names[i]);
+        i++;
+      }
+      return names;
+    };
+    job.rval = [](std::shared_ptr<std::vector<std::string>> names, const GetFromPersistentFunc &) {
+      Napi::Array results = Napi::Array::New(node_gdal::napi_env());
+      for (std::size_t i = 0; i < names->size(); ++i) results.Set( i, SafeString::New((*names.get())[i].c_str()));
+      return results;
+    };
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::categoryNamesGetter, categoryNamesGetterBody)
 
 /**
  * Color interpretation mode ({@link GCI|see GCI constants})
@@ -1207,22 +1370,28 @@ GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::categoryNamesGetter) {
  * @readonly
  * @type {Promise<string|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::colorInterpretationGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+namespace {
+struct colorInterpretationGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<GDALColorInterp> job(band->parent_uid);
-  job.persist("this", info.This());
-  job.main = [raw](const GDALExecutionProgress &) { return raw->GetColorInterpretation(); };
-  job.rval = [](GDALColorInterp ci, const GetFromPersistentFunc &) {
-    if (ci == GCI_Undefined)
-      return node_gdal::napi_env().Undefined().As<Napi::Value>();
-    else
-      return SafeString::New(GDALGetColorInterpretationName(ci));
-  };
+    GDALAsyncableJob<GDALColorInterp> job(band->parent_uid);
+    job.persist("this", info.This());
+    job.main = [raw](const GDALExecutionProgress &) { return raw->GetColorInterpretation(); };
+    job.rval = [](GDALColorInterp ci, const GetFromPersistentFunc &) {
+      if (ci == GCI_Undefined)
+        return node_gdal::napi_env().Undefined().As<Napi::Value>();
+      else
+        return SafeString::New(GDALGetColorInterpretationName(ci));
+    };
 
-  return job.run(info, async);
-}
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::colorInterpretationGetter, colorInterpretationGetterBody)
 
 NAPI_SETTER(RasterBand::unitTypeSetter) {
   NODE_UNWRAP_CHECK_VOID(RasterBand, info.This(), band);
@@ -1232,7 +1401,7 @@ NAPI_SETTER(RasterBand::unitTypeSetter) {
   }
   std::string input = value.As<Napi::String>().Utf8Value();
   GDAL_LOCK_PARENT_VOID(band);
-  CPLErr err = band->this_->SetUnitType(input.c_str());
+  CPLErr err = band->get()->SetUnitType(input.c_str());
   if (err) { NODE_THROW_LAST_CPLERR; }
 }
 
@@ -1243,9 +1412,9 @@ NAPI_SETTER(RasterBand::noDataValueSetter) {
   GDAL_LOCK_PARENT_VOID(band);
   CPLErrorReset();
   if (value.IsNull() || value.IsUndefined()) {
-    err = band->this_->DeleteNoDataValue();
+    err = band->get()->DeleteNoDataValue();
   } else if (value.IsNumber()) {
-    err = band->this_->SetNoDataValue(value.As<Napi::Number>().DoubleValue());
+    err = band->get()->SetNoDataValue(value.As<Napi::Number>().DoubleValue());
   } else {
     Napi::Error::New(node_gdal::napi_env(), "No data value must be a number").ThrowAsJavaScriptException();
     return;
@@ -1263,7 +1432,7 @@ NAPI_SETTER(RasterBand::scaleSetter) {
   }
   double input = value.As<Napi::Number>().DoubleValue();
   GDAL_LOCK_PARENT_VOID(band);
-  CPLErr err = band->this_->SetScale(input);
+  CPLErr err = band->get()->SetScale(input);
   if (err) { NODE_THROW_LAST_CPLERR; }
 }
 
@@ -1276,7 +1445,7 @@ NAPI_SETTER(RasterBand::offsetSetter) {
   }
   double input = value.As<Napi::Number>().DoubleValue();
   GDAL_LOCK_PARENT_VOID(band);
-  CPLErr err = band->this_->SetOffset(input);
+  CPLErr err = band->get()->SetOffset(input);
   if (err) { NODE_THROW_LAST_CPLERR; }
 }
 
@@ -1304,7 +1473,7 @@ NAPI_SETTER(RasterBand::categoryNamesSetter) {
   }
 
   GDAL_LOCK_PARENT_VOID(band);
-  int err = band->this_->SetCategoryNames(list);
+  int err = band->get()->SetCategoryNames(list);
 
   if (list) { delete[] list; }
 
@@ -1325,7 +1494,7 @@ NAPI_SETTER(RasterBand::colorInterpretationSetter) {
   }
 
   GDAL_LOCK_PARENT_VOID(band);
-  CPLErr err = band->this_->SetColorInterpretation(ci);
+  CPLErr err = band->get()->SetColorInterpretation(ci);
   if (err) { NODE_THROW_LAST_CPLERR; }
 }
 
@@ -1350,20 +1519,26 @@ NAPI_SETTER(RasterBand::colorInterpretationSetter) {
  * @readonly
  * @type {Promise<ColorTable|null>}
  */
-GDAL_ASYNCABLE_GETTER_DEFINE(RasterBand::colorTableGetter) {
-  NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
+namespace {
+struct colorTableGetterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    NODE_UNWRAP_CHECK_ASYNC(RasterBand, info.This(), band);
 
-  GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
+    GDAL_RAW_CHECK_ASYNC(GDALRasterBand *, band, raw);
 
-  GDALAsyncableJob<GDALColorTable *> job(band->parent_uid);
-  job.main = [raw](const GDALExecutionProgress &) { return raw->GetColorTable(); };
-  job.rval = [](GDALColorTable *ct, const GetFromPersistentFunc &getter) {
-    if (ct != nullptr) return ColorTable::New(ct, getter("this"));
-    return node_gdal::napi_env().Undefined().As<Napi::Value>();
-  };
+    GDALAsyncableJob<GDALColorTable *> job(band->parent_uid);
+    job.main = [raw](const GDALExecutionProgress &) { return raw->GetColorTable(); };
+    job.rval = [](GDALColorTable *ct, const GetFromPersistentFunc &getter) {
+      if (ct != nullptr) return ColorTable::New(ct, getter("this"));
+      return node_gdal::napi_env().Undefined().As<Napi::Value>();
+    };
 
-  return job.run(info, async);
-}
+    return job.run(info, node_gdal::is_async<Async>);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_GETTER(RasterBand::colorTableGetter, colorTableGetterBody)
 
 NAPI_SETTER(RasterBand::colorTableSetter) {
 
@@ -1382,7 +1557,7 @@ NAPI_SETTER(RasterBand::colorTableSetter) {
   }
 
   GDAL_LOCK_PARENT_VOID(band);
-  CPLErr err = band->this_->SetColorTable(raw);
+  CPLErr err = band->get()->SetColorTable(raw);
   if (err != CE_None) { NODE_THROW_LAST_CPLERR; }
 }
 

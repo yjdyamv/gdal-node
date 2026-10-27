@@ -63,15 +63,14 @@ FeatureDefn::~FeatureDefn() {
   LOG("Disposed FeatureDefn [%p]", this_.get());
 }
 
-// Currently read-only feature definitions are copied.
-// Modifying a feature definition that should have been
-// read-only modifies a shadow copy without any real effect.
-// TODO: Implement proper read-only objects that throw
-
+// The feature definition of a feature cannot be handed out: it belongs to the
+// layer the feature came from. The factory hands out a read-only clone
 Napi::Value FeatureDefn::New(const OGRFeatureDefn *def) {
   if (!def) { return node_gdal::napi_env().Null(); }
   OGRFeatureDefn *copy = def->Clone();
-  return FeatureDefn::New(copy, true);
+  Napi::Value obj = FeatureDefn::New(copy, true);
+  node_gdal::set_read_only(obj.As<Napi::Object>());
+  return obj;
 }
 
 Napi::Value FeatureDefn::New(OGRFeatureDefn *def, bool owned) {
@@ -98,7 +97,8 @@ NAPI_METHOD(FeatureDefn::toString) {
  */
 NAPI_METHOD(FeatureDefn::clone) {
   FeatureDefn *def = node_gdal::UnwrapWrapped<FeatureDefn>(info.This().As<Napi::Object>());
-  return FeatureDefn::New(def->this_->Clone());
+  // the clone is ours, so it is not read-only
+  return FeatureDefn::New(def->this_->Clone(), true);
 }
 
 /**
@@ -166,6 +166,10 @@ NAPI_GETTER(FeatureDefn::fieldsGetter) {
 
 NAPI_SETTER(FeatureDefn::geomTypeSetter) {
   FeatureDefn *def = node_gdal::UnwrapWrapped<FeatureDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
+    return;
+  }
   if (!value.IsNumber()) {
     Napi::Error::New(node_gdal::napi_env(), "geomType must be an integer").ThrowAsJavaScriptException();
     return;
@@ -175,6 +179,10 @@ NAPI_SETTER(FeatureDefn::geomTypeSetter) {
 
 NAPI_SETTER(FeatureDefn::geomIgnoredSetter) {
   FeatureDefn *def = node_gdal::UnwrapWrapped<FeatureDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
+    return;
+  }
   if (!value.IsBoolean()) {
     Napi::Error::New(node_gdal::napi_env(), "geomIgnored must be a boolean").ThrowAsJavaScriptException();
     return;
@@ -184,6 +192,10 @@ NAPI_SETTER(FeatureDefn::geomIgnoredSetter) {
 
 NAPI_SETTER(FeatureDefn::styleIgnoredSetter) {
   FeatureDefn *def = node_gdal::UnwrapWrapped<FeatureDefn>(info.This().As<Napi::Object>());
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
+    return;
+  }
   if (!value.IsBoolean()) {
     Napi::Error::New(node_gdal::napi_env(), "styleIgnored must be a boolean").ThrowAsJavaScriptException();
     return;

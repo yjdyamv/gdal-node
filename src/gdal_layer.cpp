@@ -162,7 +162,26 @@ NAPI_METHOD(Layer::toString) {
  * @return {Promise<void>}
  *
  */
-NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_LOCKED(Layer, syncToDisk, SyncToDisk);
+namespace {
+// Layer.syncToDisk()
+struct syncToDiskBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Layer>(info, "Layer", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRErr> job(obj->parent_uid);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      int err = gdal_obj->SyncToDisk();
+      if (err) { throw GDALError(getOGRErrMsg(err)); }
+      return err;
+    };
+    job.rval = [](OGRErr, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Layer::syncToDisk, syncToDiskBody)
 
 /**
  * Determines if the dataset supports the indicated operation.
@@ -173,7 +192,22 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_LOCKED(Layer, syncToDisk, SyncToDis
  * @param {string} capability (see {@link OLC|capability list}
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT_1_STRING_PARAM_LOCKED(Layer, testCapability, Boolean, TestCapability, "capability");
+namespace {
+// Layer::testCapability()
+struct testCapabilityBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    std::string param;
+    if (!args.get(0, "capability", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Layer>(info, "Layer");
+    if (!obj) { return obj.failure; }
+    GDAL_LOCK_PARENT(obj);
+    return Boolean::New(info.Env(), obj->get()->TestCapability(param.c_str()));
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(Layer::testCapability, testCapabilityBody)
 
 /**
  * Fetch the extent of this layer.

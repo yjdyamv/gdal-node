@@ -84,7 +84,6 @@ void Geometry::Initialize(Napi::Object target) {
         ATTR(lcons, "name", nameGetter, READ_ONLY_SETTER)
     });
 
-  // GDAL_SetMethod(node_gdal::napi_env(), constructor, "fromWKBType", Geometry::create);
   GDAL_SetAsyncableMethod(env, lcons, "fromWKT", Geometry::createFromWkt);
   GDAL_SetAsyncableMethod(env, lcons, "fromWKB", Geometry::createFromWkb);
   GDAL_SetAsyncableMethod(env, lcons, "fromGeoJson", Geometry::createFromGeoJson);
@@ -155,7 +154,7 @@ OGRwkbGeometryType Geometry::getGeometryType_fixed(OGRGeometry *geom) {
 NAPI_METHOD(Geometry::toString) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
   std::ostringstream ss;
-  ss << "Geometry (" << geom->this_->getGeometryName() << ")";
+  ss << "Geometry (" << geom->get()->getGeometryName() << ")";
   return Napi::String::New(node_gdal::napi_env(), ss.str().c_str());
 }
 
@@ -178,7 +177,25 @@ NAPI_METHOD(Geometry::toString) {
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD(Geometry, closeRings, closeRings);
+namespace {
+// Geometry.closeRings()
+struct closeRingsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<int> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      gdal_obj->closeRings();
+      return 0;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::closeRings, closeRingsBody)
 
 /**
  * Clears the geometry.
@@ -199,7 +216,25 @@ NODE_WRAPPED_ASYNC_METHOD(Geometry, closeRings, closeRings);
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD(Geometry, empty, empty);
+namespace {
+// Geometry.empty()
+struct emptyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<int> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      gdal_obj->empty();
+      return 0;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::empty, emptyBody)
 
 /**
  * Swaps x, y coordinates.
@@ -220,7 +255,25 @@ NODE_WRAPPED_ASYNC_METHOD(Geometry, empty, empty);
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD(Geometry, swapXY, swapXY);
+namespace {
+// Geometry.swapXY()
+struct swapXYBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<int> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      gdal_obj->swapXY();
+      return 0;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::swapXY, swapXYBody)
 
 /**
  * Determines if the geometry is empty.
@@ -242,7 +295,22 @@ NODE_WRAPPED_ASYNC_METHOD(Geometry, swapXY, swapXY);
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isEmpty, Boolean, IsEmpty);
+namespace {
+// Geometry.isEmpty()
+struct isEmptyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->IsEmpty(); };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::isEmpty, isEmptyBody)
 
 /**
  * Determines if the geometry is valid.
@@ -264,7 +332,22 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isEmpty, Boolean, Is
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isValid, Boolean, IsValid);
+namespace {
+// Geometry.isValid()
+struct isValidBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->IsValid(); };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::isValid, isValidBody)
 
 /**
  * Determines if the geometry is simple.
@@ -286,7 +369,22 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isValid, Boolean, Is
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isSimple, Boolean, IsSimple);
+namespace {
+// Geometry.isSimple()
+struct isSimpleBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->IsSimple(); };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::isSimple, isSimpleBody)
 
 /**
  * Determines if the geometry is a ring.
@@ -308,7 +406,22 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isSimple, Boolean, I
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isRing, Boolean, IsRing);
+namespace {
+// Geometry.isRing()
+struct isRingBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) { return gdal_obj->IsRing(); };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::isRing, isRingBody)
 
 /**
  * Determines if the two geometries intersect.
@@ -332,8 +445,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT(Geometry, OGRBoolean, isRing, Boolean, IsR
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, intersects, Boolean, Intersects, Geometry, "geometry to compare");
+namespace {
+// Geometry.intersects()
+struct intersectsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Intersects(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::intersects, intersectsBody)
 
 /**
  * Determines if the two geometries equal each other.
@@ -357,8 +491,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, equals, Boolean, Equals, Geometry, "geometry to compare");
+namespace {
+// Geometry.equals()
+struct equalsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Equals(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::equals, equalsBody)
 
 /**
  * Determines if the two geometries are disjoint.
@@ -382,8 +537,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, disjoint, Boolean, Disjoint, Geometry, "geometry to compare");
+namespace {
+// Geometry.disjoint()
+struct disjointBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Disjoint(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::disjoint, disjointBody)
 
 /**
  * Determines if the two geometries touch.
@@ -407,8 +583,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, touches, Boolean, Touches, Geometry, "geometry to compare");
+namespace {
+// Geometry.touches()
+struct touchesBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Touches(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::touches, touchesBody)
 
 /**
  * Determines if the two geometries cross.
@@ -432,8 +629,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, crosses, Boolean, Crosses, Geometry, "geometry to compare");
+namespace {
+// Geometry.crosses()
+struct crossesBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Crosses(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::crosses, crossesBody)
 
 /**
  * Determines if the current geometry is within the provided geometry.
@@ -457,8 +675,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, within, Boolean, Within, Geometry, "geometry to compare");
+namespace {
+// Geometry.within()
+struct withinBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Within(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::within, withinBody)
 
 /**
  * Determines if the current geometry contains the provided geometry.
@@ -482,8 +721,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, contains, Boolean, Contains, Geometry, "geometry to compare");
+namespace {
+// Geometry.contains()
+struct containsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Contains(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::contains, containsBody)
 
 /**
  * Determines if the current geometry overlaps the provided geometry.
@@ -507,8 +767,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<boolean>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, OGRBoolean, overlaps, Boolean, Overlaps, Geometry, "geometry to compare");
+namespace {
+// Geometry.overlaps()
+struct overlapsBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to compare", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<OGRBoolean> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Overlaps(gdal_param);
+    };
+    job.rval = [](OGRBoolean r, const GetFromPersistentFunc &) { return Boolean::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::overlaps, overlapsBody)
 
 /**
  * Computes the distance between the two geometries.
@@ -532,8 +813,29 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<number>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  Geometry, double, distance, Number, Distance, Geometry, "geometry to use for distance calculation");
+namespace {
+// Geometry.distance()
+struct distanceBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Geometry *param;
+    if (!args.getWrapped(0, "geometry to use for distance calculation", "Geometry", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<double> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      return gdal_obj->Distance(gdal_param);
+    };
+    job.rval = [](double r, const GetFromPersistentFunc &) { return Number::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::distance, distanceBody)
 
 /**
  * Modify the geometry such it has no segment longer then the given distance.
@@ -544,7 +846,22 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @param {number} segment_length
  * @return {void}
  */
-NODE_WRAPPED_METHOD_WITH_1_DOUBLE_PARAM(Geometry, segmentize, segmentize, "segment length");
+namespace {
+// Geometry::segmentize()
+struct segmentizeBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    double param;
+    if (!args.get(0, "segment length", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry");
+    if (!obj) { return obj.failure; }
+    obj->get()->segmentize(param);
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(Geometry::segmentize, segmentizeBody)
 
 /**
  * Apply arbitrary coordinate transformation to the geometry.
@@ -579,8 +896,31 @@ NODE_WRAPPED_METHOD_WITH_1_DOUBLE_PARAM(Geometry, segmentize, segmentize, "segme
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(
-  Geometry, int, transform, transform, CoordinateTransformation, "transform");
+namespace {
+// Geometry.transform()
+struct transformBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    CoordinateTransformation *param;
+    if (!args.getWrapped(0, "transform", "CoordinateTransformation", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<int> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      int err = gdal_obj->transform(gdal_param);
+      if (err) { throw GDALError(getOGRErrMsg(err)); }
+      return err;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::transform, transformBody)
 
 /**
  * Transforms the geometry to match the provided {@link SpatialReference}
@@ -605,8 +945,31 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(
-  Geometry, int, transformTo, transformTo, SpatialReference, "spatial reference");
+namespace {
+// Geometry.transformTo()
+struct transformToBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    SpatialReference *param;
+    if (!args.getWrapped(0, "spatial reference", "SpatialReference", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    auto *gdal_param = param->get();
+    GDALAsyncableJob<int> job(0);
+    job.persist(info[0].As<Napi::Object>());
+    job.main = [gdal_obj, gdal_param](const GDALExecutionProgress &) {
+      int err = gdal_obj->transformTo(gdal_param);
+      if (err) { throw GDALError(getOGRErrMsg(err)); }
+      return err;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::transformTo, transformToBody)
 
 /**
  * Clones the instance.
@@ -618,7 +981,7 @@ NODE_WRAPPED_ASYNC_METHOD_WITH_OGRERR_RESULT_1_WRAPPED_PARAM(
  */
 NAPI_METHOD(Geometry::clone) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return Geometry::New(geom->this_->clone());
+  return Geometry::New(geom->get()->clone());
 }
 
 /**
@@ -643,19 +1006,27 @@ NAPI_METHOD(Geometry::clone) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::convexHull) {
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  OGRGeometry *gdal_geom = geom->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->ConvexHull();
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 0);
-}
+namespace {
+
+struct convexHullBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    OGRGeometry *gdal_geom = geom->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->ConvexHull();
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::convexHull, convexHullBody)
 
 /**
  * Compute boundary.
@@ -679,19 +1050,27 @@ GDAL_ASYNCABLE_DEFINE(Geometry::convexHull) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::boundary) {
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  OGRGeometry *gdal_geom = geom->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Boundary();
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 0);
-}
+namespace {
+
+struct boundaryBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    OGRGeometry *gdal_geom = geom->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Boundary();
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::boundary, boundaryBody)
 
 /**
  * Compute intersection with another geometry.
@@ -717,26 +1096,34 @@ GDAL_ASYNCABLE_DEFINE(Geometry::boundary) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::intersection) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  Geometry *x = NULL;
+struct intersectionBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.getWrapped(0, "geometry to use for intersection", "Geometry", x)) return args.failed();
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    Geometry *x = NULL;
 
-  OGRGeometry *gdal_geom = geom->this_;
-  OGRGeometry *gdal_x = x->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Intersection(gdal_x);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.getWrapped(0, "geometry to use for intersection", "Geometry", x)) return args.failed();
+
+    OGRGeometry *gdal_geom = geom->get();
+    OGRGeometry *gdal_x = x->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Intersection(gdal_x);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::intersection, intersectionBody)
 
 /**
  * Compute the union of this geometry with another.
@@ -762,26 +1149,34 @@ GDAL_ASYNCABLE_DEFINE(Geometry::intersection) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::unionGeometry) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  Geometry *x = NULL;
+struct unionGeometryBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.getWrapped(0, "geometry to use for union", "Geometry", x)) return args.failed();
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    Geometry *x = NULL;
 
-  OGRGeometry *gdal_geom = geom->this_;
-  OGRGeometry *gdal_x = x->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Union(gdal_x);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.getWrapped(0, "geometry to use for union", "Geometry", x)) return args.failed();
+
+    OGRGeometry *gdal_geom = geom->get();
+    OGRGeometry *gdal_x = x->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Union(gdal_x);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::unionGeometry, unionGeometryBody)
 
 /**
  * Compute the difference of this geometry with another.
@@ -807,26 +1202,34 @@ GDAL_ASYNCABLE_DEFINE(Geometry::unionGeometry) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::difference) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  Geometry *x = NULL;
+struct differenceBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.getWrapped(0, "geometry to use for difference", "Geometry", x)) return args.failed();
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    Geometry *x = NULL;
 
-  OGRGeometry *gdal_geom = geom->this_;
-  OGRGeometry *gdal_x = x->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Difference(gdal_x);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.getWrapped(0, "geometry to use for difference", "Geometry", x)) return args.failed();
+
+    OGRGeometry *gdal_geom = geom->get();
+    OGRGeometry *gdal_x = x->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Difference(gdal_x);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::difference, differenceBody)
 
 /**
  * Computes the symmetric difference of this geometry and the second geometry.
@@ -852,26 +1255,34 @@ GDAL_ASYNCABLE_DEFINE(Geometry::difference) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::symDifference) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  Geometry *x = NULL;
+struct symDifferenceBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.getWrapped(0, "geometry to use for symDifference", "Geometry", x)) return args.failed();
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    Geometry *x = NULL;
 
-  OGRGeometry *gdal_geom = geom->this_;
-  OGRGeometry *gdal_x = x->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->SymDifference(gdal_x);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.getWrapped(0, "geometry to use for symDifference", "Geometry", x)) return args.failed();
+
+    OGRGeometry *gdal_geom = geom->get();
+    OGRGeometry *gdal_x = x->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, gdal_x](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->SymDifference(gdal_x);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::symDifference, symDifferenceBody)
 
 /**
  * Reduces the geometry complexity.
@@ -897,25 +1308,33 @@ GDAL_ASYNCABLE_DEFINE(Geometry::symDifference) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::simplify) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  double tolerance;
+struct simplifyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.get(0, "tolerance", tolerance)) return args.failed();
-  OGRGeometry *gdal_geom = geom->this_;
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    double tolerance;
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Simplify(tolerance);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.get(0, "tolerance", tolerance)) return args.failed();
+    OGRGeometry *gdal_geom = geom->get();
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Simplify(tolerance);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::simplify, simplifyBody)
 
 /**
  * Reduces the geometry complexity while preserving the topology.
@@ -941,25 +1360,33 @@ GDAL_ASYNCABLE_DEFINE(Geometry::simplify) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::simplifyPreserveTopology) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  double tolerance;
+struct simplifyPreserveTopologyBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.get(0, "tolerance", tolerance)) return args.failed();
-  OGRGeometry *gdal_geom = geom->this_;
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    double tolerance;
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->SimplifyPreserveTopology(tolerance);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 1);
-}
+    if (!args.get(0, "tolerance", tolerance)) return args.failed();
+    OGRGeometry *gdal_geom = geom->get();
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, tolerance](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->SimplifyPreserveTopology(tolerance);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::simplifyPreserveTopology, simplifyPreserveTopologyBody)
 
 /**
  * Buffers the geometry by the given distance.
@@ -987,29 +1414,37 @@ GDAL_ASYNCABLE_DEFINE(Geometry::simplifyPreserveTopology) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::buffer) {
-  Args args(info);
+namespace {
 
-  double distance;
-  int number_of_segments = 30;
+struct bufferBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.get(0, "distance", distance)) return args.failed();
-  if (!args.optional(1, "number of segments", number_of_segments)) return args.failed();
+    double distance;
+    int number_of_segments = 30;
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    if (!args.get(0, "distance", distance)) return args.failed();
+    if (!args.optional(1, "number of segments", number_of_segments)) return args.failed();
 
-  OGRGeometry *gdal_geom = geom->this_;
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom, distance, number_of_segments](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->Buffer(distance, number_of_segments);
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 2);
-}
+    OGRGeometry *gdal_geom = geom->get();
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom, distance, number_of_segments](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->Buffer(distance, number_of_segments);
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::buffer, bufferBody)
 
 #if GDAL_VERSION_MAJOR >= 3
 /**
@@ -1035,20 +1470,28 @@ GDAL_ASYNCABLE_DEFINE(Geometry::buffer) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::makeValid) {
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  OGRGeometry *gdal_geom = geom->this_;
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    auto r = gdal_geom->MakeValid();
-    if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return r;
-  };
-  job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
-  return job.run(info, async, 0);
-}
+struct makeValidBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+    OGRGeometry *gdal_geom = geom->get();
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      auto r = gdal_geom->MakeValid();
+      if (r == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return r;
+    };
+    job.rval = [](OGRGeometry *r, const GetFromPersistentFunc &) { return Geometry::New(r); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::makeValid, makeValidBody)
 #endif
 
 /**
@@ -1073,33 +1516,41 @@ GDAL_ASYNCABLE_DEFINE(Geometry::makeValid) {
  * @return {Promise<string>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKT) {
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct exportToWKTBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<char *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    char *text = NULL;
-    uv_sem_wait(async_lock);
-    OGRErr err = gdal_geom->exportToWkt(&text);
-    uv_sem_post(async_lock);
-    if (err) { throw GDALError(getOGRErrMsg(err)); }
-    return text;
-  };
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  job.rval = [](char *text, const GetFromPersistentFunc &) {
-    if (text) {
-      auto r = SafeString::New(text);
-      CPLFree(text);
-      return r;
-    }
-    return node_gdal::napi_env().Undefined().As<Napi::Value>();
-  };
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<char *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      char *text = NULL;
+      uv_sem_wait(async_lock);
+      OGRErr err = gdal_geom->exportToWkt(&text);
+      uv_sem_post(async_lock);
+      if (err) { throw GDALError(getOGRErrMsg(err)); }
+      return text;
+    };
 
-  return job.run(info, async, 0);
-}
+    job.rval = [](char *text, const GetFromPersistentFunc &) {
+      if (text) {
+        auto r = SafeString::New(text);
+        CPLFree(text);
+        return r;
+      }
+      return node_gdal::napi_env().Undefined().As<Napi::Value>();
+    };
+
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::exportToWKT, exportToWKTBody)
 
 /**
  * Convert a geometry into well known binary format.
@@ -1127,78 +1578,86 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKT) {
  * @return {Promise<Buffer>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKB) {
-  Args args(info);
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct exportToWKBBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  size_t size = geom->this_->WkbSize();
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  // byte order
-  OGRwkbByteOrder byte_order;
-  std::string order = "MSB";
-  if (!args.optional(0, "byte order", order)) return args.failed();
-  if (order == "MSB") {
-    byte_order = wkbXDR;
-  } else if (order == "LSB") {
-    byte_order = wkbNDR;
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "byte order must be 'MSB' or 'LSB'").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+    size_t size = geom->get()->WkbSize();
 
-  // wkb variant
-  OGRwkbVariant wkb_variant;
-  std::string variant = "OGC";
-  if (!args.optional(1, "wkb variant", variant)) return args.failed();
-  if (variant == "OGC") {
-    wkb_variant = wkbVariantOldOgc;
-  } else if (variant == "ISO") {
-    wkb_variant = wkbVariantIso;
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "variant must be 'OGC' or 'ISO'").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  unsigned char *data = (unsigned char *)malloc(size);
-  if (data == nullptr) {
-    Napi::Error::New(node_gdal::napi_env(), "Failed allocating memory").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<unsigned char *> job(0);
-  job.main = [async_lock, gdal_geom, data, byte_order, wkb_variant](const GDALExecutionProgress &) {
-    uv_sem_wait(async_lock);
-    OGRErr err = gdal_geom->exportToWkb(byte_order, data, wkb_variant);
-    uv_sem_post(async_lock);
-    if (err) {
-      free(data);
-      throw GDALError(getOGRErrMsg(err));
+    // byte order
+    OGRwkbByteOrder byte_order;
+    std::string order = "MSB";
+    if (!args.optional(0, "byte order", order)) return args.failed();
+    if (order == "MSB") {
+      byte_order = wkbXDR;
+    } else if (order == "LSB") {
+      byte_order = wkbNDR;
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "byte order must be 'MSB' or 'LSB'").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
-    return data;
-  };
 
-  Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), size);
+    // wkb variant
+    OGRwkbVariant wkb_variant;
+    std::string variant = "OGC";
+    if (!args.optional(1, "wkb variant", variant)) return args.failed();
+    if (variant == "OGC") {
+      wkb_variant = wkbVariantOldOgc;
+    } else if (variant == "ISO") {
+      wkb_variant = wkbVariantIso;
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "variant must be 'OGC' or 'ISO'").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
 
-  job.rval = [size](unsigned char *data, const GetFromPersistentFunc &) {
-    int *hint = new int{static_cast<int>(size)};
-    Napi::Value result = Napi::Buffer<char>::New(
-                            node_gdal::napi_env(),
-                            reinterpret_cast<char *>(data),
-                            size,
-                            [](Napi::Env, char *data, void *hint) {
-                              int *size = reinterpret_cast<int *>(hint);
-                              Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), -(*size));
-                              delete size;
-                              free(data);
-                            },
-                            hint);
-    return result;
-  };
-  return job.run(info, async, 2);
-}
+    unsigned char *data = (unsigned char *)malloc(size);
+    if (data == nullptr) {
+      Napi::Error::New(node_gdal::napi_env(), "Failed allocating memory").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<unsigned char *> job(0);
+    job.main = [async_lock, gdal_geom, data, byte_order, wkb_variant](const GDALExecutionProgress &) {
+      uv_sem_wait(async_lock);
+      OGRErr err = gdal_geom->exportToWkb(byte_order, data, wkb_variant);
+      uv_sem_post(async_lock);
+      if (err) {
+        free(data);
+        throw GDALError(getOGRErrMsg(err));
+      }
+      return data;
+    };
+
+    Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), size);
+
+    job.rval = [size](unsigned char *data, const GetFromPersistentFunc &) {
+      int *hint = new int{static_cast<int>(size)};
+      Napi::Value result = Napi::Buffer<char>::New(
+                              node_gdal::napi_env(),
+                              reinterpret_cast<char *>(data),
+                              size,
+                              [](Napi::Env, char *data, void *hint) {
+                                int *size = reinterpret_cast<int *>(hint);
+                                Napi::MemoryManagement::AdjustExternalMemory(node_gdal::napi_env(), -(*size));
+                                delete size;
+                                free(data);
+                              },
+                              hint);
+      return result;
+    };
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::exportToWKB, exportToWKBBody)
 
 /**
  * Convert a geometry into KML format.
@@ -1222,31 +1681,39 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToWKB) {
  * @return {Promise<string>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::exportToKML) {
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct exportToKMLBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<char *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    uv_sem_wait(async_lock);
-    char *text = gdal_geom->exportToKML();
-    uv_sem_post(async_lock);
-    if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return text;
-  };
-  job.rval = [](char *text, const GetFromPersistentFunc &) {
-    if (text) {
-      Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
-      CPLFree(text);
-      return result;
-    }
-    return node_gdal::napi_env().Undefined().As<Napi::Value>();
-  };
-  return job.run(info, async, 0);
-}
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<char *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      uv_sem_wait(async_lock);
+      char *text = gdal_geom->exportToKML();
+      uv_sem_post(async_lock);
+      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return text;
+    };
+    job.rval = [](char *text, const GetFromPersistentFunc &) {
+      if (text) {
+        Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
+        CPLFree(text);
+        return result;
+      }
+      return node_gdal::napi_env().Undefined().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::exportToKML, exportToKMLBody)
 
 /**
  * Convert a geometry into GML format.
@@ -1270,31 +1737,39 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToKML) {
  * @return {Promise<string>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::exportToGML) {
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct exportToGMLBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<char *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    uv_sem_wait(async_lock);
-    char *text = gdal_geom->exportToGML();
-    uv_sem_post(async_lock);
-    if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return text;
-  };
-  job.rval = [](char *text, const GetFromPersistentFunc &) {
-    if (text) {
-      Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
-      CPLFree(text);
-      return result;
-    }
-    return node_gdal::napi_env().Undefined().As<Napi::Value>();
-  };
-  return job.run(info, async, 0);
-}
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<char *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      uv_sem_wait(async_lock);
+      char *text = gdal_geom->exportToGML();
+      uv_sem_post(async_lock);
+      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return text;
+    };
+    job.rval = [](char *text, const GetFromPersistentFunc &) {
+      if (text) {
+        Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
+        CPLFree(text);
+        return result;
+      }
+      return node_gdal::napi_env().Undefined().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::exportToGML, exportToGMLBody)
 
 /**
  * Convert a geometry into JSON format.
@@ -1318,31 +1793,39 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToGML) {
  * @return {Promise<string>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::exportToJSON) {
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct exportToJSONBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<char *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    uv_sem_wait(async_lock);
-    char *text = gdal_geom->exportToJson();
-    uv_sem_post(async_lock);
-    if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return text;
-  };
-  job.rval = [](char *text, const GetFromPersistentFunc &) {
-    if (text) {
-      Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
-      CPLFree(text);
-      return result;
-    }
-    return node_gdal::napi_env().Undefined().As<Napi::Value>();
-  };
-  return job.run(info, async, 0);
-}
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<char *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      uv_sem_wait(async_lock);
+      char *text = gdal_geom->exportToJson();
+      uv_sem_post(async_lock);
+      if (text == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return text;
+    };
+    job.rval = [](char *text, const GetFromPersistentFunc &) {
+      if (text) {
+        Napi::Value result = Napi::String::New(node_gdal::napi_env(), text);
+        CPLFree(text);
+        return result;
+      }
+      return node_gdal::napi_env().Undefined().As<Napi::Value>();
+    };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::exportToJSON, exportToJSONBody)
 
 /**
  * Compute the centroid of the geometry.
@@ -1366,30 +1849,38 @@ GDAL_ASYNCABLE_DEFINE(Geometry::exportToJSON) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::centroid) {
-  // The Centroid method wants the caller to create the point to fill in.
-  // Instead of requiring the caller to create the point geometry to fill in, we
-  // new up an OGRPoint and put the result into it and return that.
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct centroidBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    // The Centroid method wants the caller to create the point to fill in.
+    // Instead of requiring the caller to create the point geometry to fill in, we
+    // new up an OGRPoint and put the result into it and return that.
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
-  GDALAsyncableJob<OGRPoint *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    OGRPoint *point = new OGRPoint();
-    uv_sem_wait(async_lock);
-    OGRErr err = gdal_geom->Centroid(point);
-    uv_sem_post(async_lock);
-    if (err) {
-      delete point;
-      throw GDALError(getOGRErrMsg(err));
-    }
-    return point;
-  };
-  job.rval = [](OGRPoint *point, const GetFromPersistentFunc &) { return Point::New(point); };
-  return job.run(info, async, 0);
-}
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
+    GDALAsyncableJob<OGRPoint *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      OGRPoint *point = new OGRPoint();
+      uv_sem_wait(async_lock);
+      OGRErr err = gdal_geom->Centroid(point);
+      uv_sem_post(async_lock);
+      if (err) {
+        delete point;
+        throw GDALError(getOGRErrMsg(err));
+      }
+      return point;
+    };
+    job.rval = [](OGRPoint *point, const GetFromPersistentFunc &) { return Point::New(point); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::centroid, centroidBody)
 
 /**
  * Computes the bounding box (envelope).
@@ -1410,35 +1901,43 @@ GDAL_ASYNCABLE_DEFINE(Geometry::centroid) {
  * @param {callback<Envelope>} [callback=undefined]
  * @return {Promise<Envelope>}
  */
-GDAL_ASYNCABLE_DEFINE(Geometry::getEnvelope) {
-  // returns object containing boundaries until complete OGREnvelope binding is
-  // built
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct getEnvelopeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    // returns object containing boundaries until complete OGREnvelope binding is
+    // built
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  GDALAsyncableJob<OGREnvelope *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    OGREnvelope *envelope = new OGREnvelope();
-    uv_sem_wait(async_lock);
-    gdal_geom->getEnvelope(envelope);
-    uv_sem_post(async_lock);
-    return envelope;
-  };
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
 
-  job.rval = [](OGREnvelope *envelope, const GetFromPersistentFunc &) {
-    Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
-    delete envelope;
-    return obj;
-  };
-  return job.run(info, async, 0);
-}
+    GDALAsyncableJob<OGREnvelope *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      OGREnvelope *envelope = new OGREnvelope();
+      uv_sem_wait(async_lock);
+      gdal_geom->getEnvelope(envelope);
+      uv_sem_post(async_lock);
+      return envelope;
+    };
+
+    job.rval = [](OGREnvelope *envelope, const GetFromPersistentFunc &) {
+      Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
+      delete envelope;
+      return obj;
+    };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::getEnvelope, getEnvelopeBody)
 
 /**
  * Computes the 3D bounding box (envelope).
@@ -1460,37 +1959,45 @@ GDAL_ASYNCABLE_DEFINE(Geometry::getEnvelope) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::getEnvelope3D) {
-  // returns object containing boundaries until complete OGREnvelope binding is
-  // built
+namespace {
 
-  Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
+struct getEnvelope3DBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    // returns object containing boundaries until complete OGREnvelope binding is
+    // built
 
-  OGRGeometry *gdal_geom = geom->this_;
-  uv_sem_t *async_lock = geom->async_lock;
+    Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
 
-  GDALAsyncableJob<OGREnvelope3D *> job(0);
-  job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
-    OGREnvelope3D *envelope = new OGREnvelope3D();
-    uv_sem_wait(async_lock);
-    gdal_geom->getEnvelope(envelope);
-    uv_sem_post(async_lock);
-    return envelope;
-  };
+    OGRGeometry *gdal_geom = geom->get();
+    uv_sem_t *async_lock = geom->lock();
 
-  job.rval = [](OGREnvelope3D *envelope, const GetFromPersistentFunc &) {
-    Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "minZ"), Napi::Number::New(node_gdal::napi_env(), envelope->MinZ));
-    obj.Set( Napi::String::New(node_gdal::napi_env(), "maxZ"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxZ));
-    delete envelope;
-    return obj;
-  };
-  return job.run(info, async, 0);
-}
+    GDALAsyncableJob<OGREnvelope3D *> job(0);
+    job.main = [async_lock, gdal_geom](const GDALExecutionProgress &) {
+      OGREnvelope3D *envelope = new OGREnvelope3D();
+      uv_sem_wait(async_lock);
+      gdal_geom->getEnvelope(envelope);
+      uv_sem_post(async_lock);
+      return envelope;
+    };
+
+    job.rval = [](OGREnvelope3D *envelope, const GetFromPersistentFunc &) {
+      Napi::Object obj = Napi::Object::New(node_gdal::napi_env());
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "minX"), Napi::Number::New(node_gdal::napi_env(), envelope->MinX));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "maxX"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxX));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "minY"), Napi::Number::New(node_gdal::napi_env(), envelope->MinY));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "maxY"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxY));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "minZ"), Napi::Number::New(node_gdal::napi_env(), envelope->MinZ));
+      obj.Set( Napi::String::New(node_gdal::napi_env(), "maxZ"), Napi::Number::New(node_gdal::napi_env(), envelope->MaxZ));
+      delete envelope;
+      return obj;
+    };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::getEnvelope3D, getEnvelope3DBody)
 
 /**
  * Convert geometry to strictly 2D.
@@ -1512,7 +2019,25 @@ GDAL_ASYNCABLE_DEFINE(Geometry::getEnvelope3D) {
  * @return {Promise<void>}
  */
 
-NODE_WRAPPED_ASYNC_METHOD(Geometry, flattenTo2D, flattenTo2D);
+namespace {
+// Geometry.flattenTo2D()
+struct flattenTo2DBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    auto obj = node_gdal::unwrapThis<Geometry>(info, "Geometry", async);
+    if (!obj) { return obj.failure; }
+    auto *gdal_obj = obj->get();
+    GDALAsyncableJob<int> job(0);
+    job.main = [gdal_obj](const GDALExecutionProgress &) {
+      gdal_obj->flattenTo2D();
+      return 0;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
+  }
+};
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::flattenTo2D, flattenTo2DBody)
 
 // --- JS static methods (OGRGeometryFactory) ---
 
@@ -1544,30 +2069,38 @@ NODE_WRAPPED_ASYNC_METHOD(Geometry, flattenTo2D, flattenTo2D);
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkt) {
-  Args args(info);
+namespace {
 
-  std::string *wkt_string = new std::string;
-  SpatialReference *srs = NULL;
+struct createFromWktBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!args.get(0, "wkt", *wkt_string)) return args.failed();
-  if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
+    std::string *wkt_string = new std::string;
+    SpatialReference *srs = NULL;
 
-  OGRSpatialReference *ogr_srs = NULL;
-  if (srs) { ogr_srs = srs->get(); }
+    if (!args.get(0, "wkt", *wkt_string)) return args.failed();
+    if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [wkt_string, ogr_srs](const GDALExecutionProgress &) {
-    std::unique_ptr<std::string> wkt_string_ptr(wkt_string);
-    OGRGeometry *geom = NULL;
-    OGRChar *wkt = (OGRChar *)wkt_string->c_str();
-    OGRErr err = OGRGeometryFactory::createFromWkt(&wkt, ogr_srs, &geom);
-    if (err) throw GDALError(getOGRErrMsg(err));
-    return geom;
-  };
-  job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
-  return job.run(info, async, 2);
-}
+    OGRSpatialReference *ogr_srs = NULL;
+    if (srs) { ogr_srs = srs->get(); }
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [wkt_string, ogr_srs](const GDALExecutionProgress &) {
+      std::unique_ptr<std::string> wkt_string_ptr(wkt_string);
+      OGRGeometry *geom = NULL;
+      OGRChar *wkt = (OGRChar *)wkt_string->c_str();
+      OGRErr err = OGRGeometryFactory::createFromWkt(&wkt, ogr_srs, &geom);
+      if (err) throw GDALError(getOGRErrMsg(err));
+      return geom;
+    };
+    job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::createFromWkt, createFromWktBody)
 
 /**
  * Creates a Geometry from a WKB buffer.
@@ -1597,38 +2130,46 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkt) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkb) {
-  Args args(info);
+namespace {
 
-  std::string wkb_string;
-  SpatialReference *srs = NULL;
+struct createFromWkbBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  Napi::Object wkb_obj;
-  if (!args.get(0, "wkb", wkb_obj)) return args.failed();
-  if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
+    std::string wkb_string;
+    SpatialReference *srs = NULL;
 
-  // N-API has no GetConstructorName: check the type directly
-  if (!wkb_obj.IsBuffer() && !wkb_obj.IsTypedArray()) {
-    Napi::Error::New(node_gdal::napi_env(), "Argument must be a buffer object").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object wkb_obj;
+    if (!args.get(0, "wkb", wkb_obj)) return args.failed();
+    if (!args.optionalWrapped(1, "srs", "SpatialReference", srs)) return args.failed();
+
+    // N-API has no GetConstructorName: check the type directly
+    if (!wkb_obj.IsBuffer() && !wkb_obj.IsTypedArray()) {
+      Napi::Error::New(node_gdal::napi_env(), "Argument must be a buffer object").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    unsigned char *data = (unsigned char *)wkb_obj.As<Napi::Buffer<uint8_t>>().Data();
+    size_t length = wkb_obj.As<Napi::Buffer<uint8_t>>().Length();
+
+    OGRSpatialReference *ogr_srs = NULL;
+    if (srs) { ogr_srs = srs->get(); }
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [data, length, ogr_srs](const GDALExecutionProgress &) {
+      OGRGeometry *geom = NULL;
+      OGRErr err = OGRGeometryFactory::createFromWkb(data, ogr_srs, &geom, length);
+      if (err) throw GDALError(getOGRErrMsg(err));
+      return geom;
+    };
+    job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  unsigned char *data = (unsigned char *)wkb_obj.As<Napi::Buffer<uint8_t>>().Data();
-  size_t length = wkb_obj.As<Napi::Buffer<uint8_t>>().Length();
+} // namespace
 
-  OGRSpatialReference *ogr_srs = NULL;
-  if (srs) { ogr_srs = srs->get(); }
-
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [data, length, ogr_srs](const GDALExecutionProgress &) {
-    OGRGeometry *geom = NULL;
-    OGRErr err = OGRGeometryFactory::createFromWkb(data, ogr_srs, &geom, length);
-    if (err) throw GDALError(getOGRErrMsg(err));
-    return geom;
-  };
-  job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(Geometry::createFromWkb, createFromWkbBody)
 
 /**
  * Creates a Geometry from a GeoJSON object fragment.
@@ -1665,44 +2206,52 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromWkb) {
  * @param {callback<Geometry>} [callback=undefined]
  * @return {Promise<Geometry>}
  */
-GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJson) {
-  Args args(info);
-#if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
-  Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
-  return node_gdal::napi_env().Undefined();
-#else
+namespace {
 
-  Napi::Object geo_obj;
-  if (!args.get(0, "geojson", geo_obj)) return args.failed();
-
-  // goes to text to pass it in, there isn't a performant way to
-  // go from v8 JSON -> CPLJSON anyways
-  // node-addon-api has no JSON class: reach the global JSON.stringify
-  Napi::Value json_stringified = node_gdal::napi_env()
-                                   .Global()
-                                   .Get("JSON")
-                                   .As<Napi::Object>()
-                                   .Get("stringify")
-                                   .As<Napi::Function>()
-                                   .Call({geo_obj});
-  if (json_stringified.IsEmpty() || !json_stringified.IsString()) {
-    Napi::Error::New(node_gdal::napi_env(), "Invalid GeoJSON").ThrowAsJavaScriptException();
+struct createFromGeoJsonBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+  #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
+    Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
-  }
-  std::string *val = new std::string(json_stringified.As<Napi::String>().Utf8Value());
+  #else
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [val](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    std::unique_ptr<std::string> val_ptr(val);
-    OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(val->c_str());
-    if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return geom;
-  };
-  job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
-  return job.run(info, async, 1);
-#endif
-}
+    Napi::Object geo_obj;
+    if (!args.get(0, "geojson", geo_obj)) return args.failed();
+
+    // goes to text to pass it in, there isn't a performant way to
+    // go from v8 JSON -> CPLJSON anyways
+    // node-addon-api has no JSON class: reach the global JSON.stringify
+    Napi::Value json_stringified = node_gdal::napi_env()
+                                     .Global()
+                                     .Get("JSON")
+                                     .As<Napi::Object>()
+                                     .Get("stringify")
+                                     .As<Napi::Function>()
+                                     .Call({geo_obj});
+    if (json_stringified.IsEmpty() || !json_stringified.IsString()) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid GeoJSON").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    std::string *val = new std::string(json_stringified.As<Napi::String>().Utf8Value());
+
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [val](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      std::unique_ptr<std::string> val_ptr(val);
+      OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(val->c_str());
+      if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return geom;
+    };
+    job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  #endif
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::createFromGeoJson, createFromGeoJsonBody)
 
 /**
  * Creates a Geometry from a buffer containing a GeoJSON fragment in UT8 format.
@@ -1730,61 +2279,50 @@ GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJson) {
  * @return {Promise<Geometry>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Geometry::createFromGeoJsonBuffer) {
-  Args args(info);
-#if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
-  Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
-  return node_gdal::napi_env().Undefined();
-#else
-  std::string geojson_string;
+namespace {
 
-  Napi::Object geojson_obj;
-  if (!args.get(0, "geojson", geojson_obj)) return args.failed();
-
-  // N-API has no GetConstructorName
-  if (!geojson_obj.IsBuffer() && !geojson_obj.IsTypedArray()) {
-    Napi::Error::New(node_gdal::napi_env(), "Argument must be a buffer object").ThrowAsJavaScriptException();
+struct createFromGeoJsonBufferBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+  #if GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 3
+    Napi::Error::New(node_gdal::napi_env(), "GDAL < 2.3 does not support parsing GeoJSON directly").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
-  }
+  #else
+    std::string geojson_string;
 
-  unsigned char *data = (unsigned char *)geojson_obj.As<Napi::Buffer<uint8_t>>().Data();
-  size_t length = geojson_obj.As<Napi::Buffer<uint8_t>>().Length();
+    Napi::Object geojson_obj;
+    if (!args.get(0, "geojson", geojson_obj)) return args.failed();
 
-  GDALAsyncableJob<OGRGeometry *> job(0);
-  job.main = [data, length](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLJSONDocument oDocument;
-    if (!oDocument.LoadMemory(reinterpret_cast<const GByte *>(data), length)) {
-      throw GDALError("Parsing the GeoJSON fragment failed");
+    // N-API has no GetConstructorName
+    if (!geojson_obj.IsBuffer() && !geojson_obj.IsTypedArray()) {
+      Napi::Error::New(node_gdal::napi_env(), "Argument must be a buffer object").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
     }
-    OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(oDocument.GetRoot());
 
-    if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
-    return geom;
-  };
-  job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
-  return job.run(info, async, 1);
-#endif
-}
+    unsigned char *data = (unsigned char *)geojson_obj.As<Napi::Buffer<uint8_t>>().Data();
+    size_t length = geojson_obj.As<Napi::Buffer<uint8_t>>().Length();
 
-/**
- * Creates an empty Geometry from a WKB type.
- *
- * @static
- * @method create
- * @instance
- * @memberof Geometry
- * @param {number} type WKB geometry type {@link wkbGeometryType|available options}
- * @return {Geometry}
- */
-NAPI_METHOD(Geometry::create) {
-  Args args(info);
+    GDALAsyncableJob<OGRGeometry *> job(0);
+    job.main = [data, length](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLJSONDocument oDocument;
+      if (!oDocument.LoadMemory(reinterpret_cast<const GByte *>(data), length)) {
+        throw GDALError("Parsing the GeoJSON fragment failed");
+      }
+      OGRGeometry *geom = OGRGeometryFactory::createFromGeoJson(oDocument.GetRoot());
 
-  OGRwkbGeometryType type = wkbUnknown;
-  if (!args.getEnum(0, "type", "OGRwkbGeometryType", type)) return args.failed();
+      if (geom == nullptr) throw GDALError(CPLGetLastErrorMsg());
+      return geom;
+    };
+    job.rval = [](OGRGeometry *geom, const GetFromPersistentFunc &) { return Geometry::New(geom, true); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  #endif
+  }
+};
 
-  return Geometry::New(OGRGeometryFactory::createGeometry(type), true);
-}
+} // namespace
+
+GDAL_ASYNC_METHOD(Geometry::createFromGeoJsonBuffer, createFromGeoJsonBufferBody)
 
 /**
  * @kind member
@@ -1798,9 +2336,9 @@ NAPI_GETTER(Geometry::srsGetter) {
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 7)
   // This const_cast is ok because New with false makes a copy
   // TODO: Implement this with proper C++ overloading semantics
-  return SpatialReference::New(const_cast<OGRSpatialReference *>(geom->this_->getSpatialReference()), false);
+  return SpatialReference::New(const_cast<OGRSpatialReference *>(geom->get()->getSpatialReference()), false);
 #else
-  return SpatialReference::New(geom->this_->getSpatialReference(), false);
+  return SpatialReference::New(geom->get()->getSpatialReference(), false);
 #endif
 }
 
@@ -1816,7 +2354,7 @@ NAPI_SETTER(Geometry::srsSetter) {
     return;
   }
 
-  geom->this_->assignSpatialReference(srs);
+  geom->get()->assignSpatialReference(srs);
 }
 
 /**
@@ -1829,7 +2367,7 @@ NAPI_SETTER(Geometry::srsSetter) {
  */
 NAPI_GETTER(Geometry::nameGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return SafeString::New(geom->this_->getGeometryName());
+  return SafeString::New(geom->get()->getGeometryName());
 }
 
 /**
@@ -1853,7 +2391,7 @@ NAPI_GETTER(Geometry::nameGetter) {
  */
 NAPI_GETTER(Geometry::typeGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), getGeometryType_fixed(geom->this_));
+  return Napi::Number::New(node_gdal::napi_env(), getGeometryType_fixed(geom->get()));
 }
 
 /**
@@ -1866,7 +2404,7 @@ NAPI_GETTER(Geometry::typeGetter) {
  */
 NAPI_GETTER(Geometry::wkbSizeGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), static_cast<int>(geom->this_->WkbSize()));
+  return Napi::Number::New(node_gdal::napi_env(), static_cast<int>(geom->get()->WkbSize()));
 }
 
 /**
@@ -1879,7 +2417,7 @@ NAPI_GETTER(Geometry::wkbSizeGetter) {
  */
 NAPI_GETTER(Geometry::dimensionGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), geom->this_->getDimension());
+  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getDimension());
 }
 
 /**
@@ -1891,7 +2429,7 @@ NAPI_GETTER(Geometry::dimensionGetter) {
  */
 NAPI_GETTER(Geometry::coordinateDimensionGetter) {
   Geometry *geom = node_gdal::UnwrapWrapped<Geometry>(info.This().As<Napi::Object>());
-  return Napi::Number::New(node_gdal::napi_env(), geom->this_->getCoordinateDimension());
+  return Napi::Number::New(node_gdal::napi_env(), geom->get()->getCoordinateDimension());
 }
 
 NAPI_SETTER(Geometry::coordinateDimensionSetter) {
@@ -1907,7 +2445,7 @@ NAPI_SETTER(Geometry::coordinateDimensionSetter) {
     return;
   }
 
-  geom->this_->setCoordinateDimension(dim);
+  geom->get()->setCoordinateDimension(dim);
 }
 
 Napi::Value Geometry::getConstructor(OGRwkbGeometryType type) {

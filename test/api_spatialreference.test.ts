@@ -405,8 +405,8 @@ describe('gdal.SpatialReference', () => {
   describe('isVertical', () => {
     it('should return true if vertical coordinate system', () => {
       assert.equal(gdal.SpatialReference.fromWKT(compoundVertical).isVertical(), true)
-      // This is a typo that will probably stay until 4.x
-      // @ts-expect-error breaking change
+      // This is a typo that will probably stay until 4.x, it is documented so that
+      // the typings and the documentation agree with the registration
       assert.equal((gdal.SpatialReference.fromWKT(compoundVertical)).isVectical(), true)
     })
     it('should return false if not vertical coordinate system', () => {

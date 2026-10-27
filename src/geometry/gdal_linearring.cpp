@@ -23,7 +23,6 @@ void LinearRing::Initialize(Napi::Object target) {
     {
         METHOD(toString)
         METHOD(getArea)
-        METHOD(addSubLineString)
     });
 
   // lcons->Inherit() has no DefineClass equivalent
@@ -74,30 +73,17 @@ NAPI_METHOD(LinearRing::toString) {
  * @memberof LinearRing
  * @return {number}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(LinearRing, getArea, Number, get_Area);
-
-NAPI_METHOD(LinearRing::addSubLineString) {
-  Args args(info);
-
-  LinearRing *geom = node_gdal::UnwrapWrapped<LinearRing>(info.This().As<Napi::Object>());
-  LineString *other;
-  int start = 0;
-  int end = -1;
-
-  if (!args.getWrapped(0, "line", "LineString", other)) return args.failed();
-  if (!args.optional(1, "start", start)) return args.failed();
-  if (!args.optional(2, "end", end)) return args.failed();
-
-  int n = other->get()->getNumPoints();
-
-  if (start < 0 || end < -1 || start >= n || end >= n) {
-    Napi::RangeError::New(node_gdal::napi_env(), "Invalid start or end index for LineString").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+namespace {
+// LinearRing::getArea()
+struct getAreaBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<LinearRing>(info, "LinearRing");
+    if (!obj) { return obj.failure; }
+    return Number::New(info.Env(), obj->get()->get_Area());
   }
+};
+} // namespace
 
-  geom->this_->addSubLineString(other->get(), start, end);
-
-  return node_gdal::napi_env().Undefined();
-}
+GDAL_SYNC_METHOD(LinearRing::getArea, getAreaBody)
 
 } // namespace node_gdal

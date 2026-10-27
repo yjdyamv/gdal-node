@@ -16,6 +16,7 @@ namespace node_gdal {
 
 class RasterBandPixels : public GDALObject<RasterBandPixels> {
     public:
+  static RasterBand *parent(const Napi::CallbackInfo &info);
   static Napi::FunctionReference &constructor();
 
   static void Initialize(Napi::Object target);
@@ -32,7 +33,6 @@ class RasterBandPixels : public GDALObject<RasterBandPixels> {
 
   static NAPI_GETTER(bandGetter);
 
-  static RasterBand *parent(const Napi::CallbackInfo &info);
 
   RasterBandPixels(const Napi::CallbackInfo &info);
 

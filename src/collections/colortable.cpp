@@ -115,6 +115,9 @@ Napi::Value ColorTable::New(GDALColorTable *raw, Napi::Value parent) {
   std::vector<napi_value> args = {Napi::Number::New(node_gdal::napi_env(), band->parent_uid)};
   Napi::Object obj = ColorTable::constructor().Value().New(args);
   GDAL_SET_PRIVATE(obj, "parent_", parent);
+  // The table belongs to the band: writing to the table handed out here would
+  // change the table of the band behind its back
+  node_gdal::set_read_only(obj);
 
   return obj;
 }
@@ -255,9 +258,8 @@ NAPI_METHOD(ColorTable::set) {
   NODE_UNWRAP_CHECK(ColorTable, info.This(), self);
   GDAL_RAW_CHECK(GDALColorTable *, self, raw);
 
-  Napi::Value parentMaybe = GDAL_GET_PRIVATE(info.This(), "parent_");
-  if (!parentMaybe.IsEmpty() && !parentMaybe.IsUndefined() && !parentMaybe.IsNull()) {
-    Napi::Error::New(node_gdal::napi_env(), "RasterBand color tables are read-only, create a new one to modify it").ThrowAsJavaScriptException();
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A ColorTable retrieved from a RasterBand");
     return node_gdal::napi_env().Undefined();
   }
 
@@ -305,9 +307,8 @@ NAPI_METHOD(ColorTable::ramp) {
   COLOR_FROM_OBJ(args, start_color_obj, start_color);
   COLOR_FROM_OBJ(args, end_color_obj, end_color);
 
-  Napi::Value parentMaybe = GDAL_GET_PRIVATE(info.This(), "parent_");
-  if (!parentMaybe.IsEmpty() && !parentMaybe.IsUndefined() && !parentMaybe.IsNull()) {
-    Napi::Error::New(node_gdal::napi_env(), "RasterBand color tables are read-only, create a new one to modify it").ThrowAsJavaScriptException();
+  if (node_gdal::is_read_only(info.This())) {
+    node_gdal::throw_read_only(info.Env(), "A ColorTable retrieved from a RasterBand");
     return node_gdal::napi_env().Undefined();
   }
 

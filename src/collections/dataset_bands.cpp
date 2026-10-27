@@ -88,33 +88,41 @@ NAPI_METHOD(DatasetBands::toString) {
  * @throws {Error}
  * @return {Promise<RasterBand>}
  */
-GDAL_ASYNCABLE_DEFINE(DatasetBands::get) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct getBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+    int band_id;
+    if (!args.get(0, "band id", band_id)) return args.failed();
+
+    GDALAsyncableJob<GDALRasterBand *> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw, band_id](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      GDALRasterBand *band = raw->GetRasterBand(band_id);
+      if (band == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
+      return band;
+    };
+    job.rval = [raw](GDALRasterBand *band, const GetFromPersistentFunc &) { return RasterBand::New(band, raw); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALDataset *raw = ds->get();
-  int band_id;
-  if (!args.get(0, "band id", band_id)) return args.failed();
+} // namespace
 
-  GDALAsyncableJob<GDALRasterBand *> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw, band_id](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    GDALRasterBand *band = raw->GetRasterBand(band_id);
-    if (band == nullptr) { throw GDALError(CPLGetLastErrorMsg()); }
-    return band;
-  };
-  job.rval = [raw](GDALRasterBand *band, const GetFromPersistentFunc &) { return RasterBand::New(band, raw); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(DatasetBands::get, getBody)
 
 /**
  * Adds a new band.
@@ -142,52 +150,63 @@ GDAL_ASYNCABLE_DEFINE(DatasetBands::get) {
  * @return {Promise<RasterBand>}
  */
 
-GDAL_ASYNCABLE_DEFINE(DatasetBands::create) {
-  Args args(info);
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct createBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+    GDALDataType type;
+    std::shared_ptr<StringList> options(new StringList);
+
+    // if (!args.getEnum(0, "data type", "GDALDataType", type)) return args.failed();
+    if (info.Length() < 1) {
+      Napi::Error::New(node_gdal::napi_env(), "data type argument needed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (info[0].IsString()) {
+      std::string type_name = info[0].As<Napi::String>().Utf8Value();
+      type = GDALGetDataTypeByName(type_name.c_str());
+    } else if (info[0].IsNull() || info[0].IsUndefined()) {
+      type = GDT_Unknown;
+    } else {
+      Napi::Error::New(node_gdal::napi_env(), "data type must be string or undefined").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    if (info.Length() > 1 && options->parse(info[1])) {
+      return node_gdal::napi_env().Undefined(); // error parsing creation options, options->parse does the throwing
+    }
+
+    GDALAsyncableJob<GDALRasterBand *> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw, type, options](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = raw->AddBand(type, options->get());
+      if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
+      return raw->GetRasterBand(raw->GetRasterCount());
+    };
+    job.rval = [raw, ds](GDALRasterBand *r, const GetFromPersistentFunc &) {
+      ds->updateMemory();
+      return RasterBand::New(r, raw);
+    };
+    return job.run(info, node_gdal::is_async<Async>, 2);
   }
+};
 
-  GDALDataset *raw = ds->get();
-  GDALDataType type;
-  std::shared_ptr<StringList> options(new StringList);
+} // namespace
 
-  // if (!args.getEnum(0, "data type", "GDALDataType", type)) return args.failed();
-  if (info.Length() < 1) {
-    Napi::Error::New(node_gdal::napi_env(), "data type argument needed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  if (info[0].IsString()) {
-    std::string type_name = info[0].As<Napi::String>().Utf8Value();
-    type = GDALGetDataTypeByName(type_name.c_str());
-  } else if (info[0].IsNull() || info[0].IsUndefined()) {
-    type = GDT_Unknown;
-  } else {
-    Napi::Error::New(node_gdal::napi_env(), "data type must be string or undefined").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-
-  if (info.Length() > 1 && options->parse(info[1])) {
-    return node_gdal::napi_env().Undefined(); // error parsing creation options, options->parse does the throwing
-  }
-
-  GDALAsyncableJob<GDALRasterBand *> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw, type, options](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = raw->AddBand(type, options->get());
-    if (err != CE_None) { throw GDALError(CPLGetLastErrorMsg()); }
-    return raw->GetRasterBand(raw->GetRasterCount());
-  };
-  job.rval = [raw](GDALRasterBand *r, const GetFromPersistentFunc &) { return RasterBand::New(r, raw); };
-  return job.run(info, async, 2);
-}
+GDAL_ASYNC_METHOD(DatasetBands::create, createBody)
 
 /**
  * Returns the number of bands.
@@ -210,27 +229,35 @@ GDAL_ASYNCABLE_DEFINE(DatasetBands::create) {
  * @param {callback<number>} [callback=undefined]
  * @return {Promise<number>}
  */
-GDAL_ASYNCABLE_DEFINE(DatasetBands::count) {
+namespace {
 
-  Napi::Object parent =
-    GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
-  Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+struct countBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
 
-  if (!ds->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    Napi::Object parent =
+      GDAL_GET_PRIVATE(info.This(), "parent_").As<Napi::Object>();
+    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
+
+    if (!ds->isAlive()) {
+      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALDataset *raw = ds->get();
+    GDALAsyncableJob<int> job(ds->uid);
+    job.persist(parent);
+    job.main = [raw](const GDALExecutionProgress &) {
+      int count = raw->GetRasterCount();
+      return count;
+    };
+    job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
+    return job.run(info, node_gdal::is_async<Async>, 0);
   }
+};
 
-  GDALDataset *raw = ds->get();
-  GDALAsyncableJob<int> job(ds->uid);
-  job.persist(parent);
-  job.main = [raw](const GDALExecutionProgress &) {
-    int count = raw->GetRasterCount();
-    return count;
-  };
-  job.rval = [](int count, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), count); };
-  return job.run(info, async, 0);
-}
+} // namespace
+
+GDAL_ASYNC_METHOD(DatasetBands::count, countBody)
 
 /**
  * Returns the parent dataset.

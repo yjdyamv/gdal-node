@@ -54,9 +54,19 @@ class Args {
     return env_.Undefined();
   }
 
+  // The number of positional arguments: a function as the last argument is the
+  // callback of an asynchronous method, not one of them, so the method parses
+  // the arguments in front of it. The getters which are given the index of the
+  // callback itself - getCallback() and optionalCallback() - are not affected.
+  size_t positional_length() const {
+    if (info_ == nullptr) { return 0; }
+    const size_t len = info_->Length();
+    return len > 0 && (*info_)[len - 1].IsFunction() ? len - 1 : len;
+  }
+
   // True when the argument is neither missing, nor null, nor undefined
   bool present(size_t num) const {
-    return num < info_->Length() && !(*info_)[num].IsUndefined() && !(*info_)[num].IsNull();
+    return num < positional_length() && !(*info_)[num].IsUndefined() && !(*info_)[num].IsNull();
   }
 
   // ----- required positional arguments -----

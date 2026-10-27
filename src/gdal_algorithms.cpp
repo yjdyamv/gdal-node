@@ -61,39 +61,47 @@ void Algorithms::Initialize(Napi::Object target) {
  * @return {Promise<void>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
-  Args args(info);
-  Napi::Object obj;
-  RasterBand *src;
-  RasterBand *mask = NULL;
-  double search_dist;
-  int smooth_iterations = 0;
+namespace {
 
-  if (!args.get(0, "options", obj)) return args.failed();
+struct fillNodataBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Napi::Object obj;
+    RasterBand *src;
+    RasterBand *mask = NULL;
+    double search_dist;
+    int smooth_iterations = 0;
 
-  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
-  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
-  if (!args.from(obj, "searchDist", search_dist)) return args.failed();
-  if (!args.from(obj, "smoothIterations", smooth_iterations)) return args.failed();
+    if (!args.get(0, "options", obj)) return args.failed();
 
-  GDALRasterBand *gdal_src = src->get();
-  GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
+    if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+    if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+    if (!args.from(obj, "searchDist", search_dist)) return args.failed();
+    if (!args.from(obj, "smoothIterations", smooth_iterations)) return args.failed();
 
-  std::vector<long> ds_uids = {src->parent_uid};
-  if (mask) ds_uids.push_back(mask->parent_uid);
+    GDALRasterBand *gdal_src = src->get();
+    GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
 
-  GDALAsyncableJob<CPLErr> job(ds_uids);
-  job.persist(src->Value());
-  if (mask) job.persist(mask->Value());
-  job.main = [gdal_src, gdal_mask, search_dist, smooth_iterations](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, NULL, NULL, NULL);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 1);
-}
+    std::vector<long> ds_uids = {src->parent_uid};
+    if (mask) ds_uids.push_back(mask->parent_uid);
+
+    GDALAsyncableJob<CPLErr> job(ds_uids);
+    job.persist(src->Value());
+    if (mask) job.persist(mask->Value());
+    job.main = [gdal_src, gdal_mask, search_dist, smooth_iterations](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      CPLErr err = GDALFillNodata(gdal_src, gdal_mask, search_dist, 0, smooth_iterations, NULL, NULL, NULL);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Algorithms::fillNodata, fillNodataBody)
 
 /**
  * @typedef {object} ContourOptions
@@ -159,94 +167,102 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::fillNodata) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
-  Args args(info);
-  Napi::Object obj;
-  Napi::Value prop;
-  RasterBand *src;
-  Layer *dst;
-  double interval = 100, base = 0;
-  double *fixed_levels = NULL;
-  DoubleList fixed_level_array;
-  int n_fixed_levels = 0;
-  int use_nodata = 0;
-  double nodata = 0;
-  int id_field = -1, elev_field = -1;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
+namespace {
 
-  if (!args.get(0, "options", obj)) return args.failed();
+struct contourGenerateBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Napi::Object obj;
+    Napi::Value prop;
+    RasterBand *src;
+    Layer *dst;
+    double interval = 100, base = 0;
+    double *fixed_levels = NULL;
+    DoubleList fixed_level_array;
+    int n_fixed_levels = 0;
+    int use_nodata = 0;
+    double nodata = 0;
+    int id_field = -1, elev_field = -1;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
 
-  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
-  if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
-  if (!args.from(obj, "idField", id_field)) return args.failed();
-  if (!args.from(obj, "elevField", elev_field)) return args.failed();
-  if (!args.from(obj, "interval", interval)) return args.failed();
-  if (!args.from(obj, "offset", base)) return args.failed();
-  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
-  if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "fixedLevels"))) {
-    if (fixed_level_array.parse(obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "fixedLevels")))) {
-      return node_gdal::napi_env().Undefined(); // error parsing double list
-    } else {
-      fixed_levels = fixed_level_array.get();
-      n_fixed_levels = fixed_level_array.length();
+    if (!args.get(0, "options", obj)) return args.failed();
+
+    if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+    if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
+    if (!args.from(obj, "idField", id_field)) return args.failed();
+    if (!args.from(obj, "elevField", elev_field)) return args.failed();
+    if (!args.from(obj, "interval", interval)) return args.failed();
+    if (!args.from(obj, "offset", base)) return args.failed();
+    if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+    if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "fixedLevels"))) {
+      if (fixed_level_array.parse(obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "fixedLevels")))) {
+        return node_gdal::napi_env().Undefined(); // error parsing double list
+      } else {
+        fixed_levels = fixed_level_array.get();
+        n_fixed_levels = fixed_level_array.length();
+      }
     }
-  }
-  if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "nodata"))) {
-    prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "nodata"));
-    if (prop.IsNumber()) {
-      use_nodata = 1;
-      nodata = prop.As<Napi::Number>().DoubleValue();
-    } else if (!prop.IsNull() && !prop.IsUndefined()) {
-      Napi::TypeError::New(node_gdal::napi_env(), "nodata property must be a number").ThrowAsJavaScriptException();
+    if (obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "nodata"))) {
+      prop = obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "nodata"));
+      if (prop.IsNumber()) {
+        use_nodata = 1;
+        nodata = prop.As<Napi::Number>().DoubleValue();
+      } else if (!prop.IsNull() && !prop.IsUndefined()) {
+        Napi::TypeError::New(node_gdal::napi_env(), "nodata property must be a number").ThrowAsJavaScriptException();
+      }
     }
+
+    GDALRasterBand *gdal_src = src->get();
+    OGRLayer *gdal_dst = dst->get();
+
+    long src_uid = src->parent_uid;
+    long dst_uid = dst->parent_uid;
+
+    GDALAsyncableJob<CPLErr> job({src_uid, dst_uid});
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main = [gdal_src,
+                interval,
+                base,
+                n_fixed_levels,
+                fixed_levels,
+                use_nodata,
+                nodata,
+                gdal_dst,
+                id_field,
+                elev_field,
+                interruptible](const GDALExecutionProgress &progress) {
+      CPLErrorReset();
+      CPLErr err = GDALContourGenerate(
+        gdal_src,
+        interval,
+        base,
+        n_fixed_levels,
+        fixed_levels,
+        use_nodata,
+        nodata,
+        gdal_dst,
+        id_field,
+        elev_field,
+        interruptible ? ProgressTrampoline : nullptr,
+        interruptible ? (void *)&progress : nullptr);
+      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+      return err;
+    };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALRasterBand *gdal_src = src->get();
-  OGRLayer *gdal_dst = dst->get();
+} // namespace
 
-  long src_uid = src->parent_uid;
-  long dst_uid = dst->parent_uid;
-
-  GDALAsyncableJob<CPLErr> job({src_uid, dst_uid});
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main = [gdal_src,
-              interval,
-              base,
-              n_fixed_levels,
-              fixed_levels,
-              use_nodata,
-              nodata,
-              gdal_dst,
-              id_field,
-              elev_field,
-              interruptible](const GDALExecutionProgress &progress) {
-    CPLErrorReset();
-    CPLErr err = GDALContourGenerate(
-      gdal_src,
-      interval,
-      base,
-      n_fixed_levels,
-      fixed_levels,
-      use_nodata,
-      nodata,
-      gdal_dst,
-      id_field,
-      elev_field,
-      interruptible ? ProgressTrampoline : nullptr,
-      interruptible ? (void *)&progress : nullptr);
-    if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-    return err;
-  };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(Algorithms::contourGenerate, contourGenerateBody)
 
 /**
  * @typedef {object} SieveOptions
@@ -293,64 +309,72 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::contourGenerate) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
-  Args args(info);
-  Napi::Object obj;
-  RasterBand *src;
-  RasterBand *dst;
-  RasterBand *mask = NULL;
-  int threshold;
-  int connectedness = 4;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
+namespace {
 
-  if (!args.get(0, "options", obj)) return args.failed();
+struct sieveFilterBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Napi::Object obj;
+    RasterBand *src;
+    RasterBand *dst;
+    RasterBand *mask = NULL;
+    int threshold;
+    int connectedness = 4;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
 
-  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
-  if (!args.fromWrapped(obj, "dst", "RasterBand", dst)) return args.failed();
-  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
-  if (!args.from(obj, "threshold", threshold)) return args.failed();
-  if (!args.from(obj, "connectedness", connectedness)) return args.failed();
-  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+    if (!args.get(0, "options", obj)) return args.failed();
 
-  if (connectedness != 4 && connectedness != 8) {
-    Napi::Error::New(node_gdal::napi_env(), "connectedness option must be 4 or 8").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+    if (!args.fromWrapped(obj, "dst", "RasterBand", dst)) return args.failed();
+    if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+    if (!args.from(obj, "threshold", threshold)) return args.failed();
+    if (!args.from(obj, "connectedness", connectedness)) return args.failed();
+    if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+
+    if (connectedness != 4 && connectedness != 8) {
+      Napi::Error::New(node_gdal::napi_env(), "connectedness option must be 4 or 8").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALRasterBand *gdal_src = src->get();
+    GDALRasterBand *gdal_dst = dst->get();
+    GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
+
+    std::vector<long> ds_uids = {src->parent_uid, dst->parent_uid};
+    if (mask) ds_uids.push_back(mask->parent_uid);
+
+    GDALAsyncableJob<CPLErr> job(ds_uids);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
+    const bool interruptible = job.interruptible();
+    job.main =
+      [gdal_src, gdal_dst, gdal_mask, threshold, connectedness, interruptible](const GDALExecutionProgress &progress) {
+        CPLErrorReset();
+        CPLErr err = GDALSieveFilter(
+          gdal_src,
+          gdal_mask,
+          gdal_dst,
+          threshold,
+          connectedness,
+          NULL,
+          interruptible ? ProgressTrampoline : nullptr,
+          interruptible ? (void *)&progress : nullptr);
+        if (err) { throw GDALError(CPLGetLastErrorMsg()); }
+        return err;
+      };
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALRasterBand *gdal_src = src->get();
-  GDALRasterBand *gdal_dst = dst->get();
-  GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
+} // namespace
 
-  std::vector<long> ds_uids = {src->parent_uid, dst->parent_uid};
-  if (mask) ds_uids.push_back(mask->parent_uid);
-
-  GDALAsyncableJob<CPLErr> job(ds_uids);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) return info.Env().Undefined();
-  const bool interruptible = job.interruptible();
-  job.main =
-    [gdal_src, gdal_dst, gdal_mask, threshold, connectedness, interruptible](const GDALExecutionProgress &progress) {
-      CPLErrorReset();
-      CPLErr err = GDALSieveFilter(
-        gdal_src,
-        gdal_mask,
-        gdal_dst,
-        threshold,
-        connectedness,
-        NULL,
-        interruptible ? ProgressTrampoline : nullptr,
-        interruptible ? (void *)&progress : nullptr);
-      if (err) { throw GDALError(CPLGetLastErrorMsg()); }
-      return err;
-    };
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(Algorithms::sieveFilter, sieveFilterBody)
 
 /**
  * Compute checksum for image region.
@@ -382,52 +406,60 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::sieveFilter) {
  * @return {Promise<number>}
  */
 
-GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
-  Args args(info);
-  RasterBand *src;
-  int x = 0, y = 0, w, h, bandw, bandh;
+namespace {
 
-  if (!args.getWrapped(0, "src", "RasterBand", src)) return args.failed();
-  GDAL_RAW_CHECK(GDALRasterBand *, src, gdal_src);
+struct checksumImageBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    RasterBand *src;
+    int x = 0, y = 0, w, h, bandw, bandh;
 
-  w = bandw = src->get()->GetXSize();
-  h = bandh = src->get()->GetYSize();
+    if (!args.getWrapped(0, "src", "RasterBand", src)) return args.failed();
+    GDAL_RAW_CHECK(GDALRasterBand *, src, gdal_src);
 
-  if (!args.optional(1, "x", x)) return args.failed();
-  if (!args.optional(2, "y", y)) return args.failed();
-  if (!args.optional(3, "xSize", w)) return args.failed();
-  if (!args.optional(4, "ySize", h)) return args.failed();
+    w = bandw = src->get()->GetXSize();
+    h = bandh = src->get()->GetYSize();
 
-  if (x < 0 || y < 0 || x >= bandw || y >= bandh) {
-    Napi::RangeError::New(node_gdal::napi_env(), "offset invalid for given band").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    if (!args.optional(1, "x", x)) return args.failed();
+    if (!args.optional(2, "y", y)) return args.failed();
+    if (!args.optional(3, "xSize", w)) return args.failed();
+    if (!args.optional(4, "ySize", h)) return args.failed();
+
+    if (x < 0 || y < 0 || x >= bandw || y >= bandh) {
+      Napi::RangeError::New(node_gdal::napi_env(), "offset invalid for given band").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (w < 0 || h < 0 || w > bandw || h > bandh) {
+      Napi::RangeError::New(node_gdal::napi_env(), "x and y size must be smaller than band dimensions and greater than 0").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (x + w - 1 >= bandw || y + h - 1 >= bandh) {
+      Napi::RangeError::New(node_gdal::napi_env(), "given range is outside bounds of given band").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    long src_uid = src->parent_uid;
+
+    GDALAsyncableJob<int> job(src_uid);
+    job.persist(src->Value());
+    job.main = [gdal_src, x, y, w, h](const GDALExecutionProgress &) {
+      CPLErrorReset();
+      int r = GDALChecksumImage(gdal_src, x, y, w, h);
+  #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 6)
+      if (r == -1) throw GDALError(CPLGetLastErrorMsg());
+  #else
+      if (CPLGetLastErrorType() != CE_None) throw GDALError(CPLGetLastErrorMsg());
+  #endif
+      return r;
+    };
+    job.rval = [](int r, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), r); };
+    return job.run(info, node_gdal::is_async<Async>, 5);
   }
-  if (w < 0 || h < 0 || w > bandw || h > bandh) {
-    Napi::RangeError::New(node_gdal::napi_env(), "x and y size must be smaller than band dimensions and greater than 0").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
-  if (x + w - 1 >= bandw || y + h - 1 >= bandh) {
-    Napi::RangeError::New(node_gdal::napi_env(), "given range is outside bounds of given band").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+};
 
-  long src_uid = src->parent_uid;
+} // namespace
 
-  GDALAsyncableJob<int> job(src_uid);
-  job.persist(src->Value());
-  job.main = [gdal_src, x, y, w, h](const GDALExecutionProgress &) {
-    CPLErrorReset();
-    int r = GDALChecksumImage(gdal_src, x, y, w, h);
-#if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 6)
-    if (r == -1) throw GDALError(CPLGetLastErrorMsg());
-#else
-    if (CPLGetLastErrorType() != CE_None) throw GDALError(CPLGetLastErrorMsg());
-#endif
-    return r;
-  };
-  job.rval = [](int r, const GetFromPersistentFunc &) { return Napi::Number::New(node_gdal::napi_env(), r); };
-  return job.run(info, async, 5);
-}
+GDAL_ASYNC_METHOD(Algorithms::checksumImage, checksumImageBody)
 
 /**
  * @typedef {object} PolygonizeOptions
@@ -483,113 +515,129 @@ GDAL_ASYNCABLE_DEFINE(Algorithms::checksumImage) {
  * @param {callback<void>} [callback=undefined]
  * @return {Promise<void>}
  */
-GDAL_ASYNCABLE_DEFINE(Algorithms::polygonize) {
-  Args args(info);
-  Napi::Object obj;
-  RasterBand *src;
-  RasterBand *mask = NULL;
-  Layer *dst;
-  int connectedness = 4;
-  int pix_val_field = 0;
-  char **papszOptions = NULL;
-  Napi::FunctionReference *progress_cb = nullptr;
-  Napi::Value abort_signal;
+namespace {
 
-  if (!args.get(0, "options", obj)) return args.failed();
+struct polygonizeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Napi::Object obj;
+    RasterBand *src;
+    RasterBand *mask = NULL;
+    Layer *dst;
+    int connectedness = 4;
+    int pix_val_field = 0;
+    char **papszOptions = NULL;
+    Napi::FunctionReference *progress_cb = nullptr;
+    Napi::Value abort_signal;
 
-  if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
-  if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
-  if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
-  if (!args.from(obj, "connectedness", connectedness)) return args.failed();
-  if (!args.from(obj, "pixValField", pix_val_field)) return args.failed();
-  if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
-  if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+    if (!args.get(0, "options", obj)) return args.failed();
 
-  if (connectedness == 8) {
-    papszOptions = CSLSetNameValue(papszOptions, "8CONNECTED", "8");
-  } else if (connectedness != 4) {
-    Napi::Error::New(node_gdal::napi_env(), "connectedness must be 4 or 8").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
+    if (!args.fromWrapped(obj, "src", "RasterBand", src)) return args.failed();
+    if (!args.fromWrapped(obj, "dst", "Layer", dst)) return args.failed();
+    if (!args.fromWrapped(obj, "mask", "RasterBand", mask)) return args.failed();
+    if (!args.from(obj, "connectedness", connectedness)) return args.failed();
+    if (!args.from(obj, "pixValField", pix_val_field)) return args.failed();
+    if (!args.fromCallback(obj, "progress_cb", progress_cb)) return args.failed();
+    if (!args.from(obj, "abort_signal", abort_signal)) return args.failed();
+
+    if (connectedness == 8) {
+      papszOptions = CSLSetNameValue(papszOptions, "8CONNECTED", "8");
+    } else if (connectedness != 4) {
+      Napi::Error::New(node_gdal::napi_env(), "connectedness must be 4 or 8").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GDALRasterBand *gdal_src = src->get();
+    OGRLayer *gdal_dst = dst->get();
+    GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
+
+    std::vector<long> ds_uids = {src->parent_uid, dst->parent_uid};
+    if (mask) ds_uids.push_back(mask->parent_uid);
+
+    GDALAsyncableJob<CPLErr> job(ds_uids);
+    job.progress = progress_cb;
+    // An AbortSignal alone is enough to make the operation interruptible: GDAL
+    // can be interrupted only through the progress trampoline, which therefore
+    // has to be installed even when there is no progress callback
+    if (!job.setAbortSignal(abort_signal)) {
+      // The invalid signal has already thrown, the options would be leaked
+      CSLDestroy(papszOptions);
+      return info.Env().Undefined();
+    }
+    const bool interruptible = job.interruptible();
+
+    if (
+      obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "useFloats")) &&
+      obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "useFloats")).As<Napi::Boolean>().Value()) {
+      job.main =
+        [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
+          CPLErrorReset();
+          CPLErr err = GDALFPolygonize(
+            gdal_src,
+            gdal_mask,
+            reinterpret_cast<OGRLayerH>(gdal_dst),
+            pix_val_field,
+            papszOptions,
+            interruptible ? ProgressTrampoline : nullptr,
+            interruptible ? (void *)&progress : nullptr);
+          if (papszOptions) CSLDestroy(papszOptions);
+          if (err) throw GDALError(CPLGetLastErrorMsg());
+          return err;
+        };
+    } else {
+      job.main =
+        [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
+          CPLErrorReset();
+          CPLErr err = GDALPolygonize(
+            gdal_src,
+            gdal_mask,
+            reinterpret_cast<OGRLayerH>(gdal_dst),
+            pix_val_field,
+            papszOptions,
+            interruptible ? ProgressTrampoline : nullptr,
+            interruptible ? (void *)&progress : nullptr);
+          if (papszOptions) CSLDestroy(papszOptions);
+          if (err) throw GDALError(CPLGetLastErrorMsg());
+          return err;
+        };
+    }
+    job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
   }
+};
 
-  GDALRasterBand *gdal_src = src->get();
-  OGRLayer *gdal_dst = dst->get();
-  GDALRasterBand *gdal_mask = mask ? mask->get() : nullptr;
+} // namespace
 
-  std::vector<long> ds_uids = {src->parent_uid, dst->parent_uid};
-  if (mask) ds_uids.push_back(mask->parent_uid);
-
-  GDALAsyncableJob<CPLErr> job(ds_uids);
-  job.progress = progress_cb;
-  // An AbortSignal alone is enough to make the operation interruptible: GDAL
-  // can be interrupted only through the progress trampoline, which therefore
-  // has to be installed even when there is no progress callback
-  if (!job.setAbortSignal(abort_signal)) {
-    // The invalid signal has already thrown, the options would be leaked
-    CSLDestroy(papszOptions);
-    return info.Env().Undefined();
-  }
-  const bool interruptible = job.interruptible();
-
-  if (
-    obj.As<Napi::Object>().HasOwnProperty(Napi::String::New(node_gdal::napi_env(), "useFloats")) &&
-    obj.As<Napi::Object>().Get(Napi::String::New(node_gdal::napi_env(), "useFloats")).As<Napi::Boolean>().Value()) {
-    job.main =
-      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
-        CPLErrorReset();
-        CPLErr err = GDALFPolygonize(
-          gdal_src,
-          gdal_mask,
-          reinterpret_cast<OGRLayerH>(gdal_dst),
-          pix_val_field,
-          papszOptions,
-          interruptible ? ProgressTrampoline : nullptr,
-          interruptible ? (void *)&progress : nullptr);
-        if (papszOptions) CSLDestroy(papszOptions);
-        if (err) throw GDALError(CPLGetLastErrorMsg());
-        return err;
-      };
-  } else {
-    job.main =
-      [gdal_src, gdal_mask, gdal_dst, pix_val_field, papszOptions, interruptible](const GDALExecutionProgress &progress) {
-        CPLErrorReset();
-        CPLErr err = GDALPolygonize(
-          gdal_src,
-          gdal_mask,
-          reinterpret_cast<OGRLayerH>(gdal_dst),
-          pix_val_field,
-          papszOptions,
-          interruptible ? ProgressTrampoline : nullptr,
-          interruptible ? (void *)&progress : nullptr);
-        if (papszOptions) CSLDestroy(papszOptions);
-        if (err) throw GDALError(CPLGetLastErrorMsg());
-        return err;
-      };
-  }
-  job.rval = [](CPLErr r, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 1);
-}
+GDAL_ASYNC_METHOD(Algorithms::polygonize, polygonizeBody)
 
 // This is used for stress-testing the locking mechanism
 // it doesn't do anything but sollicit locks
-GDAL_ASYNCABLE_DEFINE(Algorithms::_acquireLocks) {
-  Args args(info);
-  Dataset *ds1, *ds2, *ds3;
+namespace {
 
-  if (!args.getWrapped(0, "ds1", "Dataset", ds1)) return args.failed();
-  if (!args.getWrapped(1, "ds2", "Dataset", ds2)) return args.failed();
-  if (!args.getWrapped(2, "ds3", "Dataset", ds3)) return args.failed();
+struct _acquireLocksBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Dataset *ds1, *ds2, *ds3;
 
-  GDALAsyncableJob<int> job({ds1->uid, ds2->uid, ds3->uid});
-  job.main = [](const GDALExecutionProgress &) {
-    int i, sum = 0;
-    // make sure the optimizer won't surprise us
-    for (i = 0; i < 1e4; i++) sum += i;
-    return sum;
-  };
-  job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
-  return job.run(info, async, 3);
-}
+    if (!args.getWrapped(0, "ds1", "Dataset", ds1)) return args.failed();
+    if (!args.getWrapped(1, "ds2", "Dataset", ds2)) return args.failed();
+    if (!args.getWrapped(2, "ds3", "Dataset", ds3)) return args.failed();
+
+    GDALAsyncableJob<int> job({ds1->uid, ds2->uid, ds3->uid});
+    job.main = [](const GDALExecutionProgress &) {
+      int i, sum = 0;
+      // make sure the optimizer won't surprise us
+      for (i = 0; i < 1e4; i++) sum += i;
+      return sum;
+    };
+    job.rval = [](int, const GetFromPersistentFunc &) { return node_gdal::napi_env().Undefined().As<Napi::Value>(); };
+    return job.run(info, node_gdal::is_async<Async>, 3);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Algorithms::_acquireLocks, _acquireLocksBody)
 
 /**
  * @typedef {Uint8Array} PixelFunction

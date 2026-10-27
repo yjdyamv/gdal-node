@@ -70,7 +70,6 @@ class Geometry : public GeometryBase<Geometry, OGRGeometry> {
 #endif
 
   // static constructor methods
-  GDAL_ASYNCABLE_DECLARE(create);
   GDAL_ASYNCABLE_DECLARE(createFromWkt);
   GDAL_ASYNCABLE_DECLARE(createFromWkb);
   GDAL_ASYNCABLE_DECLARE(createFromGeoJson);

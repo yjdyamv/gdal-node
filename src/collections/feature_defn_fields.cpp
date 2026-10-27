@@ -192,6 +192,10 @@ NAPI_METHOD(FeatureDefnFields::remove) {
     Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
   }
+  if (node_gdal::is_read_only(parent)) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
+    return node_gdal::napi_env().Undefined();
+  }
 
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
@@ -226,6 +230,10 @@ NAPI_METHOD(FeatureDefnFields::add) {
   FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
   if (!feature_def->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  if (node_gdal::is_read_only(parent)) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
     return node_gdal::napi_env().Undefined();
   }
   if (info.Length() < 1) {
@@ -281,6 +289,10 @@ NAPI_METHOD(FeatureDefnFields::reorder) {
   FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
   if (!feature_def->isAlive()) {
     Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  if (node_gdal::is_read_only(parent)) {
+    node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
     return node_gdal::napi_env().Undefined();
   }
 

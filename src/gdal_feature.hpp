@@ -20,12 +20,12 @@ class Feature : public GDALObject<Feature> {
   static Napi::Value New(OGRFeature *feature);
   static Napi::Value New(OGRFeature *feature, bool owned);
   static NAPI_METHOD(toString);
+  void updateMemory();
   static NAPI_METHOD(getGeometry);
   //	static NAPI_METHOD(setGeometryDirectly);
   static NAPI_METHOD(setGeometry);
   //  static NAPI_METHOD(stealGeometry);
   static NAPI_METHOD(clone);
-  static NAPI_METHOD(equals);
   static NAPI_METHOD(getFieldDefn);
   static NAPI_METHOD(setFrom);
   static NAPI_METHOD(destroy);

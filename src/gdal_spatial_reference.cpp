@@ -138,13 +138,9 @@ SpatialReference::SpatialReference(const Napi::CallbackInfo &info)
   LOG("Created SpatialReference [%p]", this_);
 }
 
-// Currently read-only spatial references are copied.
-// Modifying a spatial reference that should have been
-// read-only modifies a shadow copy without any real effect.
-// TODO: Implement proper read-only objects that throw
-// Fixing this for srs obtained from a Layer is trivial
-// But fixing it for srs obtained from a Feature requires moving the Features to the ObjectStore
-
+// The spatial reference of a layer, of a geometry or of a multidim object
+// cannot be handed out: it belongs to its parent. The factory hands out a
+// read-only copy (`clone()` makes a writable one)
 Napi::Value SpatialReference::New(const OGRSpatialReference *srs) {
   // This const_cast is not a problem since the very first operation
   // below is copying the SpatialReference
@@ -165,6 +161,8 @@ Napi::Value SpatialReference::New(OGRSpatialReference *raw, bool owned) {
   Napi::Object obj = constructor().Value().New(args);
   SpatialReference *wrapped = node_gdal::UnwrapWrapped<SpatialReference>(obj);
   wrapped->uid = object_store().add(raw, *wrapped, 0);
+  // A copy is not the spatial reference of the parent it was copied from
+  if (!owned) node_gdal::set_read_only(obj);
 
   return obj;
 }
@@ -176,13 +174,34 @@ NAPI_METHOD(SpatialReference::toString) {
 /**
  * Set a GeogCS based on well known name.
  *
+ * @throws {Error}
  * @method setWellKnownGeogCS
  * @instance
  * @memberof SpatialReference
  * @param {string} name
  */
-NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_STRING_PARAM(
-  SpatialReference, setWellKnownGeogCS, SetWellKnownGeogCS, "input");
+namespace {
+// SpatialReference::setWellKnownGeogCS()
+struct setWellKnownGeogCSBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    std::string param;
+    if (!args.get(0, "input", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    if (node_gdal::is_read_only(info.This())) {
+      node_gdal::throw_read_only(
+        info.Env(), "A SpatialReference retrieved from a layer, a geometry or a multidim object");
+      return info.Env().Undefined();
+    }
+    int err = obj->get()->SetWellKnownGeogCS(param.c_str());
+    if (err) { NODE_THROW_OGRERR(err); }
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::setWellKnownGeogCS, setWellKnownGeogCSBody)
 
 /**
  * Convert in place to ESRI WKT format.
@@ -192,7 +211,25 @@ NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT_1_STRING_PARAM(
  * @instance
  * @memberof SpatialReference
  */
-NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(SpatialReference, morphToESRI, morphToESRI);
+namespace {
+// SpatialReference::morphToESRI()
+struct morphToESRIBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    if (node_gdal::is_read_only(info.This())) {
+      node_gdal::throw_read_only(
+        info.Env(), "A SpatialReference retrieved from a layer, a geometry or a multidim object");
+      return info.Env().Undefined();
+    }
+    int err = obj->get()->morphToESRI();
+    if (err) { NODE_THROW_OGRERR(err); }
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::morphToESRI, morphToESRIBody)
 
 /**
  * Convert in place from ESRI WKT format.
@@ -202,7 +239,25 @@ NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(SpatialReference, morphToESRI, morphToESR
  * @instance
  * @memberof SpatialReference
  */
-NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(SpatialReference, morphFromESRI, morphFromESRI);
+namespace {
+// SpatialReference::morphFromESRI()
+struct morphFromESRIBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    if (node_gdal::is_read_only(info.This())) {
+      node_gdal::throw_read_only(
+        info.Env(), "A SpatialReference retrieved from a layer, a geometry or a multidim object");
+      return info.Env().Undefined();
+    }
+    int err = obj->get()->morphFromESRI();
+    if (err) { NODE_THROW_OGRERR(err); }
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::morphFromESRI, morphFromESRIBody)
 
 /**
  * This method returns `true` if EPSG feels this geographic coordinate system
@@ -221,7 +276,18 @@ NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(SpatialReference, morphFromESRI, morphFro
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, EPSGTreatsAsLatLong, Boolean, EPSGTreatsAsLatLong);
+namespace {
+// SpatialReference::EPSGTreatsAsLatLong()
+struct EPSGTreatsAsLatLongBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->EPSGTreatsAsLatLong());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::EPSGTreatsAsLatLong, EPSGTreatsAsLatLongBody)
 
 /**
  * This method returns `true` if EPSG feels this projected coordinate system
@@ -232,7 +298,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, EPSGTreatsAsLatLong, Boolean, 
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, EPSGTreatsAsNorthingEasting, Boolean, EPSGTreatsAsNorthingEasting);
+namespace {
+// SpatialReference::EPSGTreatsAsNorthingEasting()
+struct EPSGTreatsAsNorthingEastingBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->EPSGTreatsAsNorthingEasting());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::EPSGTreatsAsNorthingEasting, EPSGTreatsAsNorthingEastingBody)
 
 /**
  * Check if geocentric coordinate system.
@@ -242,7 +319,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, EPSGTreatsAsNorthingEasting, B
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isGeocentric, Boolean, IsGeocentric);
+namespace {
+// SpatialReference::isGeocentric()
+struct isGeocentricBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsGeocentric());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isGeocentric, isGeocentricBody)
 
 /**
  * Check if geographic coordinate system.
@@ -252,7 +340,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isGeocentric, Boolean, IsGeoce
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isGeographic, Boolean, IsGeographic);
+namespace {
+// SpatialReference::isGeographic()
+struct isGeographicBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsGeographic());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isGeographic, isGeographicBody)
 
 /**
  * Check if projected coordinate system.
@@ -262,7 +361,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isGeographic, Boolean, IsGeogr
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isProjected, Boolean, IsProjected);
+namespace {
+// SpatialReference::isProjected()
+struct isProjectedBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsProjected());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isProjected, isProjectedBody)
 
 /**
  * Check if local coordinate system.
@@ -272,7 +382,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isProjected, Boolean, IsProjec
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isLocal, Boolean, IsLocal);
+namespace {
+// SpatialReference::isLocal()
+struct isLocalBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsLocal());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isLocal, isLocalBody)
 
 /**
  * Check if vertical coordinate system.
@@ -282,7 +403,30 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isLocal, Boolean, IsLocal);
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isVertical, Boolean, IsVertical);
+namespace {
+// SpatialReference::isVertical()
+struct isVerticalBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsVertical());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isVertical, isVerticalBody)
+/**
+ * Check if vertical coordinate system.
+ *
+ * Same as `isVertical`; the mis-spelled alias is registered in
+ * `SpatialReference::Initialize` next to it and has always been part of the
+ * published API, so it keeps its own documentation.
+ *
+ * @method isVectical
+ * @instance
+ * @memberof SpatialReference
+ * @return {boolean}
+ */
 
 /**
  * Check if compound coordinate system.
@@ -292,7 +436,18 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isVertical, Boolean, IsVertica
  * @memberof SpatialReference
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isCompound, Boolean, IsCompound);
+namespace {
+// SpatialReference::isCompound()
+struct isCompoundBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsCompound());
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isCompound, isCompoundBody)
 
 /**
  * Do the GeogCS'es match?
@@ -303,8 +458,21 @@ NODE_WRAPPED_METHOD_WITH_RESULT(SpatialReference, isCompound, Boolean, IsCompoun
  * @param {SpatialReference} srs
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  SpatialReference, isSameGeogCS, Boolean, IsSameGeogCS, SpatialReference, "srs");
+namespace {
+// SpatialReference::isSameGeogCS()
+struct isSameGeogCSBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    SpatialReference *param;
+    if (!args.getWrapped(0, "srs", "SpatialReference", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsSameGeogCS(param->get()));
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isSameGeogCS, isSameGeogCSBody)
 
 /**
  * Do the VertCS'es match?
@@ -315,8 +483,21 @@ NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @param {SpatialReference} srs
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
-  SpatialReference, isSameVertCS, Boolean, IsSameVertCS, SpatialReference, "srs");
+namespace {
+// SpatialReference::isSameVertCS()
+struct isSameVertCSBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    SpatialReference *param;
+    if (!args.getWrapped(0, "srs", "SpatialReference", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsSameVertCS(param->get()));
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isSameVertCS, isSameVertCSBody)
 
 /**
  * Do these two spatial references describe the same system?
@@ -327,7 +508,21 @@ NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(
  * @param {SpatialReference} srs
  * @return {boolean}
  */
-NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(SpatialReference, isSame, Boolean, IsSame, SpatialReference, "srs");
+namespace {
+// SpatialReference::isSame()
+struct isSameBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    Args args(info);
+    SpatialReference *param;
+    if (!args.getWrapped(0, "srs", "SpatialReference", param)) { return args.failed(); }
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    return Boolean::New(info.Env(), obj->get()->IsSame(param->get()));
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::isSame, isSameBody)
 
 /**
  * Set EPSG authority info if possible.
@@ -337,7 +532,25 @@ NODE_WRAPPED_METHOD_WITH_RESULT_1_WRAPPED_PARAM(SpatialReference, isSame, Boolea
  * @instance
  * @memberof SpatialReference
  */
-NODE_WRAPPED_METHOD_WITH_OGRERR_RESULT(SpatialReference, autoIdentifyEPSG, AutoIdentifyEPSG);
+namespace {
+// SpatialReference::autoIdentifyEPSG()
+struct autoIdentifyEPSGBody : node_gdal::SyncMethodBody {
+  static Napi::Value run(const Napi::CallbackInfo &info) {
+    auto obj = node_gdal::unwrapThis<SpatialReference>(info, "SpatialReference");
+    if (!obj) { return obj.failure; }
+    if (node_gdal::is_read_only(info.This())) {
+      node_gdal::throw_read_only(
+        info.Env(), "A SpatialReference retrieved from a layer, a geometry or a multidim object");
+      return info.Env().Undefined();
+    }
+    int err = obj->get()->AutoIdentifyEPSG();
+    if (err) { NODE_THROW_OGRERR(err); }
+    return info.Env().Undefined();
+  }
+};
+} // namespace
+
+GDAL_SYNC_METHOD(SpatialReference::autoIdentifyEPSG, autoIdentifyEPSGBody)
 
 /**
  * Clones the spatial reference.
@@ -727,26 +940,34 @@ NAPI_METHOD(SpatialReference::fromURN) {
  * @param {callback<SpatialReference>} [callback=undefined]
  * @return {Promise<SpatialReference>}
  */
-GDAL_ASYNCABLE_DEFINE(SpatialReference::fromCRSURL) {
-  Args args(info);
+namespace {
 
-  std::string input("");
-  if (!args.get(0, "url", input)) return args.failed();
+struct fromCRSURLBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  GDALAsyncableJob<OGRSpatialReference *> job(0);
+    std::string input("");
+    if (!args.get(0, "url", input)) return args.failed();
 
-  job.main = [input](const GDALExecutionProgress &progress) {
-    OGRSpatialReference *srs = new OGRSpatialReference();
-    int err = srs->importFromCRSURL(input.c_str());
-    if (err) {
-      delete srs;
-      throw GDALError(getOGRErrMsg(err));
-    }
-    return srs;
-  };
-  job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
-  return job.run(info, async, 1);
-}
+    GDALAsyncableJob<OGRSpatialReference *> job(0);
+
+    job.main = [input](const GDALExecutionProgress &progress) {
+      OGRSpatialReference *srs = new OGRSpatialReference();
+      int err = srs->importFromCRSURL(input.c_str());
+      if (err) {
+        delete srs;
+        throw GDALError(getOGRErrMsg(err));
+      }
+      return srs;
+    };
+    job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(SpatialReference::fromCRSURL, fromCRSURLBody)
 
 /**
  * Initialize spatial reference from a URL.
@@ -778,26 +999,34 @@ GDAL_ASYNCABLE_DEFINE(SpatialReference::fromCRSURL) {
  * @return {Promise<SpatialReference>}
  */
 
-GDAL_ASYNCABLE_DEFINE(SpatialReference::fromURL) {
-  Args args(info);
+namespace {
 
-  std::string input("");
-  if (!args.get(0, "url", input)) return args.failed();
+struct fromURLBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  GDALAsyncableJob<OGRSpatialReference *> job(0);
+    std::string input("");
+    if (!args.get(0, "url", input)) return args.failed();
 
-  job.main = [input](const GDALExecutionProgress &progress) {
-    OGRSpatialReference *srs = new OGRSpatialReference();
-    OGRErr err = srs->importFromUrl(input.c_str());
-    if (err) {
-      delete srs;
-      throw GDALError(getOGRErrMsg(err));
-    }
-    return srs;
-  };
-  job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
-  return job.run(info, async, 1);
-}
+    GDALAsyncableJob<OGRSpatialReference *> job(0);
+
+    job.main = [input](const GDALExecutionProgress &progress) {
+      OGRSpatialReference *srs = new OGRSpatialReference();
+      OGRErr err = srs->importFromUrl(input.c_str());
+      if (err) {
+        delete srs;
+        throw GDALError(getOGRErrMsg(err));
+      }
+      return srs;
+    };
+    job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(SpatialReference::fromURL, fromURLBody)
 
 /**
  * Initialize from a Mapinfo style CoordSys definition.
@@ -858,26 +1087,34 @@ NAPI_METHOD(SpatialReference::fromMICoordSys) {
  * @param {callback<SpatialReference>} [callback=undefined]
  * @return {Promise<SpatialReference>}
  */
-GDAL_ASYNCABLE_DEFINE(SpatialReference::fromUserInput) {
-  Args args(info);
+namespace {
 
-  std::string input("");
-  if (!args.get(0, "url", input)) return args.failed();
+struct fromUserInputBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
 
-  GDALAsyncableJob<OGRSpatialReference *> job(0);
+    std::string input("");
+    if (!args.get(0, "url", input)) return args.failed();
 
-  job.main = [input](const GDALExecutionProgress &progress) {
-    OGRSpatialReference *srs = new OGRSpatialReference();
-    int err = srs->SetFromUserInput(input.c_str());
-    if (err) {
-      delete srs;
-      throw GDALError(getOGRErrMsg(err));
-    }
-    return srs;
-  };
-  job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
-  return job.run(info, async, 1);
-}
+    GDALAsyncableJob<OGRSpatialReference *> job(0);
+
+    job.main = [input](const GDALExecutionProgress &progress) {
+      OGRSpatialReference *srs = new OGRSpatialReference();
+      int err = srs->SetFromUserInput(input.c_str());
+      if (err) {
+        delete srs;
+        throw GDALError(getOGRErrMsg(err));
+      }
+      return srs;
+    };
+    job.rval = [](OGRSpatialReference *srs, const GetFromPersistentFunc &) { return SpatialReference::New(srs, true); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(SpatialReference::fromUserInput, fromUserInputBody)
 
 /**
  * Initialize from EPSG GCS or PCS code.

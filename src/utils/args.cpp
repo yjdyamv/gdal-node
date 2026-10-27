@@ -191,7 +191,9 @@ bool Args::optional(size_t num, const char *name, Napi::Array &out) {
 }
 
 bool Args::optionalCallback(size_t num, const char *name, Napi::FunctionReference *&out) {
-  if (!present(num)) { return !failed_; }
+  // `num` is the index of the callback itself, so it is not affected by the
+  // trailing function rule of present()
+  if (num >= info_->Length() || (*info_)[num].IsUndefined() || (*info_)[num].IsNull()) { return !failed_; }
   return getCallback(num, name, out);
 }
 
