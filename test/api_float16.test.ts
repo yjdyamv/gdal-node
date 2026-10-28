@@ -115,6 +115,8 @@ describe('the Float16 rasters', () => {
       asyncWriteBlockValues: number[]
       stream: boolean
       streamValues: number[]
+      closedBlock: string
+      closedRead: string
     }
     let report: Report
 
@@ -168,6 +170,14 @@ describe('the Float16 rasters', () => {
         report.asyncWriteBlockValues,
         report.asyncWriteBlockValues.map((v, i) => (i < report.asyncBlockValues.length ? 7 : values[i] * 2))
       )
+    })
+
+    it('should reject instead of throwing when the band is destroyed', () => {
+      // the polyfill asks the band for its data type before the native method is
+      // called, which is where the destroyed band is reported; it must leave
+      // that report to the native method, which rejects the promise
+      assert.equal(report.closedBlock, 'RasterBand object has already been destroyed')
+      assert.equal(report.closedRead, 'RasterBand object has already been destroyed')
     })
   })
 })

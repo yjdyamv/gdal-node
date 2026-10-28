@@ -65,8 +65,22 @@ const collect = async () => {
   await band.pixels.writeBlockAsync(0, 0, filled)
   report.asyncWriteBlockValues = Array.from(band.pixels.read(0, 0, 4, 3))
 
+  // a destroyed band must reject the promise of the asynchronous methods: the
+  // polyfill decides whether it has to make the array which the caller did not
+  // give by asking the band for its data type, and that question has to be left
+  // to the native method when the band is gone
+  const pixels = band.pixels
   ds.close()
   mem.close()
+  report.closedBlock = await pixels.readBlockAsync(0, 0).then(
+    () => 'resolved',
+    (e) => e.message
+  )
+  report.closedRead = await pixels.readAsync(0, 0, 4, 3).then(
+    () => 'resolved',
+    (e) => e.message
+  )
+
   process.stdout.write(JSON.stringify(report))
 }
 
