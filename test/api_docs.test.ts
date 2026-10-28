@@ -107,6 +107,19 @@ const typed = (file: ts.SourceFile): boolean => {
   return found
 }
 
+// `using` and `await using` are declarations which only Node.js 24 and later
+// accept at runtime, while every compiler which this test uses knows them: the
+// blocks which use them fall back to the compiler when the engine cannot run
+// them, so that they are still checked and not silently skipped
+const explicitResourceManagement = ((): boolean => {
+  try {
+    new vm.Script('{\n  using resource = null\n  resource\n}')
+    return true
+  } catch (_e) {
+    return false
+  }
+})()
+
 // `await` is legitimate in an example, but not at the top level of a script
 const parses = (code: string): boolean => {
   for (const source of [ code, `(async () => {\n${code}\n})()` ]) {
@@ -118,10 +131,15 @@ const parses = (code: string): boolean => {
   // every other block must be plain JavaScript, which is what a reader pastes
   // into a script: TypeScript would accept the block which declared `const`
   // twice, because a redeclaration is one of its semantic errors and not one
-  // of its syntax errors, so a block without any type is not allowed through
+  // of its syntax errors, so a block without any type is not allowed through -
+  // unless it uses a declaration which the engine of this version does not have
+  // yet, in which case the compiler is the only thing which can check it
   const file = ts.createSourceFile('example.ts', code, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS)
   const diagnostics = (file as unknown as { parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics
-  return diagnostics.length === 0 && typed(file)
+  if (diagnostics.length !== 0) {
+    return false
+  }
+  return typed(file) || (!explicitResourceManagement && /\busing\s+[\w$]+/.test(code))
 }
 
 describe('the examples of the documentation', () => {

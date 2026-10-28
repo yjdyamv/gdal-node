@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as cp from 'node:child_process'
+import * as vm from 'node:vm'
 import { assert } from 'chai'
 
 // The examples of the README are the first thing a new user reads and the only
@@ -15,6 +16,18 @@ import { assert } from 'chai'
 
 const root = path.join(__dirname, '..')
 const gdalPath = path.join(root, 'lib', 'gdal.js')
+
+// `using` and `await using` do not exist before Node.js 24, and an example which
+// uses them can only be run by the versions which have them: the syntax of it is
+// checked by test/api_docs.test.ts on every version
+const explicitResourceManagement = ((): boolean => {
+  try {
+    new vm.Script('{\n  using resource = null\n  resource\n}')
+    return true
+  } catch (_e) {
+    return false
+  }
+})()
 
 const fixtures: Record<string, string> = {
   'sample.tif': path.join(__dirname, 'data', 'sample.tif'),
@@ -96,7 +109,12 @@ describe('the examples of the README', () => {
     // this one prints nothing, it only has to run
     assert.equal(run('await ds.rasterSizeAsync'), '')
   })
-  it('should close the dataset at the end of the block', () => {
+  it('should close the dataset at the end of the block', function (this: Mocha.Context) {
+    if (!explicitResourceManagement) {
+      console.log('the example requires `using`, which Node.js 24 introduced')
+      this.skip()
+      return
+    }
     // this one prints nothing either, the `using` blocks close the datasets
     assert.equal(run('using ds = gdal.open('), '')
   })
