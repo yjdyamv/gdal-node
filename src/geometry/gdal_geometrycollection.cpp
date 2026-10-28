@@ -78,6 +78,7 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value childrenGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<GeometryCollection>(info.This(), "GeometryCollection");
   return node_gdal::get_private(info.This(), "children_");
 }
 

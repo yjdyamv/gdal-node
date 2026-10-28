@@ -27,11 +27,7 @@ RasterBandPixels::~RasterBandPixels() {
 RasterBand *RasterBandPixels::parent(const Napi::CallbackInfo &info) {
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  RasterBand *band = node_gdal::UnwrapWrapped<RasterBand>(parent);
-  if (!band->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "RasterBand object has already been destroyed").ThrowAsJavaScriptException();
-    return nullptr;
-  }
+  RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(parent, "RasterBand");
   return band;
 }
 
@@ -834,7 +830,9 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value bandGetter(const Napi::CallbackInfo &info) {
-  return node_gdal::get_private(info.This(), "parent_");
+  Napi::Value parent = node_gdal::get_private(info.This(), "parent_");
+  node_gdal::requireAlive<RasterBand>(parent, "RasterBand");
+  return parent;
 }
 
 } // namespace

@@ -61,8 +61,9 @@ describe('gdal.RasterBandAsync', () => {
         it('should throw error if dataset already closed', () => {
           const ds = gdal.open('temp', 'w', 'MEM', 256, 256, 1, gdal.GDT_Byte)
           const band = ds.bands.get(1)
+          const pixels = band.pixels
           ds.close()
-          return assert.isRejected(band.pixels.getAsync(200, 300))
+          return assert.isRejected(pixels.getAsync(200, 300))
         })
       })
       describe('set()', () => {
@@ -83,8 +84,9 @@ describe('gdal.RasterBandAsync', () => {
         it('should throw error if dataset already closed', () => {
           const ds = gdal.open('temp', 'w', 'MEM', 256, 256, 1, gdal.GDT_Byte)
           const band = ds.bands.get(1)
+          const pixels = band.pixels
           ds.close()
-          return assert.isRejected(band.pixels.setAsync(10, 20, 30))
+          return assert.isRejected(pixels.setAsync(10, 20, 30))
         })
       })
       describe('readAsync() w/cb', () => {
@@ -430,8 +432,9 @@ describe('gdal.RasterBandAsync', () => {
             const ds = gdal.openAsync(`${__dirname}/data/sample.tif`)
             return assert.isFulfilled(ds.then((r) => {
               const band = r.bands.get(1)
+              const pixels = band.pixels
               r.close()
-              return assert.isRejected(band.pixels.readAsync(0, 0, 16, 16))
+              return assert.isRejected(pixels.readAsync(0, 0, 16, 16))
             }))
           })
         })
@@ -481,8 +484,9 @@ describe('gdal.RasterBandAsync', () => {
           it('should throw error if dataset already closed', () => {
             const ds = gdal.open(`${__dirname}/data/sample.tif`)
             const band = ds.bands.get(1)
+            const pixels = band.pixels
             ds.close()
-            return assert.isRejected(band.pixels.readBlockAsync(0, 0))
+            return assert.isRejected(pixels.readBlockAsync(0, 0))
           })
         })
         describe('writeBlockAsync()', () => {
@@ -536,8 +540,9 @@ describe('gdal.RasterBandAsync', () => {
 
             const length = band.blockSize.x * band.blockSize.y
             const data = new Uint8Array(new ArrayBuffer(length))
+            const pixels = band.pixels
             ds.close()
-            return assert.isRejected(band.pixels.writeBlockAsync(0, 0, data))
+            return assert.isRejected(pixels.writeBlockAsync(0, 0, data))
           })
         })
         it('clampBlockAsync()', () => {
@@ -997,8 +1002,9 @@ describe('gdal.RasterBandAsync', () => {
     it('should reject if the dataset is already closed', async () => {
       const ds = gdal.open(`${__dirname}/data/sample.tif`)
       const band = ds.bands.get(1)
+      const overviews = band.overviews
       ds.close()
-      await assert.isRejected(band.overviews.getBySampleCountAsync(2), /already been destroyed/)
+      await assert.isRejected(overviews.getBySampleCountAsync(2), /already been destroyed/)
     })
   })
 })

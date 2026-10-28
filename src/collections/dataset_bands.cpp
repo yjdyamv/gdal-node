@@ -73,12 +73,7 @@ struct getBody : node_gdal::AsyncMethodBody {
 
     Napi::Object parent =
       node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
-
-    if (!ds->isAlive()) {
-      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(parent, "Dataset");
 
     GDALDataset *raw = ds->get();
     int band_id;
@@ -135,12 +130,7 @@ struct createBody : node_gdal::AsyncMethodBody {
 
     Napi::Object parent =
       node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
-
-    if (!ds->isAlive()) {
-      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(parent, "Dataset");
 
     GDALDataset *raw = ds->get();
     GDALDataType type;
@@ -213,12 +203,7 @@ struct countBody : node_gdal::AsyncMethodBody {
 
     Napi::Object parent =
       node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-    Dataset *ds = node_gdal::UnwrapWrapped<Dataset>(parent);
-
-    if (!ds->isAlive()) {
-      Napi::Error::New(node_gdal::napi_env(), "Dataset object has already been destroyed").ThrowAsJavaScriptException();
-      return node_gdal::napi_env().Undefined();
-    }
+    Dataset *ds = node_gdal::unwrap_or_throw<Dataset>(parent, "Dataset");
 
     GDALDataset *raw = ds->get();
     GDALAsyncableJob<int> job(ds->uid);
@@ -254,7 +239,9 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value dsGetter(const Napi::CallbackInfo &info) {
-  return node_gdal::get_private(info.This(), "parent_");
+  Napi::Value parent = node_gdal::get_private(info.This(), "parent_");
+  node_gdal::requireAlive<Dataset>(parent, "Dataset");
+  return parent;
 }
 
 } // namespace

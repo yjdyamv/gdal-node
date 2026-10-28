@@ -633,6 +633,17 @@ template <typename T> inline T *unwrap_or_throw(Napi::Value value, const char *n
 }
 
 //
+// The same check, for an accessor which hands back an object it has stored
+// instead of one which it can look up again: the stored object is usually a
+// wrapper whose own object has been destroyed in the meantime, so returning it
+// would hand out a handle which every method of it refuses to use.  The accessor
+// has to throw the same error as the methods instead of returning the handle.
+//
+template <typename T> inline void requireAlive(const Napi::Value &value, const char *name) {
+  unwrap_or_throw<T>(value, name);
+}
+
+//
 // The GDAL object behind the handle which `obj->get()` returns, which throws
 // when the object of the parent has been destroyed in the meantime
 //

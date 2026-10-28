@@ -148,6 +148,7 @@ Napi::Value styleIgnoredGetter(const Napi::CallbackInfo &info) {
 
 
 Napi::Value fieldsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<FeatureDefn>(info.This(), "FeatureDefn");
   return node_gdal::get_private(info.This(), "fields_");
 }
 

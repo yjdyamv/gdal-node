@@ -124,11 +124,7 @@ Napi::Value count(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   OGRFeatureDefn *def = layer->get()->GetLayerDefn();
   if (!def) {
@@ -145,11 +141,7 @@ Napi::Value indexOf(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   OGRFeatureDefn *def = layer->get()->GetLayerDefn();
   if (!def) {
@@ -168,11 +160,7 @@ Napi::Value get(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
@@ -200,11 +188,7 @@ Napi::Value getNames(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   OGRFeatureDefn *def = layer->get()->GetLayerDefn();
   if (!def) {
@@ -228,11 +212,7 @@ Napi::Value remove(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
@@ -262,11 +242,7 @@ Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "field definition(s) must be given").ThrowAsJavaScriptException();
     return node_gdal::napi_env().Undefined();
@@ -315,11 +291,7 @@ Napi::Value reorder(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  Layer *layer = node_gdal::UnwrapWrapped<Layer>(parent);
-  if (!layer->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Layer object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Layer *layer = node_gdal::unwrap_or_throw<Layer>(parent, "Layer");
 
   OGRFeatureDefn *def = layer->get()->GetLayerDefn();
   if (!def) {
@@ -371,7 +343,9 @@ Napi::Value reorder(const Napi::CallbackInfo &info) {
 
 
 Napi::Value layerGetter(const Napi::CallbackInfo &info) {
-  return node_gdal::get_private(info.This(), "parent_");
+  Napi::Value parent = node_gdal::get_private(info.This(), "parent_");
+  node_gdal::requireAlive<Layer>(parent, "Layer");
+  return parent;
 }
 
 } // namespace

@@ -479,7 +479,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => layer.features.countAsync(undefined, (e) => {
               assert.instanceOf(e, Error)
-            }), /already destroyed/)
+            }), /already (been )?destroyed/)
           })
         )
       })
@@ -492,8 +492,9 @@ describe('gdal.LayerAsync', () => {
         )
         it('should throw error if dataset is destroyed', () =>
           prepare_dataset_layer_test('r', { autoclose: false }, (dataset, layer, file) => {
+            const features = layer.features
             dataset.close()
-            return assert.isRejected(layer.features.countAsync(), /already destroyed/)
+            return assert.isRejected(features.countAsync(), /already (been )?destroyed/)
               .then(() => cleanupWrite(dataset, file))
           })
         )
@@ -515,9 +516,10 @@ describe('gdal.LayerAsync', () => {
         )
         it('should throw error if dataset is destroyed', () =>
           prepare_dataset_layer_test('r', (dataset, layer) => {
+            const features = layer.features
             dataset.close()
-            const feature = layer.features.getAsync(0)
-            return assert.isRejected(feature, /already destroyed/)
+            const feature = features.getAsync(0)
+            return assert.isRejected(feature, /already (been )?destroyed/)
           })
         )
       })
@@ -545,8 +547,9 @@ describe('gdal.LayerAsync', () => {
         )
         it('should throw error if dataset is destroyed', () =>
           prepare_dataset_layer_test('r', { autoclose: false }, (dataset, layer, file) => {
+            const features = layer.features
             dataset.close()
-            return assert.isRejected(layer.features.nextAsync(), /already destroyed/)
+            return assert.isRejected(features.nextAsync(), /already (been )?destroyed/)
               .then(() => cleanupWrite(dataset, file))
           })
         )
@@ -562,8 +565,9 @@ describe('gdal.LayerAsync', () => {
         )
         it('should throw error if dataset is destroyed', () =>
           prepare_dataset_layer_test('r', { autoclose: false }, (dataset, layer, file) => {
+            const features = layer.features
             dataset.close()
-            return assert.isRejected(layer.features.firstAsync(), /already destroyed/)
+            return assert.isRejected(features.firstAsync(), /already (been )?destroyed/)
               .then(() => cleanupWrite(dataset, file))
           })
         )
@@ -585,7 +589,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.features.forEach(() => undefined)
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -624,7 +628,7 @@ describe('gdal.LayerAsync', () => {
             assert.throws(() => {
               const feature = new gdal.Feature(layer)
               layer.features.addAsync(feature)
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         )
       })
@@ -673,8 +677,9 @@ describe('gdal.LayerAsync', () => {
         it('should reject if dataset is destroyed', () =>
           prepare_dataset_layer_test('r', { autoclose: false }, (dataset, layer: gdal.Layer) => {
             const newFeature = new gdal.Feature(layer)
+            const features = layer.features
             dataset.close()
-            return assert.isRejected(layer.features.setAsync(1, newFeature), /already destroyed/)
+            return assert.isRejected(features.setAsync(1, newFeature), /already (been )?destroyed/)
           }))
       })
 
@@ -697,8 +702,9 @@ describe('gdal.LayerAsync', () => {
         )
         it('should throw error if dataset is destroyed', () =>
           prepare_dataset_layer_test('w', { autoclose: false }, (dataset, layer) => {
+            const features = layer.features
             dataset.close()
-            return assert.isRejected(layer.features.removeAsync(1), /already destroyed/)
+            return assert.isRejected(features.removeAsync(1), /already (been )?destroyed/)
           })
         )
       })
@@ -733,7 +739,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.count()
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -761,7 +767,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.get(4)
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -794,7 +800,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.forEach(() => undefined)
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -834,7 +840,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.getNames()
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -850,7 +856,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.indexOf('fips_num')
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -927,7 +933,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.add(new gdal.FieldDefn('field0', gdal.OFTString))
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -967,7 +973,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.fromObject({ name: 'test' })
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
         it('should require an object', () => {
@@ -1083,7 +1089,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.remove(0)
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })
@@ -1118,7 +1124,7 @@ describe('gdal.LayerAsync', () => {
             dataset.close()
             assert.throws(() => {
               layer.fields.reorder([ 2, 0, 1 ])
-            }, /already destroyed/)
+            }, /already (been )?destroyed/)
           })
         })
       })

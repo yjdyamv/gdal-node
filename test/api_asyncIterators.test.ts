@@ -91,7 +91,7 @@ if (Symbol.asyncIterator) {
             ds.close()
             return assert.isRejected((async () => {
               for await (const field of fields) void field
-            })(), /already destroyed/)
+            })(), /already (been )?destroyed/)
           })
         })
       })
@@ -113,7 +113,7 @@ if (Symbol.asyncIterator) {
             ds.close()
             return assert.isRejected((async () => {
               for (const l of layer.features) void l
-            })(), /already destroyed/)
+            })(), /already (been )?destroyed/)
           })
         })
       })

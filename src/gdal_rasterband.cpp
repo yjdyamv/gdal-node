@@ -1412,16 +1412,19 @@ Napi::Value setStatistics(const Napi::CallbackInfo &info) {
 
 
 Napi::Value dsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<RasterBand>(info.This(), "RasterBand");
   return node_gdal::get_private(info.This(), "ds_");
 }
 
 
 Napi::Value overviewsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<RasterBand>(info.This(), "RasterBand");
   return node_gdal::get_private(info.This(), "overviews_");
 }
 
 
 Napi::Value pixelsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<RasterBand>(info.This(), "RasterBand");
   return node_gdal::get_private(info.This(), "pixels_");
 }
 

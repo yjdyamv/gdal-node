@@ -64,14 +64,14 @@ Feature::Feature(const Napi::CallbackInfo &info) : GDALObject<Feature>(info) {
     if (node_gdal::IsInstanceOf<Layer>(info[0])) {
       Layer *layer = node_gdal::UnwrapWrapped<Layer>(info[0].As<Napi::Object>());
       if (!layer->isAlive()) {
-        Napi::Error::New(info.Env(), "Layer object already destroyed").ThrowAsJavaScriptException();
+        Napi::Error::New(info.Env(), "Layer object has already been destroyed").ThrowAsJavaScriptException();
         return;
       }
       def = layer->get()->GetLayerDefn();
     } else if (node_gdal::IsInstanceOf<FeatureDefn>(info[0])) {
       FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(info[0].As<Napi::Object>());
       if (!feature_def->isAlive()) {
-        Napi::Error::New(info.Env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
+        Napi::Error::New(info.Env(), "FeatureDefn object has already been destroyed").ThrowAsJavaScriptException();
         return;
       }
       def = feature_def->get();
@@ -146,11 +146,7 @@ NAPI_METHOD(Feature::getFieldDefn) {
   int field_index;
   if (!args.get(0, "field index", field_index)) return args.failed();
 
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
 
   if (field_index < 0 || field_index >= feature->this_->GetFieldCount()) {
     Napi::RangeError::New(node_gdal::napi_env(), "Invalid field index").ThrowAsJavaScriptException();
@@ -257,11 +253,7 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 Napi::Value getGeometry(const Napi::CallbackInfo &info) {
 
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
 
   OGRGeometry *geom = feature->get()->GetGeometryRef();
   if (!geom) {
@@ -279,11 +271,7 @@ Napi::Value setGeometry(const Napi::CallbackInfo &info) {
   Geometry *geom = nullptr;
   if (!args.optionalWrapped(0, "geometry", "Geometry", geom)) return args.failed();
 
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
 
   OGRErr err = feature->get()->SetGeometry(geom ? geom->get() : nullptr);
   if (err) { throw GDALError(getOGRErrMsg(err)); }
@@ -295,21 +283,13 @@ Napi::Value setGeometry(const Napi::CallbackInfo &info) {
 
 
 Napi::Value clone(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
   return Feature::New(feature->get()->Clone());
 }
 
 
 Napi::Value destroy(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
   feature->dispose();
   return node_gdal::napi_env().Undefined();
 }
@@ -324,11 +304,7 @@ Napi::Value setFrom(const Napi::CallbackInfo &info) {
 
   if (!args.getWrapped(0, "feature", "Feature", other_feature)) return args.failed();
 
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
 
   if (!info[1].IsArray()) {
     if (!args.optional(1, "forgiving", forgiving)) return args.failed();
@@ -377,36 +353,25 @@ Napi::Value setFrom(const Napi::CallbackInfo &info) {
 
 
 Napi::Value fieldsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Feature>(info.This(), "Feature");
   return node_gdal::get_private(info.This(), "fields_");
 }
 
 
 Napi::Value fidGetter(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
   return Napi::Number::New(node_gdal::napi_env(), feature->get()->GetFID());
 }
 
 
 Napi::Value defnGetter(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
   return FeatureDefn::New(feature->get()->GetDefnRef());
 }
 
 
 Napi::Value getStyleString(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
   const char *psz = feature->get()->GetStyleString();
   if (!psz) {
     return node_gdal::napi_env().Null();
@@ -417,11 +382,7 @@ Napi::Value getStyleString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value setStyleString(const Napi::CallbackInfo &info) {
-  Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
-  if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  Feature *feature = node_gdal::unwrap_or_throw<Feature>(info.This().As<Napi::Object>(), "Feature");
 
   if (info.Length() < 1 || info[0].IsNull() || info[0].IsUndefined()) {
     // Clear style if null/undefined or no arg
@@ -443,7 +404,7 @@ Napi::Value setStyleString(const Napi::CallbackInfo &info) {
 void fidSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
   Feature *feature = node_gdal::UnwrapWrapped<Feature>(info.This().As<Napi::Object>());
   if (!feature->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "Feature object already destroyed").ThrowAsJavaScriptException();
+    Napi::Error::New(node_gdal::napi_env(), "Feature object has already been destroyed").ThrowAsJavaScriptException();
     return;
   }
   if (!value.IsNumber()) {

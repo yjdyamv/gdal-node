@@ -1117,11 +1117,13 @@ void geoTransformSetter(const Napi::CallbackInfo &info, const Napi::Value &value
 
 
 Napi::Value bandsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Dataset>(info.This(), "Dataset");
   return node_gdal::get_private(info.This(), "bands_");
 }
 
 
 Napi::Value layersGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Dataset>(info.This(), "Dataset");
   return node_gdal::get_private(info.This(), "layers_");
 }
 

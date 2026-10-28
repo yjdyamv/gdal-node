@@ -62,6 +62,7 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value ringsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Polygon>(info.This(), "Polygon");
   return node_gdal::get_private(info.This(), "rings_");
 }
 

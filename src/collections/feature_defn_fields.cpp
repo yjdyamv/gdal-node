@@ -123,11 +123,7 @@ Napi::Value count(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
 
   return Napi::Number::New(node_gdal::napi_env(), feature_def->get()->GetFieldCount());
 }
@@ -138,11 +134,7 @@ Napi::Value indexOf(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
 
   std::string name("");
   if (!args.get(0, "field name", name)) return args.failed();
@@ -155,11 +147,7 @@ Napi::Value get(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
 
   if (info.Length() < 1) {
     Napi::Error::New(node_gdal::napi_env(), "Field index or name must be given").ThrowAsJavaScriptException();
@@ -179,11 +167,7 @@ Napi::Value getNames(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
 
   int n = feature_def->get()->GetFieldCount();
   Napi::Array result = Napi::Array::New(node_gdal::napi_env(), n);
@@ -201,11 +185,7 @@ Napi::Value remove(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
   if (node_gdal::is_read_only(parent)) {
     node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
     return node_gdal::napi_env().Undefined();
@@ -232,11 +212,7 @@ Napi::Value add(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
   if (node_gdal::is_read_only(parent)) {
     node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
     return node_gdal::napi_env().Undefined();
@@ -278,11 +254,7 @@ Napi::Value reorder(const Napi::CallbackInfo &info) {
 
   Napi::Object parent =
     node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
-  FeatureDefn *feature_def = node_gdal::UnwrapWrapped<FeatureDefn>(parent);
-  if (!feature_def->isAlive()) {
-    Napi::Error::New(node_gdal::napi_env(), "FeatureDefn object already destroyed").ThrowAsJavaScriptException();
-    return node_gdal::napi_env().Undefined();
-  }
+  FeatureDefn *feature_def = node_gdal::unwrap_or_throw<FeatureDefn>(parent, "FeatureDefn");
   if (node_gdal::is_read_only(parent)) {
     node_gdal::throw_read_only(info.Env(), "A FeatureDefn retrieved from a feature");
     return node_gdal::napi_env().Undefined();
@@ -332,7 +304,9 @@ Napi::Value reorder(const Napi::CallbackInfo &info) {
 
 
 Napi::Value featureDefnGetter(const Napi::CallbackInfo &info) {
-  return node_gdal::get_private(info.This(), "parent_");
+  Napi::Value parent = node_gdal::get_private(info.This(), "parent_");
+  node_gdal::requireAlive<FeatureDefn>(parent, "FeatureDefn");
+  return parent;
 }
 
 } // namespace

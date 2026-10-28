@@ -7885,9 +7885,9 @@ export class MDArray {
  * @name dimensions
  * @instance
  * @memberof MDArray
- * @type {GroupDimensions}
+ * @type {ArrayDimensions}
  */
-  readonly dimensions: GroupDimensions
+  readonly dimensions: ArrayDimensions
 
   /**
  * @readonly

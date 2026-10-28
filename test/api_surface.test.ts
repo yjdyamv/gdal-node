@@ -555,4 +555,106 @@ describe('API surface', () => {
       assert.strictEqual(gdal.Float16Array.BYTES_PER_ELEMENT, 2)
     })
   })
+
+  // The accessors which hand back an object they have stored - a collection, or
+  // the parent of a collection - cannot behave like the members of the object
+  // they hand out by doing nothing: the handle they store stops working when
+  // its own object is destroyed, so the accessor has to refuse to hand it out
+  // rather than return something which every method of it refuses to use
+  describe('the objects handed out by a destroyed parent', () => {
+    const refuse = (access: () => unknown, what: string) => {
+      try {
+        access()
+      } catch (e) {
+        assert.instanceOf(e, Error)
+        assert.match((e as Error).message, /already (been )?destroyed/)
+        return
+      }
+      assert.fail(`${what} was handed out after its parent was destroyed`)
+    }
+
+    it('should refuse the raster collections', () => {
+      const ds = gdal.open(path.join(__dirname, 'data', 'sample.tif'))
+      const bands = ds.bands
+      const band = bands.get(1)
+      const pixels = band.pixels
+      const overviews = band.overviews
+      // while the dataset is open, the same collection is handed out every time
+      assert.strictEqual(ds.bands, bands)
+      assert.strictEqual(band.pixels, pixels)
+      assert.strictEqual(band.ds, ds)
+      assert.strictEqual(pixels.band, band)
+      ds.close()
+      refuse(() => ds.bands, 'Dataset.bands')
+      refuse(() => bands.ds, 'DatasetBands.ds')
+      refuse(() => band.pixels, 'RasterBand.pixels')
+      refuse(() => pixels.band, 'RasterBandPixels.band')
+      refuse(() => band.ds, 'RasterBand.ds')
+      refuse(() => overviews.count(), 'RasterBandOverviews.count()')
+    })
+
+    it('should refuse the vector collections', () => {
+      const ds = gdal.open(path.join(__dirname, 'data', 'cutline.shp'))
+      const layers = ds.layers
+      const layer = layers.get(0)
+      const features = layer.features
+      const fields = layer.fields
+      assert.strictEqual(ds.layers, layers)
+      assert.strictEqual(layer.ds, ds)
+      assert.strictEqual(features.layer, layer)
+      assert.strictEqual(fields.layer, layer)
+      ds.close()
+      refuse(() => ds.layers, 'Dataset.layers')
+      refuse(() => layers.ds, 'DatasetLayers.ds')
+      refuse(() => layer.features, 'Layer.features')
+      refuse(() => layer.fields, 'Layer.fields')
+      refuse(() => layer.ds, 'Layer.ds')
+      refuse(() => features.layer, 'LayerFeatures.layer')
+      refuse(() => fields.layer, 'LayerFields.layer')
+    })
+
+    it('should keep the objects which do not belong to the dataset', () => {
+      // A feature and a feature definition are copies which keep their own
+      // object, so they are still usable once the dataset is closed - only the
+      // collections which hand them out are gone
+      const ds = gdal.open(path.join(__dirname, 'data', 'cutline.shp'))
+      const feature = ds.layers.get(0).features.first()
+      assert.isNotNull(feature)
+      const defn = feature!.defn
+      const featureFields = feature!.fields
+      const defnFields = defn.fields
+      assert.strictEqual(featureFields.feature, feature)
+      assert.strictEqual(defnFields.featureDefn, defn)
+      const values = featureFields.toObject()
+      assert.notDeepEqual(values, {})
+      ds.close()
+      assert.deepEqual(featureFields.toObject(), values)
+      assert.equal(defn.fields.count(), defnFields.count())
+      assert.equal(defnFields.featureDefn, defn)
+    })
+
+    it('should refuse the multidim collections', () => {
+      const ds = gdal.open(path.join(__dirname, 'data', 'gfs.t00z.alnsf.nc'), 'mr')
+      const root = ds.root
+      const groups = root.groups
+      const arrays = root.arrays
+      const dimensions = root.dimensions
+      const attributes = root.attributes
+      const array = arrays.get(0)
+      const arrayDimensions = array.dimensions
+      const arrayAttributes = array.attributes
+      assert.strictEqual(ds.root, root)
+      assert.strictEqual(groups.parent, root)
+      assert.strictEqual(arrayDimensions.parent, array)
+      ds.close()
+      refuse(() => groups.parent, 'GroupGroups.parent')
+      refuse(() => groups.ds, 'GroupGroups.ds')
+      refuse(() => arrays.parent, 'GroupArrays.parent')
+      refuse(() => dimensions.parent, 'GroupDimensions.parent')
+      refuse(() => attributes.parent, 'GroupAttributes.parent')
+      refuse(() => arrayDimensions.parent, 'ArrayDimensions.parent')
+      refuse(() => arrayAttributes.parent, 'ArrayAttributes.parent')
+      refuse(() => root.groups, 'Group.groups')
+    })
+  })
 })

@@ -48,6 +48,7 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value curvesGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<CompoundCurve>(info.This(), "CompoundCurve");
   return node_gdal::get_private(info.This(), "curves_");
 }
 

@@ -159,21 +159,25 @@ Napi::Value toString(const Napi::CallbackInfo &info) {
 
 
 Napi::Value groupsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Group>(info.This(), "Group");
   return node_gdal::get_private(info.This(), "groups_");
 }
 
 
 Napi::Value arraysGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Group>(info.This(), "Group");
   return node_gdal::get_private(info.This(), "arrays_");
 }
 
 
 Napi::Value dimensionsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Group>(info.This(), "Group");
   return node_gdal::get_private(info.This(), "dims_");
 }
 
 
 Napi::Value attributesGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<Group>(info.This(), "Group");
   return node_gdal::get_private(info.This(), "attrs_");
 }
 

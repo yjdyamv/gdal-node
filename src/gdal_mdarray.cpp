@@ -434,7 +434,7 @@ GDAL_ASYNC_METHOD(MDArray::read, readBody)
  * @name dimensions
  * @instance
  * @memberof MDArray
- * @type {GroupDimensions}
+ * @type {ArrayDimensions}
  */
 /**
  * @readonly
@@ -625,11 +625,13 @@ Napi::Value typeGetter(const Napi::CallbackInfo &info) {
 
 
 Napi::Value dimensionsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<MDArray>(info.This(), "MDArray");
   return node_gdal::get_private(info.This(), "dims_");
 }
 
 
 Napi::Value attributesGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<MDArray>(info.This(), "MDArray");
   return node_gdal::get_private(info.This(), "attrs_");
 }
 

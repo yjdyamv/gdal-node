@@ -92,8 +92,9 @@ describe('gdal.Dataset', () => {
         })
         it('should throw if dataset is closed', () => {
           const ds = gdal.open(`${__dirname}/data/sample.tif`)
+          const bands = ds.bands
           ds.close()
-          return assert.isRejected(ds.bands.countAsync())
+          return assert.isRejected(bands.countAsync())
         })
       })
       describe('get()', () => {
@@ -138,8 +139,9 @@ describe('gdal.Dataset', () => {
         })
         it('should throw if dataset is closed', () => {
           const ds = gdal.open(`${__dirname}/data/sample.tif`)
+          const bands = ds.bands
           ds.close()
-          return assert.isRejected(ds.bands.getAsync(1))
+          return assert.isRejected(bands.getAsync(1))
         })
       })
       describe('forEach()', () => {
@@ -249,8 +251,9 @@ describe('gdal.Dataset', () => {
         })
         it('should throw if the dataset has been closed', () => {
           const ds = gdal.open('temp', 'w', 'MEM', 256, 256, 1, gdal.GDT_Byte)
+          const bands = ds.bands
           ds.close()
-          const band = ds.bands.createAsync(gdal.GDT_Byte)
+          const band = bands.createAsync(gdal.GDT_Byte)
           return assert.isRejected(band, /Dataset object has already been destroyed/)
         })
       })
@@ -298,8 +301,9 @@ describe('gdal.Dataset', () => {
         })
         it('should throw if dataset is closed', () => {
           const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
+          const layers = ds.layers
           ds.close()
-          return assert.isRejected(ds.layers.countAsync())
+          return assert.isRejected(layers.countAsync())
         })
       })
       describe('get()', () => {

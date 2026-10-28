@@ -117,6 +117,7 @@ Napi::Value value(const Napi::CallbackInfo &info) {
 
 
 Napi::Value pointsGetter(const Napi::CallbackInfo &info) {
+  node_gdal::requireAlive<SimpleCurve>(info.This(), "SimpleCurve");
   return node_gdal::get_private(info.This(), "points_");
 }
 

@@ -153,11 +153,17 @@ class GroupCollection : public GDALObject<SELF> {
   }
 
   static NAPI_GETTER(parentGetter) {
+    // The parent of a multidim collection is a `Group` or an `MDArray`, which
+    // Go away with the dataset, so the dataset is what has to be checked
+    Napi::Value ds = node_gdal::get_private(info.This().As<Napi::Object>(), "parent_ds_");
+    node_gdal::requireAlive<Dataset>(ds, "Dataset");
     return node_gdal::get_private(info.This().As<Napi::Object>(), "parent_");
   }
 
   static NAPI_GETTER(dsGetter) {
-    return node_gdal::get_private(info.This().As<Napi::Object>(), "parent_ds_");
+    Napi::Value ds = node_gdal::get_private(info.This().As<Napi::Object>(), "parent_ds_");
+    node_gdal::requireAlive<Dataset>(ds, "Dataset");
+    return ds;
   }
 
   GroupCollection(const Napi::CallbackInfo &info) : GDALObject<SELF>(info) {
