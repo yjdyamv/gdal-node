@@ -83,6 +83,8 @@ struct getBody : node_gdal::AsyncMethodBody {
 
     GDALDataset *raw = ds->get();
 
+    Args args(info);
+
     if (info.Length() < 1) {
       Napi::Error::New(node_gdal::napi_env(), "method must be given integer or string").ThrowAsJavaScriptException();
       return node_gdal::napi_env().Undefined();
@@ -100,7 +102,9 @@ struct getBody : node_gdal::AsyncMethodBody {
         return lyr;
       };
     } else if (info[0].IsNumber()) {
-      int64_t id = info[0].As<Napi::Number>().Int64Value();
+      // OGRLayer indices are ints, and GetLayer() truncates a wider argument
+      int id;
+      if (!args.get(0, "layer index", id)) { return args.failed(); }
       job.main = [raw, id](const GDALExecutionProgress &) {
         CPLErrorReset();
         OGRLayer *lyr = raw->GetLayer(id);

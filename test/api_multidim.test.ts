@@ -81,6 +81,20 @@ describe('gdal', () => {
         }
         assert.isAbove(called, 0)
       })
+
+      // an index which is not a number used to be truncated into 0, which named
+      // the first array
+      it('should require a string or an integer for the id', () => {
+        const ids = [ NaN, Infinity, -Infinity, 1e308 ]
+        for (const id of ids) {
+          assert.throws(() => {
+            ds.root.arrays.get(id)
+          }, /id must be a string or an integer/, String(id))
+        }
+        assert.throws(() => {
+          ds.root.arrays.get(true as unknown as number)
+        }, /id must be a string or a number/)
+      })
     })
 
     describe('"dimensions" property', () => {

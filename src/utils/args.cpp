@@ -1,6 +1,18 @@
 #include "args.hpp"
 
+#include <cmath>
+
 namespace node_gdal {
+
+// An integer argument must be a number which names an integer.  Napi's integer
+// conversions turn NaN and the infinities into 0 and a number which does not fit
+// into garbage, and the callers use the result as an index: `bands.get(NaN)` used
+// to return the first band, as did `features.get(NaN)` and `arrays.get(NaN)`.  A
+// fraction is still truncated, as this binding always did.
+static bool inIntegerRange(const Napi::Value &value, double lowest, double highest) {
+  const double number = value.As<Napi::Number>().DoubleValue();
+  return std::isfinite(number) && number >= lowest && number < highest;
+}
 
 // ----- the two shapes of a rejection -----
 
@@ -50,27 +62,39 @@ bool Args::get(size_t num, const char *name, int &out) {
     return true;
   }
   if (!(*info_)[num].IsNumber()) { return rejectValue((*info_)[num], name, "an integer"); }
-  out = static_cast<int>((*info_)[num].As<Napi::Number>().Int64Value());
+  if (!inIntegerRange((*info_)[num], -2147483648.0, 2147483648.0)) {
+    return rejectValue((*info_)[num], name, "an integer");
+  }
+  out = static_cast<int>((*info_)[num].As<Napi::Number>().DoubleValue());
   return true;
 }
 
 bool Args::get(size_t num, const char *name, unsigned int &out) {
   if (!require(num, name)) { return false; }
   if (!(*info_)[num].IsNumber()) { return rejectValue((*info_)[num], name, "an integer"); }
-  out = (*info_)[num].As<Napi::Number>().Uint32Value();
+  if (!inIntegerRange((*info_)[num], 0.0, 4294967296.0)) {
+    return rejectValue((*info_)[num], name, "an integer");
+  }
+  out = static_cast<unsigned int>((*info_)[num].As<Napi::Number>().DoubleValue());
   return true;
 }
 
 bool Args::get(size_t num, const char *name, int64_t &out) {
   if (!require(num, name)) { return false; }
   if (!(*info_)[num].IsNumber()) { return rejectValue((*info_)[num], name, "an integer"); }
-  out = (*info_)[num].As<Napi::Number>().Int64Value();
+  if (!inIntegerRange((*info_)[num], -9223372036854775808.0, 9223372036854775808.0)) {
+    return rejectValue((*info_)[num], name, "an integer");
+  }
+  out = static_cast<int64_t>((*info_)[num].As<Napi::Number>().DoubleValue());
   return true;
 }
 bool Args::get(size_t num, const char *name, short &out) {
   if (!require(num, name)) { return false; }
   if (!(*info_)[num].IsNumber()) { return rejectValue((*info_)[num], name, "an integer"); }
-  out = static_cast<short>((*info_)[num].As<Napi::Number>().Int32Value());
+  if (!inIntegerRange((*info_)[num], -32768.0, 32768.0)) {
+    return rejectValue((*info_)[num], name, "an integer");
+  }
+  out = static_cast<short>((*info_)[num].As<Napi::Number>().DoubleValue());
   return true;
 }
 bool Args::get(size_t num, const char *name, double &out) {
@@ -138,7 +162,10 @@ bool Args::getStringOrInt(
     return true;
   }
   if ((*info_)[num].IsNumber()) {
-    out_int = static_cast<int>((*info_)[num].As<Napi::Number>().Int64Value());
+    if (!inIntegerRange((*info_)[num], -2147483648.0, 2147483648.0)) {
+      return rejectValue((*info_)[num], name, "a string or an integer");
+    }
+    out_int = static_cast<int>((*info_)[num].As<Napi::Number>().DoubleValue());
     is_string = false;
     return true;
   }

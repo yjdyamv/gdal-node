@@ -4,6 +4,7 @@
 #include <cpl_error.h>
 #include <gdal_version.h>
 #include <ogr_feature.h>
+#include <cmath>
 #include <functional>
 #include <thread>
 #include <stdio.h>
@@ -921,7 +922,13 @@ template <typename OGRFT> inline int parse_field_index(Napi::Value value, const 
   }
 
   if (value.IsNumber()) {
-    int index = value.As<Napi::Number>().Int32Value();
+    // NaN and the infinities become 0 in Napi's conversion, and 0 is a valid
+    // index: `fields.get(NaN)` used to return the first field
+    const double number = value.As<Napi::Number>().DoubleValue();
+    if (!std::isfinite(number) || number < -2147483648.0 || number >= 2147483648.0) {
+      throw GDALError("Invalid field index", "RangeError");
+    }
+    int index = static_cast<int>(number);
     if (index < 0 || index >= defn->GetFieldCount()) throw GDALError("Invalid field index", "RangeError");
     return index;
   }

@@ -475,6 +475,16 @@ describe('gdal.Layer', () => {
             })
           })
         })
+        it('should throw if the index is not an integer', () => {
+          prepare_dataset_layer_test('r', (dataset, layer) => {
+            const ids = [ NaN, Infinity, -Infinity, 1e308, 2 ** 32, 2 ** 53 ]
+            for (const id of ids) {
+              assert.throws(() => {
+                layer.features.get(id)
+              }, /feature id must be an integer/, String(id))
+            }
+          })
+        })
         it('should throw error if dataset is destroyed', () => {
           prepare_dataset_layer_test('r', (dataset, layer) => {
             dataset.close()
@@ -806,6 +816,16 @@ describe('gdal.Layer', () => {
             assert.throws(() => {
               layer.fields.get(112)
             }, /Invalid field index/)
+          })
+        })
+        it('should throw error if the field index is not an integer', () => {
+          prepare_dataset_layer_test('r', (dataset, layer) => {
+            const ids = [ NaN, Infinity, -Infinity, 1e308 ]
+            for (const id of ids) {
+              assert.throws(() => {
+                layer.fields.get(id)
+              }, /Invalid field index/, String(id))
+            }
           })
         })
       })

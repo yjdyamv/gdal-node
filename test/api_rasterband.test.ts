@@ -1700,6 +1700,20 @@ describe('gdal.RasterBand', () => {
           ds.close()
           gdal.vsimem.release(tempFile)
         })
+        it('should throw error if id is not an integer', () => {
+          const tempFile = fileUtils.clone(`${__dirname}/data/sample.tif`)
+          const ds = gdal.open(tempFile, 'r+')
+          const band = ds.bands.get(1)
+          ds.buildOverviews('NEAREST', [ 2 ])
+          const ids = [ NaN, Infinity, -Infinity, 1e308, 2 ** 32 ]
+          for (const id of ids) {
+            assert.throws(() => {
+              band.overviews.get(id)
+            }, /id must be an integer/, String(id))
+          }
+          ds.close()
+          gdal.vsimem.release(tempFile)
+        })
       })
       describe('forEach()', () => {
         it('should pass each overview to the callback', () => {

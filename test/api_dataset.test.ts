@@ -107,6 +107,17 @@ describe('gdal.Dataset', () => {
             ds.bands.get(0)
           })
         })
+        // a band index which is not a number used to be truncated into 0 in the
+        // native conversion, which named the first band
+        it('should throw if band id is not an integer', () => {
+          const ds = gdal.open(`${__dirname}/data/sample.tif`)
+          const ids = [ NaN, Infinity, -Infinity, 1e308, 2 ** 32, 2 ** 53 ]
+          for (const id of ids) {
+            assert.throws(() => {
+              ds.bands.get(id)
+            }, /band id must be an integer/, String(id))
+          }
+        })
         it('should throw if dataset is closed', () => {
           const ds = gdal.open(`${__dirname}/data/sample.tif`)
           ds.close()
@@ -302,6 +313,15 @@ describe('gdal.Dataset', () => {
             assert.throws(() => {
               ds.layers.get(5)
             }, /Layer not found: 5/)
+          })
+          it('should throw if layer id is not an integer', () => {
+            const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
+            const ids = [ NaN, Infinity, -Infinity, 1e308, 2 ** 32, 2 ** 53 ]
+            for (const id of ids) {
+              assert.throws(() => {
+                ds.layers.get(id)
+              }, /layer index must be an integer/, String(id))
+            }
           })
           it('should throw if dataset is closed', () => {
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
