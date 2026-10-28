@@ -9,22 +9,35 @@ const aborted = () => {
   return controller.signal
 }
 
-// Waits for an operation which interrupts itself from its own progress callback.
-// Such an operation can finish before its first progress notification - a read or
-// a translation of a cached file does not report any progress - and then the
-// abort never had a chance to interrupt it, so there is nothing to assert and the
-// test is skipped instead of failing for a reason which has nothing to do with
-// the abort
-const assertAborted = async function (
-  context: Mocha.Context,
-  operation: Promise<unknown>,
-  progress: () => number
-): Promise<void> {
+// Aborts an operation the first time it reports progress.  GDAL can only be
+// interrupted from its progress function, which is where the AbortSignal flag is
+// read, so the first notification is the earliest moment at which an abort can
+// be requested, and this is what a program which lets its user press 'cancel'
+// does.  In synchronous mode the flag is read again right after the callback
+// returns, so the operation stops at that very notification; in asynchronous
+// mode the notification travels to the main thread while the auxiliary thread
+// keeps working, so the operation stops at the next checkpoint - which is why
+// the operations below are big enough to report hundreds or thousands of
+// notifications while they run.  Unlike a timer, none of this assumes anything
+// about the speed of the machine
+const abortAfterFirstProgress = (controller: AbortController): () => void => {
+  let aborted = false
+  return () => {
+    if (aborted) return
+    aborted = true
+    controller.abort()
+  }
+}
+
+// Waits for an operation which was supposed to be aborted: it has to reject with
+// an AbortError, and nothing else.  The abort is requested from the progress
+// callback of the operation itself, so there is no race to work around: an
+// operation which succeeds here is an operation which ignored the abort
+const assertAborted = async function (operation: Promise<unknown>): Promise<void> {
   const result = await operation.then(
     (value) => ({ value, error: null as Error | null }),
     (error: Error) => ({ value: null, error })
   )
-  if (result.error === null && progress() === 0) context.skip()
   assert.isNotNull(result.error, 'should have been aborted')
   assert.equal((result.error as Error).name, 'AbortError')
 }
@@ -107,11 +120,18 @@ describe('AbortController', () => {
     let src: gdal.Dataset
 
     before(() => {
-      // A dataset big enough to require more than one progress callback
-      src = gdal.open('/vsimem/abort_src.tif', 'w', 'GTiff', 1024, 1024, 3)
-      const buf = new Float32Array(1024 * 1024)
+      // Written and closed before it is read, so that the operations below read
+      // it from the storage instead of from the block cache of the dataset which
+      // wrote it: a translation of a cached raster reports next to no progress
+      // and finishes before an asynchronous abort can be requested, which is
+      // what made these tests depend on the speed of the machine.  A translation
+      // of this one takes about 0.7 s and reports about 2000 notifications
+      const write = gdal.open('/vsimem/abort_src.tif', 'w', 'GTiff', 2048, 2048, 1, gdal.GDT_Float32)
+      const buf = new Float32Array(2048 * 2048)
       for (let i = 0; i < buf.length; i++) buf[i] = Math.sin(i * 0.001) * 100
-      for (let b = 1; b <= 3; b++) src.bands.get(b).pixels.write(0, 0, 1024, 1024, buf)
+      write.bands.get(1).pixels.write(0, 0, 2048, 2048, buf)
+      write.close()
+      src = gdal.open('/vsimem/abort_src.tif')
     })
     after(() => {
       src.close()
@@ -142,34 +162,36 @@ describe('AbortController', () => {
       }
     })
 
-    it('should reject when the operation is aborted while running', async function () {
+    it('should reject when the operation is aborted while running', async () => {
       const controller = new AbortController()
+      await assertAborted(gdal.translateAsync('/vsimem/abort_out.tif', src,
+        [ '-r', 'lanczos', '-co', 'COMPRESS=DEFLATE' ], {
+          abort_signal: controller.signal,
+          progress_cb: abortAfterFirstProgress(controller)
+        }))
+    })
+
+    it('should stop calling the progress callback after being aborted', async () => {
+      const controller = new AbortController()
+      const abort = abortAfterFirstProgress(controller)
       let progress = 0
-      await assertAborted(this, gdal.translateAsync('/vsimem/abort_out.tif', src,
+      await assertAborted(gdal.translateAsync('/vsimem/abort_out.tif', src,
         [ '-r', 'lanczos', '-co', 'COMPRESS=DEFLATE' ], {
           abort_signal: controller.signal,
           progress_cb: () => {
-            if (progress++ === 0) controller.abort()
-          }
-        }), () => progress)
-    })
-
-    it('should stop calling the progress callback after being aborted', async function () {
-      const controller = new AbortController()
-      let progress = 0
-      await assertAborted(this, gdal.translateAsync('/vsimem/abort_out.tif', src,
-        [ '-r', 'lanczos' ], {
-          abort_signal: controller.signal,
-          progress_cb: () => {
-            controller.abort()
             progress++
+            abort()
           }
-        }), () => progress)
-      // The callback which aborted the operation has to have run, otherwise
-      // this test would pass without testing anything
+        }))
+      // The abort is requested from the callback itself, so it has to have been
+      // called at least once, otherwise this test would pass without testing
+      // anything
       const calls = progress
       assert.isAbove(calls, 0, 'should have received progress before being aborted')
-      // Let any leftover progress notification drain
+      // Let the notifications which were already on their way when the abort was
+      // requested drain: the asynchronous dispatcher queues them for the main
+      // thread, so a few of them are delivered after the request - but once the
+      // operation has finished, there is nothing left to report
       await new Promise((resolve) => setImmediate(resolve))
       assert.equal(progress, calls, 'should not receive progress after being aborted')
     })
@@ -273,25 +295,15 @@ describe('AbortController', () => {
   describe('RasterBandPixels', () => {
     let ds: gdal.Dataset
     let band: gdal.RasterBand
-    let big: gdal.Dataset
-    // Big enough that the abort which the progress callback of the test below
-    // performs arrives while the read is still running. The abort itself is
-    // carried out by the JS thread, which has to run the notification first, and
-    // a smaller band can be read completely before it gets to do that
-    const bigSize = 4096
     const buf = new Float32Array(64 * 64)
 
     beforeEach(() => {
       ds = gdal.open('/vsimem/abort_pixels.tif', 'w', 'GTiff', 64, 64, 1)
       band = ds.bands.get(1)
-      big = gdal.open('/vsimem/abort_pixels_big.tif', 'w', 'GTiff', bigSize, bigSize, 1)
-      big.bands.get(1).pixels.write(0, 0, bigSize, bigSize, new Float32Array(bigSize * bigSize))
     })
     afterEach(() => {
       ds.close()
-      big.close()
       gdal.vsimem.release('/vsimem/abort_pixels.tif')
-      gdal.vsimem.release('/vsimem/abort_pixels_big.tif')
       void global.gc!()
     })
 
@@ -313,22 +325,27 @@ describe('AbortController', () => {
       assert.isRejected(band.pixels.writeAsync(0, 0, 64, 64, buf, { abort_signal: aborted() }),
         'The operation was aborted'))
 
-    it('should abort a read while it is running', async function () {
+    // A synchronous read runs the progress callback inline, on the same thread
+    // as the read itself, so an abort requested from it is seen by the check
+    // which follows the callback - there is nothing to wait for and nothing to
+    // race against.  The asynchronous case cannot be tested this way: there the
+    // notification is queued for the main thread while the auxiliary thread
+    // keeps reading, so the abort is only seen if the read has work left, and a
+    // read is too short for that unless it is made artificially slow.  The
+    // asynchronous abort is covered by the translations above, which report
+    // thousands of notifications while they run
+    it('should abort a synchronous read from its progress callback', () => {
       const controller = new AbortController()
       let progress = 0
-      // Opened for reading, so that the blocks of the band which was just written
-      // are not served from the block cache of the writer
-      const source = gdal.open('/vsimem/abort_pixels_big.tif')
-      try {
-        await assertAborted(this, source.bands.get(1).pixels.readAsync(0, 0, bigSize, bigSize, undefined, {
-          abort_signal: controller.signal,
-          progress_cb: () => {
-            if (progress++ === 0) controller.abort()
-          }
-        }), () => progress)
-      } finally {
-        source.close()
-      }
+      assert.throws(() => band.pixels.read(0, 0, 64, 64, new Uint8Array(64 * 64), {
+        abort_signal: controller.signal,
+        progress_cb: () => {
+          progress++
+          abortAfterFirstProgress(controller)()
+        }
+      }), 'The operation was aborted')
+      // The read has to have reported progress, otherwise nothing was aborted
+      assert.isAbove(progress, 0, 'should have received progress before being aborted')
     })
 
     it('should not do anything when the signal is not aborted', async () => {
