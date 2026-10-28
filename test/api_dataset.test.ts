@@ -1383,5 +1383,42 @@ describe('gdal.Dataset', () => {
       }, /the body of the block failed/)
       assert.throws(() => ds.rasterSize, /already/)
     })
+    it('should write the data before it closes the dataset', async () => {
+      const file = `/vsimem/close_async_using.${String(
+        Math.random()
+      ).substring(2)}.tif`
+      {
+        await using opened = await gdal.openAsync(file, 'w', 'GTiff', 4, 4, 1, gdal.GDT_Byte)
+        opened.bands.get(1).pixels.write(0, 0, 4, 4, new Uint8Array(16).fill(7))
+      }
+      // the block has ended: the data must be on the disk now
+      const reopened = gdal.open(file)
+      const pixels = reopened.bands.get(1).pixels.read(0, 0, 4, 4) as Uint8Array
+      reopened.close()
+      assert.deepEqual(Array.from(pixels), new Array(16).fill(7))
+    })
+  })
+  describe('closeAsync()', () => {
+    it('should write the data before it closes the dataset', async () => {
+      const file = `/vsimem/close_async.${String(Math.random()).substring(2)}.tif`
+      const ds = gdal.open(file, 'w', 'GTiff', 4, 4, 1, gdal.GDT_Byte)
+      ds.bands.get(1).pixels.write(0, 0, 4, 4, new Uint8Array(16).fill(7))
+      await ds.closeAsync()
+      assert.throws(() => ds.rasterSize, /already been destroyed/)
+      const reopened = gdal.open(file)
+      const pixels = reopened.bands.get(1).pixels.read(0, 0, 4, 4) as Uint8Array
+      reopened.close()
+      assert.deepEqual(Array.from(pixels), new Array(16).fill(7))
+    })
+    it('should close a dataset which was opened for reading', async () => {
+      const ds = gdal.open(`${__dirname}/data/sample.tif`)
+      await ds.closeAsync()
+      assert.throws(() => ds.rasterSize, /already been destroyed/)
+    })
+    it('should reject if the dataset is already closed', async () => {
+      const ds = gdal.open(`${__dirname}/data/sample.tif`)
+      ds.close()
+      await assert.isRejected(ds.closeAsync(), /already been destroyed/)
+    })
   })
 })

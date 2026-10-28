@@ -3620,6 +3620,22 @@ export class Dataset {
  * @return {Promise<void>}
  */
   buildOverviewsAsync(resampling: string, overviews: number[], bands?: number[], options?: ProgressOptions, callback?: callback<void>): Promise<void>
+
+  /**
+ * Closes the dataset after flushing it
+ *
+ * `close()` is synchronous, so closing a dataset which was opened for writing
+ * blocks the event loop for as long as GDAL needs to write what it still
+ * holds in its buffers. This one hands the flushing to a worker thread and
+ * closes the dataset when the data has reached the disk.
+ *
+ * @method closeAsync
+ * @instance
+ * @memberof Dataset
+ * @async
+ * @return {Promise<void>}
+ */
+  closeAsync(): Promise<void>
 }
 
 export class DatasetBands implements Iterable<RasterBand>, AsyncIterable<RasterBand> {
