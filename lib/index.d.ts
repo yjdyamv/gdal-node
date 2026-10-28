@@ -8228,6 +8228,26 @@ export class PolygonRings implements Iterable<LineString> {
   add(rings: LinearRing|LinearRing[]): void
 
   /**
+ * Removes a ring from the collection.
+ *
+ * Removing the exterior ring at index `0` when the polygon has interior rings
+ * promotes the first interior ring to be the exterior ring, and when it does
+ * not, it leaves the polygon empty.
+ *
+ * @example
+ *
+ * // drop the first interior ring
+ * polygon.rings.remove(1);
+ *
+ * @method remove
+ * @instance
+ * @memberof PolygonRings
+ * @param {number} index
+ * @throws {Error}
+ */
+  remove(index: number): void
+
+  /**
  * Iterates through all rings using a callback function.
  *
  * @example

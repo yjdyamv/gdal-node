@@ -83,6 +83,24 @@ Napi::Value PolygonRings::New(Napi::Value geom) {
  * @memberof PolygonRings
  * @param {LinearRing|LinearRing[]} rings
  */
+/**
+ * Removes a ring from the collection.
+ *
+ * Removing the exterior ring at index `0` when the polygon has interior rings
+ * promotes the first interior ring to be the exterior ring, and when it does
+ * not, it leaves the polygon empty.
+ *
+ * @example
+ *
+ * // drop the first interior ring
+ * polygon.rings.remove(1);
+ *
+ * @method remove
+ * @instance
+ * @memberof PolygonRings
+ * @param {number} index
+ * @throws {Error}
+ */
 namespace {
 
 Napi::Value toString(const Napi::CallbackInfo &info) {
@@ -176,7 +194,33 @@ Napi::Value add(const Napi::CallbackInfo &info) {
   return node_gdal::napi_env().Undefined();
 }
 
+
 } // namespace
+
+// The declaration in polygon_rings.hpp is what makes this the method which
+// method("remove") below refers to, so it is defined here and not in the
+// anonymous namespace together with the other three
+Napi::Value PolygonRings::remove(const Napi::CallbackInfo &info) {
+  Args args(info);
+
+  Napi::Object parent =
+    node_gdal::get_private(info.This(), "parent_").As<Napi::Object>();
+  Polygon *geom = node_gdal::UnwrapWrapped<Polygon>(parent);
+
+  int i;
+  if (!args.get(0, "index", i)) return args.failed();
+
+  int count = geom->get()->getExteriorRing() ? 1 : 0;
+  count += geom->get()->getNumInteriorRings();
+  if (i < 0 || i >= count) {
+    throw GDALError("Ring not found: index " + std::to_string(i));
+    return node_gdal::napi_env().Undefined();
+  }
+
+  geom->get()->removeRing(i);
+
+  return node_gdal::napi_env().Undefined();
+}
 
 void PolygonRings::Initialize(Napi::Object target) {
   Napi::Env env = target.Env();
@@ -185,6 +229,7 @@ void PolygonRings::Initialize(Napi::Object target) {
     method("count", count),
     method("get", get),
     method("add", add),
+    method("remove", remove),
   };
 
   Napi::Function lcons = GDALDefineClass<PolygonRings>(env, "PolygonRings", methods);

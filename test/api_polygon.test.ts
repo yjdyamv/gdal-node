@@ -84,6 +84,59 @@ describe('gdal.Polygon', () => {
           }, /must be a LinearRing/)
         })
       })
+      describe('remove()', () => {
+        const ring = (x: number) => {
+          const r = new gdal.LinearRing()
+          r.points.add(x, 0, 0)
+          r.points.add(x + 10, 0, 0)
+          r.points.add(x + 10, 10, 0)
+          r.points.add(x, 10, 0)
+          r.points.add(x, 0, 0)
+          return r
+        }
+        it('should remove a ring', () => {
+          const polygon = new gdal.Polygon()
+          polygon.rings.add([ ring(0), ring(1), ring(2) ])
+          polygon.rings.remove(1)
+          assert.equal(polygon.rings.count(), 2)
+          assert.equal(polygon.rings.get(0).points.get(0).x, 0)
+          assert.equal(polygon.rings.get(1).points.get(0).x, 2)
+        })
+        it('should promote the first interior ring when the exterior one is removed', () => {
+          const polygon = new gdal.Polygon()
+          polygon.rings.add([ ring(0), ring(1) ])
+          polygon.rings.remove(0)
+          assert.equal(polygon.rings.count(), 1)
+          assert.equal(polygon.rings.get(0).points.get(0).x, 1)
+        })
+        it('should leave an empty polygon when the last ring is removed', () => {
+          const polygon = new gdal.Polygon()
+          polygon.rings.add(ring(0))
+          polygon.rings.remove(0)
+          assert.equal(polygon.rings.count(), 0)
+          assert.equal(polygon.toWKT(), 'POLYGON EMPTY')
+          assert.isTrue(polygon.isValid())
+        })
+        it('should throw if ring doesnt exist', () => {
+          const polygon = new gdal.Polygon()
+          polygon.rings.add(ring(0))
+          assert.throws(() => {
+            polygon.rings.remove(1)
+          }, /Ring not found: index 1/)
+          assert.equal(polygon.rings.count(), 1)
+        })
+        it('should throw if the index is not an integer', () => {
+          const polygon = new gdal.Polygon()
+          polygon.rings.add(ring(0))
+          const ids = [ NaN, Infinity, -Infinity, 1e308 ]
+          for (const id of ids) {
+            assert.throws(() => {
+              polygon.rings.remove(id)
+            }, /index must be an integer/, String(id))
+          }
+          assert.equal(polygon.rings.count(), 1)
+        })
+      })
       let polygon: gdal.Polygon
       const createRings = () => {
         const ring1 = new gdal.LinearRing()
