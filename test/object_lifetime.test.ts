@@ -20,7 +20,14 @@ describe('object cache', () => {
   })
 })
 describe('object lifetimes', () => {
-  it('datasets should stay alive until all bands go out of scope', () => {
+  // the runtime keeps the target of a WeakRef alive until the end of the turn
+  // in which the WeakRef was created, and the module creates one for every
+  // dataset which it opens, so that it can close the datasets which nobody
+  // closed when the process exits: a dataset which goes out of scope is
+  // therefore reclaimed at the end of the turn and not in the middle of it
+  const nextTurn = () => new Promise((resolve) => setImmediate(resolve))
+
+  it('datasets should stay alive until all bands go out of scope', async () => {
     let ds: gdal.Dataset | null = gdal.open('temp', 'w', 'MEM', 4, 4, 1)
     let band: gdal.RasterBand | null = ds.bands.get(1)
 
@@ -41,6 +48,7 @@ describe('object lifetimes', () => {
 
       // eslint-disable-next-line no-useless-assignment
       band = null
+      await nextTurn()
       global.gc!()
 
       // @ts-expect-error not a public API
@@ -66,7 +74,7 @@ describe('object lifetimes', () => {
       // @ts-expect-error not a public API
       assert.isFalse(gdal._isAlive(band_uid))
   })
-  it('datasets should stay alive until all layers go out of scope', () => {
+  it('datasets should stay alive until all layers go out of scope', async () => {
     let ds: gdal.Dataset | null = gdal.open(path.join(__dirname, 'data/shp/sample.shp'))
     let layer: gdal.Layer | null = ds.layers.get(0)
 
@@ -86,6 +94,7 @@ describe('object lifetimes', () => {
 
       // eslint-disable-next-line no-useless-assignment
       layer = null
+      await nextTurn()
       global.gc!()
 
       // @ts-expect-error not a public API

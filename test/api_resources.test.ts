@@ -1,3 +1,7 @@
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
+import * as cp from 'node:child_process'
 import * as gdal from 'gdal-async'
 import { assert } from 'chai'
 
@@ -430,7 +434,9 @@ describe('the dataset scopes', () => {
       await gdal.usingAsync(async (scope) => {
         await new Promise<void>((resolve, reject) => {
           gdal.openAsync(sample, (error, ds) => {
-            if (error) { reject(error); return }
+            if (error) {
+              reject(error); return
+            }
             assert.isOk(ds.rasterSize)
             resolve()
           })
@@ -458,5 +464,61 @@ describe('the dataset scopes', () => {
         /callback must be a function/
       )
     })
+  })
+})
+
+describe('the process exit', () => {
+  const script = path.join(__dirname, '_process_exit.js')
+  const run = (style: 'exit' | 'natural' | 'keep' | 'broken'): string => {
+    const file = path.join(os.tmpdir(), `gdal_exit_${style}_${process.pid}.tif`)
+    cp.execFileSync(process.execPath, [ script, file, style ])
+    return file
+  }
+  const values = (file: string): number[] => {
+    const ds = gdal.open(file)
+    try {
+      return Array.from(new Set(ds.bands.get(1).pixels.read(0, 0, 64, 64) as Uint8Array))
+    } finally {
+      ds.close()
+    }
+  }
+
+  // a GeoTIFF writes the directory which describes its blocks only when it is
+  // closed, so a script which still holds the dataset when it ends loses what
+  // it has written unless something closes it for the script
+  it('should close the dataset of a script which forgets it and calls process.exit()', () => {
+    const file = run('exit')
+    try {
+      assert.deepEqual(values(file), [ 42 ])
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+
+  it('should close the dataset of a script which forgets it and falls off the end', () => {
+    const file = run('natural')
+    try {
+      assert.deepEqual(values(file), [ 42 ])
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+
+  it('should not let a dataset which refuses to close stop the exit', () => {
+    const file = run('broken')
+    try {
+      assert.deepEqual(values(file), [ 0 ])
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
+  })
+
+  it('should not close the datasets of a caller which owns them itself', () => {
+    const file = run('keep')
+    try {
+      assert.deepEqual(values(file), [ 0 ])
+    } finally {
+      fs.rmSync(file, { force: true })
+    }
   })
 })

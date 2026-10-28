@@ -216,3 +216,21 @@ export function using<T>(fn: (scope: DatasetScope) => T): T
  * @throws {TypeError} if the callback is not a function
  */
 export function usingAsync<T>(fn: (scope: DatasetScope) => T|Promise<T>): Promise<T>
+
+/**
+ * Whether the datasets which nobody closed are closed when the process exits
+ *
+ * A GeoTIFF writes the directory which describes its blocks only when it is
+ * closed, so a script which still holds a dataset when it ends writes a file
+ * which cannot be opened. A normal exit finalizes the addon objects, which
+ * closes them, but `process.exit()` tears the environment down without running
+ * the finalizers, so the datasets which are still open are closed
+ * synchronously on the `exit` event.
+ *
+ * A caller which owns the lifetime of its datasets itself - a server which
+ * closes them in its own shutdown handler, for example - can set this to
+ * `false` to keep the module from touching them.
+ *
+ * @default true
+ */
+export let closeAllOnExit: boolean
