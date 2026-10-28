@@ -345,7 +345,10 @@ describe('gdal.Dataset', () => {
           it('should not reuse the error of a previous failure', () => {
             // a missing layer is not a failure of GDAL, which reports nothing
             const ds = gdal.open(`${__dirname}/data/shp/sample.shp`)
-            assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+            // the message of a failed open differs between the platforms and between
+            // the versions of GDAL: only the failure itself is needed here, because
+            // what matters is that it leaves an error behind to be reused
+            assert.throws(() => gdal.open('/nonexistent/file.tif'))
             assert.throws(() => {
               ds.layers.get('bogus')
             }, /^Layer not found: bogus$/)

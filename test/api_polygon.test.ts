@@ -318,7 +318,9 @@ describe('gdal.MultiPolygon', () => {
       it('should not reuse the error of a previous failure', () => {
         // neither lookup sets a CPL error of its own, so the message used to be
         // whatever the last operation to fail had left behind
-        assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+        // (the message of a failed open differs between the platforms and between
+        // the versions of GDAL, so only the failure itself is needed here)
+        assert.throws(() => gdal.open('/nonexistent/file.tif'))
         assert.throws(() => {
           multiPolygon.children.get(112)
         }, /^Geometry not found: index 112$/)

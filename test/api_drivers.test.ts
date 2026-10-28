@@ -40,7 +40,10 @@ describe('gdal.drivers', () => {
       // a missing driver is not a failure of GDAL, so there is no error to
       // report: the lookup used to hand back whatever the last operation to
       // fail left behind, which has nothing to do with the driver
-      assert.throws(() => gdal.open('/nonexistent/file.tif'), /does not exist/)
+      // the message of a failed open differs between the platforms (and between
+      // the versions of GDAL), so only the failure itself is needed here: what
+      // matters is that it leaves an error behind to be reused
+      assert.throws(() => gdal.open('/nonexistent/file.tif'))
       assert.throws(() => {
         gdal.drivers.get('awfag')
       }, /^Cannot find driver: awfag$/)

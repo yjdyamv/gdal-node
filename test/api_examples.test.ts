@@ -1,7 +1,9 @@
 import gdal from 'gdal-async'
 import { assert } from 'chai'
 import * as cp from 'child_process'
+import * as fs from 'fs'
 import * as http from 'http'
+import * as os from 'os'
 import * as path from 'path'
 
 const example = (name: string): string => path.join(__dirname, '..', 'examples', name)
@@ -125,10 +127,28 @@ describe('the examples', () => {
     })
 
     it('should report the statistics which the raster has', () => {
-      const { stdout } = run('gdalinfo.js', fixture('CM13ct.png'))
-      assert.include(stdout, 'Min=1')
-      assert.include(stdout, 'Max=253')
-      assert.include(stdout, 'NoData Value=0')
+      // the statistics of a raster are not part of the raster: they are kept in a
+      // PAM sidecar file next to it, which is written on demand and which this
+      // repository does not carry (the fixture files with an .aux.xml suffix are
+      // ignored), so they are computed here instead of being expected to be there
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gdal-examples-'))
+      const copy = path.join(directory, 'statistics.png')
+      fs.copyFileSync(fixture('CM13ct.png'), copy)
+      const ds = gdal.open(copy)
+      try {
+        ds.bands.get(1).computeStatistics(false)
+      } finally {
+        ds.close()
+      }
+      try {
+        const { status, stdout } = run('gdalinfo.js', copy)
+        assert.equal(status, 0)
+        assert.include(stdout, 'Min=1')
+        assert.include(stdout, 'Max=253')
+        assert.include(stdout, 'NoData Value=0')
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true })
+      }
     })
 
     it('should not report what the raster does not have', () => {
