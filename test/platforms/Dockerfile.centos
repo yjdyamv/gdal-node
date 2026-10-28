@@ -1,0 +1,24 @@
+ARG VERSION=stream9
+FROM quay.io/centos/centos:${VERSION}
+
+ARG NODEJS=lts
+ARG GDAL=""
+ENV GDAL=${GDAL}
+
+RUN \
+  dnf -y install dnf-plugins-core && \
+  dnf install -y epel-release && \
+  dnf config-manager --enable crb && \
+  dnf config-manager --save --setopt="epel*.priority=1" && \
+  dnf install -y rsync && \
+  curl -fsSL https://rpm.nodesource.com/setup_${NODEJS}.x | bash - && \
+  dnf install -y nodejs && \
+  dnf groupinstall -y 'Development Tools' && \
+  dnf install -y git python3 ccache && \
+  mkdir -p /target && chmod 777 /target
+
+RUN if [ "${GDAL}" = "shared" ]; then dnf install -y gdal-devel; fi
+
+COPY entrypoint.sh /
+
+ENTRYPOINT ["/entrypoint.sh"]

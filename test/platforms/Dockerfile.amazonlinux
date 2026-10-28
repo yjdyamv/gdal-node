@@ -1,0 +1,19 @@
+ARG VERSION=latest
+FROM amazonlinux:${VERSION}
+
+ARG NODEJS=20
+ARG GDAL=""
+ENV GDAL=${GDAL}
+
+RUN \
+  yum install -y gcc-c++ make && \
+  yum install -y nodejs${NODEJS} nodejs${NODEJS}-npm && \
+  yum install -y git rsync python3 byacc && \
+  alternatives --install /usr/bin/python python /usr/bin/python3 60 && \
+  mkdir -p /target && chmod 777 /target
+
+RUN if [ "${GDAL}" = "shared" ]; then error; fi
+
+COPY entrypoint.sh /
+
+ENTRYPOINT ["/entrypoint.sh"]

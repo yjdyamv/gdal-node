@@ -1,0 +1,164 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch unit testing (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/node",
+            "args": [
+                "--expose-gc",
+                "${workspaceFolder}/node_modules/mocha/lib/cli/cli.js",
+                "-R", "tap",
+                "--timeout", "0",
+                "--require", "tsx",
+                "--require", "tsconfig-paths/register",
+                "--require", "./test/_common.ts",
+                "--require", "./test/_hooks.ts",
+                "test/*.ts"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Launch unit testing (lldb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/local/bin/node",
+            "args": [
+                "--expose-gc",
+                "${workspaceFolder}/node_modules/mocha/lib/cli/cli.js",
+                "-R", "tap",
+                "--timeout", "0",
+                "--require", "tsx",
+                "--require", "tsconfig-paths/register",
+                "--require", "./test/_common.ts",
+                "--require", "./test/_hooks.ts",
+                "test/*.ts"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "lldb",
+        },
+        {
+            "name": "Launch unit testing (vsdbg)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "node.exe",
+            "args": [
+                "--expose-gc",
+                "${workspaceFolder}/node_modules/mocha/lib/cli/cli.js",
+                "-R", "tap",
+                "--timeout", "0",
+                "--require", "tsx",
+                "--require", "tsconfig-paths/register",
+                "--require", "./test/_common.ts",
+                "--require", "./test/_hooks.ts",
+                "test/*.ts"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "externalTerminal"
+        },
+        {
+            "type": "pwa-node",
+            "request": "launch",
+            "name": "Launch unit testing (JS)",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "args": [
+                "-R", "tap",
+                "--timeout", "0",
+                "--v8-expose-gc",
+                "--require", "tsx",
+                "--require", "tsconfig-paths/register",
+                "--require", "./test/_common.ts",
+                "--require", "./test/_hooks.ts",
+                "test/*.ts"
+            ],
+            "program": "${workspaceFolder}/node_modules/.bin/mocha"
+        },
+        {
+            "type": "pwa-node",
+            "request": "launch",
+            "name": "Launch bench (JS)",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/bench/streams.bench.js"
+        },
+        {
+            "name": "Load a core dump (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/node",
+            "coreDumpPath": "${workspaceFolder}/core",
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Launch stress test (gdb)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/node",
+            "args": [ "test/stress" ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Launch Node REPL",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "/usr/bin/node",
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+    ]
+}
