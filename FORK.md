@@ -30,22 +30,32 @@ README](https://github.com/mmomtchev/node-gdal-async#long-term-support-of-this-p
 ## Versioning
 
 `gdal-node` is versioned independently of the upstream, using [Semantic
-Versioning](https://semver.org/):
+Versioning](https://semver.org/), and its version is `<MAJOR>.<MINOR>.<PATCH>`
+with nothing else in it - the GDAL release it is built against is *not* part of
+it, in any form.
 
-* `MAJOR` follows the `gdal-node` API: a breaking change of the binding bumps
-  it. It is deliberately **not** tied to the upstream major version - the fork
-  starts at `1.0.0` although it carries the upstream `3.13.0`.
+| Where | What it holds | Example |
+| --- | --- | --- |
+| Git tag, and the name of the GitHub release | `v` + the version | `v1.0.0` |
+| `package.json` `version` | the version, without the `v` | `1.0.0` |
+| `package.json` `upstreamVersion` | the release of the upstream `node-gdal-async` this one is based on | `3.13.0` |
+| Release download URL | `.../releases/download/v<version>/` | `.../download/v1.0.0/` |
+
+* `MAJOR` is the fork's own: a breaking change of the binding API bumps it. It
+  is not tied to the upstream major, which is why the fork starts at `1.0.0`
+  although it carries the upstream `3.13.0`.
 * `MINOR` adds API, `PATCH` fixes bugs. Both stay compatible.
-* The upstream release the fork is based on is recorded in the `upstreamVersion`
-  field of `package.json`, and repeated in the release notes. It is *not* part
-  of the version number: build metadata (`1.0.0+gdal3.13.0`) is stripped by
-  most registries and mirrors, and a prerelease tag (`1.0.0-gdal3.13.0`) sorts
-  below `1.0.0` and is excluded by `^1.0.0` ranges.
+* `upstreamVersion` is the single place that says which GDAL a given `gdal-node`
+  is built against - `3.13.0` is the upstream `node-gdal-async` release, whose
+  number is the version of the GDAL it bundles. It appears in the release notes
+  too, but never in the tag and never in the version number, so that there is
+  exactly one authority to read and one string to compare.
 
-The version number is load-bearing: `package.json` `binary.remote_path` is
-`v{version}`, so the prebuilt binaries of a release are downloaded from
-`https://github.com/yjdyamv/gdal-node/releases/download/v<version>/`. A version
-that is published and then withdrawn cannot be reused.
+The `v` prefix is not cosmetic: `package.json` `binary.remote_path` is
+`v{version}`, which is what makes the prebuilt binaries of a release load from
+`https://github.com/yjdyamv/gdal-node/releases/download/v<version>/`, and the
+`test-npm.yml` workflow downloads the sources from `refs/tags/v<version>`. A
+version that has been published and then withdrawn cannot be reused.
 
 ## History
 
