@@ -76,7 +76,7 @@ Napi::Value PolygonRings::New(Napi::Value geom) {
  * polygon.rings.add(ring1);
  *
  * // many at once:
- * polygon.rings.add([ring1, ...]);
+ * polygon.rings.add([ring1, ring2]);
  *
  * @method add
  * @instance

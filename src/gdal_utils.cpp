@@ -253,7 +253,7 @@ GDAL_ASYNC_METHOD(Utils::vectorTranslate, vectorTranslateBody)
  *
  * @example
  * const output = gdal.info(gdal.open('input.tif'))
- * const output = gdal.info(gdal.open('/vsimem/temp.tif'), ['-json'])
+ * const json = gdal.info(gdal.open('/vsimem/temp.tif'), ['-json'])
  *
  * @throws {Error}
  * @method info

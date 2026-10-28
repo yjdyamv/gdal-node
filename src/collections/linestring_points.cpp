@@ -102,7 +102,7 @@ Napi::Value LineStringPoints::New(Napi::Value geom) {
  *
  * lineString.points.add(new gdal.Point(1, 2));
  * lineString.points.add([
- *     new gdal.Point(1, 2)
+ *     new gdal.Point(1, 2),
  *     new gdal.Point(3, 4)
  * ]);
  *

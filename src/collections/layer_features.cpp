@@ -157,7 +157,11 @@ GDAL_ASYNC_METHOD(LayerFeatures::first, firstBody)
  *
  * @example
  *
- * while (feature = layer.features.next()) { ... }
+ * let feature = layer.features.next();
+ * while (feature !== null) {
+ *   // use the feature
+ *   feature = layer.features.next();
+ * }
  *
  * @method next
  * @instance
@@ -171,7 +175,11 @@ GDAL_ASYNC_METHOD(LayerFeatures::first, firstBody)
  *
  * @example
  *
- * while (feature = await layer.features.nextAsync()) { ... }
+ * let feature = await layer.features.nextAsync();
+ * while (feature !== null) {
+ *   // use the feature
+ *   feature = await layer.features.nextAsync();
+ * }
  *
  * @method nextAsync
  * @instance

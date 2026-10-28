@@ -1970,7 +1970,7 @@ export interface xyz {
  *
  * @example
  * const output = gdal.info(gdal.open('input.tif'))
- * const output = gdal.info(gdal.open('/vsimem/temp.tif'), ['-json'])
+ * const json = gdal.info(gdal.open('/vsimem/temp.tif'), ['-json'])
  *
  * @throws {Error}
  * @method info
@@ -3122,7 +3122,7 @@ export class CompoundCurveCurves implements Iterable<SimpleCurve>, AsyncIterable
  * compound.curves.add(ring1);
  *
  * // many at once:
- * compound.curves.add([ring1, ...]);
+ * compound.curves.add([ring1, ring2]);
  *
  * @method add
  * @instance
@@ -7255,7 +7255,11 @@ export class LayerFeatures implements Iterable<Feature>, AsyncIterable<Feature> 
  *
  * @example
  *
- * while (feature = layer.features.next()) { ... }
+ * let feature = layer.features.next();
+ * while (feature !== null) {
+ *   // use the feature
+ *   feature = layer.features.next();
+ * }
  *
  * @method next
  * @instance
@@ -7270,7 +7274,11 @@ export class LayerFeatures implements Iterable<Feature>, AsyncIterable<Feature> 
  *
  * @example
  *
- * while (feature = await layer.features.nextAsync()) { ... }
+ * let feature = await layer.features.nextAsync();
+ * while (feature !== null) {
+ *   // use the feature
+ *   feature = await layer.features.nextAsync();
+ * }
  *
  * @method nextAsync
  * @instance
@@ -7703,7 +7711,7 @@ export class LineStringPoints implements Iterable<Point> {
  *
  * lineString.points.add(new gdal.Point(1, 2));
  * lineString.points.add([
- *     new gdal.Point(1, 2)
+ *     new gdal.Point(1, 2),
  *     new gdal.Point(3, 4)
  * ]);
  *
@@ -8210,7 +8218,7 @@ export class PolygonRings implements Iterable<LineString> {
  * polygon.rings.add(ring1);
  *
  * // many at once:
- * polygon.rings.add([ring1, ...]);
+ * polygon.rings.add([ring1, ring2]);
  *
  * @method add
  * @instance

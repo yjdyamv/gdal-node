@@ -76,7 +76,7 @@ Napi::Value CompoundCurveCurves::New(Napi::Value geom) {
  * compound.curves.add(ring1);
  *
  * // many at once:
- * compound.curves.add([ring1, ...]);
+ * compound.curves.add([ring1, ring2]);
  *
  * @method add
  * @instance
