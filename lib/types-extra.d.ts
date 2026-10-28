@@ -111,3 +111,53 @@ export namespace Polygon {
  * @deprecated use `setPROJSearchPaths`, which this is an alias of
  */
 export function setPROJSearchPath(path: string): void
+
+// The scopes which open a dataset for the duration of a callback, which
+// lib/gdal.js installs and which have no registration for yatag to read: they
+// take the arguments of `gdal.open()` and a callback, or the arguments as an
+// array - which is what a dataset that has to be created with a driver needs
+export type OpenArguments =
+  | [ path: string|Buffer, mode?: string ]
+  | [ path: string|Buffer, mode: string, drivers: string|string[],
+      x_size?: number, y_size?: number, band_count?: number,
+      data_type?: string, creation_options?: string[]|object ]
+
+/**
+ * Opens a dataset and closes it when the callback returns
+ *
+ * The dataset is closed when the callback returns or throws, unless the
+ * callback returns the dataset itself, which means that the caller takes it
+ * over. A callback which returns a promise is allowed - the dataset is closed
+ * when the promise settles - but `withDatasetAsync()`, which does not block the
+ * event loop, is the one to use then.
+ *
+ * @example
+ *
+ * const count = gdal.withDataset('in.tif', 'r', (ds) => ds.bands.count())
+ *
+ * @example
+ *
+ * gdal.withDataset([ 'out.tif', 'w', 'GTiff', 400, 300, 1, gdal.GDT_Byte ], (ds) => {
+ *   ds.bands.get(1).pixels.write(0, 0, 400, 300, new Uint8Array(120000))
+ * })
+ *
+ * @throws {TypeError} if the last argument is not a function
+ */
+export function withDataset<T>(args: OpenArguments, fn: (dataset: Dataset) => T): T
+export function withDataset<T>(path: string|Buffer, mode: string, fn: (dataset: Dataset) => T): T
+
+/**
+ * Opens a dataset and closes it when the callback finishes
+ *
+ * The same as `withDataset()`, with the dataset opened and closed without
+ * blocking the event loop: the promise of the call resolves with what the
+ * callback returned, after the dataset has been closed.
+ *
+ * @example
+ *
+ * const count = await gdal.withDatasetAsync('in.tif', 'r', (ds) => ds.bands.countAsync())
+ *
+ * @throws {TypeError} if the last argument is not a function
+ */
+export function withDatasetAsync<T>(args: OpenArguments, fn: (dataset: Dataset) => T|Promise<T>): Promise<T>
+export function withDatasetAsync<T>(path: string|Buffer, mode: string, fn: (dataset: Dataset) => T|Promise<T>): Promise<T>
