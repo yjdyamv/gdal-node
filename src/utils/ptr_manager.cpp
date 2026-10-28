@@ -417,7 +417,7 @@ template Napi::Object ObjectStore::get(shared_ptr<GDALMDArray>);
 #endif
 
 const char warningGCBug[] =
-  "Sleeping on semaphore in garbage collector, this is a bug in gdal-async, event loop blocked for ";
+  "Sleeping on semaphore in garbage collector, this is a bug in gdal-node, event loop blocked for ";
 const char warningManualClose[] =
   "Closing a dataset while background async operations are still running, event loop blocked for ";
 static inline void uv_sem_wait_with_warning(uv_sem_t *sem, const char *warning) {
@@ -461,7 +461,7 @@ template <> void ObjectStore::dispose(shared_ptr<ObjectStoreItem<GDALDataset *>>
 }
 
 const char warningSQL[] =
-  "Sleeping on semaphore in garbage collector while destroying an SQL results layers, this is a known issue in gdal-async, event loop blocked for ";
+  "Sleeping on semaphore in garbage collector while destroying an SQL results layers, this is a known issue in gdal-node, event loop blocked for ";
 // Closing a Layer is a special case - it can contain SQL results
 // This is the only case where we could sleep in the GC:
 //   A Dataset has multiple layers, one of them is an SQL results layer

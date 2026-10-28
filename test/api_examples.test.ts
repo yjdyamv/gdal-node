@@ -1,4 +1,4 @@
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 import { assert } from 'chai'
 import * as cp from 'child_process'
 import * as fs from 'fs'

@@ -1,4 +1,4 @@
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 
 console.log(`GDAL Version: ${gdal.version}, source: ${gdal.bundled ? 'bundled' : 'system library'}`)
 

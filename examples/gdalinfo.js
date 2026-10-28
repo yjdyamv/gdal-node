@@ -1,7 +1,7 @@
 const gdal = require('../lib/gdal.js')
 const util = require('util')
 
-console.log(`GDAL Version: ${gdal.version}, source: ${gdal.bundled ? 'bundled with node-gdal-async' : 'system-installed library'}`)
+console.log(`GDAL Version: ${gdal.version}, source: ${gdal.bundled ? 'bundled with gdal-node' : 'system-installed library'}`)
 
 const filename = process.argv[2]
 if (!filename) {

@@ -1,7 +1,7 @@
 #ifndef __NODE_GDAL_VSIFS_H__
 #define __NODE_GDAL_VSIFS_H__
 
-// gdal-async
+// gdal-node
 #include "gdal_common.hpp"
 
 // gdal

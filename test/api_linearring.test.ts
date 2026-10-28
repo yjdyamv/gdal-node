@@ -1,5 +1,5 @@
 import { assert } from 'chai'
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 
 describe('gdal.LinearRing', () => {
   afterEach(() => void global.gc!())

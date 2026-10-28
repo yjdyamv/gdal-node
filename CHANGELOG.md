@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [Unreleased]
+# [1.0.0] - 2026-10-28
+
+First release of `gdal-node`, the maintained fork of [`node-gdal-async`](https://github.com/mmomtchev/node-gdal-async). It is the upstream 3.13.0 release (see `upstreamVersion` in `package.json`) plus the changes below. See [FORK.md](FORK.md) for the provenance, the versioning scheme and the full inventory of the patches with their upstream status.
 
 ### Added
  - `Dataset.closeAsync()`, which flushes the dataset on a worker thread and then closes it, because `close()` is synchronous and a dataset which was opened for writing blocks the event loop while GDAL writes what it still holds in its buffers. `Symbol.asyncDispose` awaits it, so an `await using` block now flushes before it closes the dataset instead of only calling `close()`

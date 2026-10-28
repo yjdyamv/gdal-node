@@ -8,7 +8,7 @@ if [ -z "${OP}" ]; then
   exit 1
 fi
 if [ ! -d "test/platforms" ]; then
-  echo "This command must be run from the node-gdal-async root directory"
+  echo "This command must be run from the gdal-node root directory"
   exit 1
 fi
 

@@ -219,7 +219,7 @@ template <class Impl> inline Napi::Value SyncMethod(const Napi::CallbackInfo &in
   }
 
 static const char eventLoopWarning[] =
-  "Synchronous method called while an asynchronous operation is running in the background, check node_modules/gdal-async/ASYNCIO.md, event loop blocked for ";
+  "Synchronous method called while an asynchronous operation is running in the background, check node_modules/gdal-node/ASYNCIO.md, event loop blocked for ";
 // These constructors throw
 // Only one use case never throws: on the main thread
 // and after checking that the Dataset is alive

@@ -1,4 +1,4 @@
-// gdal-async
+// gdal-node
 #include "gdal_common.hpp"
 #include "utils/args.hpp"
 

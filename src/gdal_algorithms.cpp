@@ -798,13 +798,13 @@ static CPLErr pixelFunc(
 
   auto uid = pfArgsMap.find(PFN_ID_FIELD);
   if (uid == pfArgsMap.end()) {
-    CPLError(CE_Failure, CPLE_AppDefined, "gdal-async Internal error, pixelFuncs inconsistency, id=NULL");
+    CPLError(CE_Failure, CPLE_AppDefined, "gdal-node Internal error, pixelFuncs inconsistency, id=NULL");
     return CE_Failure;
   }
   char *end;
   size_t id = std::strtoul(uid->second.c_str(), &end, 16);
   if (end == uid->second.c_str() || id >= pixelFuncs.size()) {
-    CPLError(CE_Failure, CPLE_AppDefined, "gdal-async Internal error, pixelFuncs inconsistency");
+    CPLError(CE_Failure, CPLE_AppDefined, "gdal-node Internal error, pixelFuncs inconsistency");
     return CE_Failure;
   }
   pfArgsMap.erase(PFN_ID_FIELD);
@@ -817,7 +817,7 @@ static CPLErr pixelFunc(
   if (
     size != static_cast<size_t>(nPixelSpace) ||
     size * static_cast<size_t>(nBufXSize) != static_cast<size_t>(nLineSpace)) {
-    CPLError(CE_Failure, CPLE_AppDefined, "gdal-async still does not support irregular buffer strides");
+    CPLError(CE_Failure, CPLE_AppDefined, "gdal-node still does not support irregular buffer strides");
     return CE_Failure;
   }
 

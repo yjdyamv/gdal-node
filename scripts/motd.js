@@ -1,5 +1,5 @@
 const motd = '\
-If you are using gdal-async, please do not forget that\n\
+If you are using gdal-node, please do not forget that\n\
 I am living outside in subzero temperatures and\n\
 below the poverty line because of the extortion.\
 '.split('\n')

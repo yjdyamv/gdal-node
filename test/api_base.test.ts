@@ -1,4 +1,4 @@
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 import { assert } from 'chai'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -73,7 +73,7 @@ describe('gdal', () => {
     describe('GDAL_DATA behavior', () => {
       const data_path = fs.existsSync('./lib/gdal.js') ?
         path.resolve(__dirname, '..', 'deps', 'libgdal', 'gdal', 'data') :
-        path.resolve(__dirname, '..', 'node_modules', 'gdal-async', 'deps', 'libgdal', 'gdal', 'data')
+        path.resolve(__dirname, '..', 'node_modules', 'gdal-node', 'deps', 'libgdal', 'gdal', 'data')
 
       it('with bundled GDAL, should set GDAL_DATA config option to locally bundled path', () => {
         assert.equal(gdal.config.get('GDAL_DATA'), data_path)
@@ -81,7 +81,7 @@ describe('gdal', () => {
       it('should respect GDAL_DATA environment over locally bundled path', (done) => {
         const env = Object.assign({}, process.env)
         env.GDAL_DATA = 'bogus'
-        const gdalJS = fs.existsSync('./lib/gdal.js') ? './lib/gdal.js' : 'gdal-async'
+        const gdalJS = fs.existsSync('./lib/gdal.js') ? './lib/gdal.js' : 'gdal-node'
         // The manual delete/global.gc() allows for error-free unit testing of the ASAN build
         const command =
           `"const gdal = require('${gdalJS}'); console.log(gdal.config.get('GDAL_DATA')); delete gdal.drivers; global.gc();"`

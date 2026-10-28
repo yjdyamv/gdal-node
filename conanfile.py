@@ -3,7 +3,7 @@ from conan import ConanFile
 
 class GdalAsyncDependencies(ConanFile):
     """
-    Dependency manifest for the gdal-async native addon.
+    Dependency manifest for the gdal-node native addon.
 
     This replaces the vendored sources under deps/, which used to be downloaded
     by deps/*.sh and then converted to gyp by hand. GDAL brings in the rest of

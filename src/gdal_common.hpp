@@ -24,7 +24,7 @@
 #include "utils/ptr_manager.hpp"
 
 #if GDAL_VERSION_MAJOR < 2 || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR < 2)
-#error gdal-async now requires GDAL >= 2.2, downgrade to gdal-async@3.6.x for earlier versions
+#error gdal-node now requires GDAL >= 2.2, downgrade to gdal-node@3.6.x for earlier versions
 #endif
 
 namespace node_gdal {
@@ -1005,7 +1005,7 @@ template <typename OGRFT> inline int parse_field_index(Napi::Value value, const 
         static_cast<long>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));                    \
   }
 
-// gdal-async supports a single instance per V8 isolate (enforced in Init),
+// gdal-node supports a single instance per V8 isolate (enforced in Init),
 // so the environment is kept reachable for the few places (async result
 // lambdas) where the old binding did not require threading it through.
 // The environment is declared near the top of this file (the trampolines above

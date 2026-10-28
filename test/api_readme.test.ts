@@ -37,7 +37,7 @@ const fixtures: Record<string, string> = {
 const blocks = (): string[] => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
   return Array.from(readme.matchAll(/```js\r?\n([^]*?)```/g), (match) => match[1])
-    .filter((code) => code.includes('require(') && code.includes('gdal-async'))
+    .filter((code) => code.includes('require(') && code.includes('gdal-node'))
 }
 
 // The block as a program which node can run: the package is this build and the
@@ -46,7 +46,7 @@ const program = (marker: string): string => {
   const block = blocks().find((code) => code.includes(marker))
   assert.isDefined(block, `the README has no example with ${marker}`)
   let source = (block as string)
-    .replace(/require\((['"])gdal-async\1\)/g, `require(${JSON.stringify(gdalPath)})`)
+    .replace(/require\((['"])gdal-node\1\)/g, `require(${JSON.stringify(gdalPath)})`)
   for (const [ name, file ] of Object.entries(fixtures)) {
     source = source.split(`'${name}'`).join(JSON.stringify(file))
     source = source.split(`"${name}"`).join(JSON.stringify(file))

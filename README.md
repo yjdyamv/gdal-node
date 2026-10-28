@@ -1,21 +1,25 @@
-# node-gdal-async
+# gdal-node
 
-**Update: since Oct 24 2024 I am homeless and living in my van. I lost access to most of my computer hardware. The eviction from my home has been timed for maximum effect as I was not present when it happened. Please, if you use my software, consider asking everyone in the geospatial community if they are taking part in this extortion and why.**
+Native asynchronous [GDAL](http://www.gdal.org/) bindings for [Node.js](http://nodejs.org/): read and write raster and vector geospatial datasets straight from JavaScript or TypeScript. `gdal-node` is the maintained fork of [`mmomtchev/node-gdal-async`](https://github.com/mmomtchev/node-gdal-async), tracking GDAL 3.13 - see [FORK.md](FORK.md) for the provenance, the versioning scheme and the full list of changes. To get started, browse the [**API Documentation**](https://mmomtchev.github.io/node-gdal-async/) or the [examples](examples/).
 
-![logo](https://raw.githubusercontent.com/mmomtchev/node-gdal-async/master/gdal-async-logo.svg)
+![logo](gdal-node-logo.svg)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![npm version](https://img.shields.io/npm/v/gdal-async)](https://www.npmjs.com/package/gdal-async)
-[![Test release](https://github.com/mmomtchev/node-gdal-async/actions/workflows/test-release.yml/badge.svg)](https://github.com/mmomtchev/node-gdal-async/actions/workflows/test-release.yml)
-[![Test npm package](https://github.com/mmomtchev/node-gdal-async/actions/workflows/test-npm.yml/badge.svg)](https://github.com/mmomtchev/node-gdal-async/actions/workflows/test-npm.yml)
-![Node.js CI](https://github.com/mmomtchev/node-gdal-async/workflows/Node.js%20CI/badge.svg)
-[![codecov](https://codecov.io/gh/mmomtchev/node-gdal-async/branch/master/graph/badge.svg?token=FE9IJUZ07D)](https://codecov.io/gh/mmomtchev/node-gdal-async)
-[![downloads](https://img.shields.io/npm/dt/gdal-async)](https://www.npmjs.com/package/gdal-async)
-<img src="https://raw.githubusercontent.com/mmomtchev/mmomtchev/refs/heads/master/combat-medal.svg" alt="Combat proven on the backend during a DoS attack" width="25">
+[![npm version](https://img.shields.io/npm/v/gdal-node)](https://www.npmjs.com/package/gdal-node)
+[![downloads](https://img.shields.io/npm/dt/gdal-node)](https://www.npmjs.com/package/gdal-node)
+[![Tests](https://github.com/yjdyamv/gdal-node/actions/workflows/test-dev.yml/badge.svg)](https://github.com/yjdyamv/gdal-node/actions/workflows/test-dev.yml)
+[![Test npm package](https://github.com/yjdyamv/gdal-node/actions/workflows/test-npm.yml/badge.svg)](https://github.com/yjdyamv/gdal-node/actions/workflows/test-npm.yml)
+[![Test release](https://github.com/yjdyamv/gdal-node/actions/workflows/test-release.yml/badge.svg)](https://github.com/yjdyamv/gdal-node/actions/workflows/test-release.yml)
 
-Read and write raster and vector geospatial datasets straight from [Node.js](http://nodejs.org) with this native asynchronous [GDAL](http://www.gdal.org/) binding. To get started, browse the [**API Documentation**](https://mmomtchev.github.io/node-gdal-async/) or [examples](examples/).
+When in doubt on how to use a method, check also the [unit tests](https://github.com/yjdyamv/gdal-node/tree/main/test).
 
-When in doubt on how to use a method, check also the [unit tests](https://github.com/mmomtchev/node-gdal-async/tree/master/test).
+Every `gdal-async@X` version mentioned below refers to the upstream release which this fork starts from (3.13.0): `gdal-node` is versioned independently, see [FORK.md](FORK.md).
+
+## A note from the upstream author
+
+> **Update: since Oct 24 2024 I am homeless and living in my van. I lost access to most of my computer hardware. The eviction from my home has been timed for maximum effect as I was not present when it happened. Please, if you use my software, consider asking everyone in the geospatial community if they are taking part in this extortion and why.**
+>
+> -- Momtchil Momtchev ([@mmomtchev](https://github.com/mmomtchev)), the author of `node-gdal-async`, of which `gdal-node` is a fork
 
 ---
 
@@ -38,16 +42,16 @@ It adds a number of features:
 - Support for curve geometries (since 3.1)
 - Progress callbacks (since 3.2)
 - Built-in support for HDF5, NetCDF, GRIB, WMS, WMTS, WCS and FlatGeobuf (since 3.3)
-- **`worker_threads` support** - every thread gets its own isolated copy of the addon (unreleased)
-- **`AbortController` support** - long-running operations can be interrupted with an `AbortSignal` (unreleased)
-- **Errors with classes** - every failure is a `gdal.GDALError` or one of its subclasses, so `instanceof` tells what went wrong (unreleased)
-- **`using` and `await using` support** - a `Dataset` closes itself when an explicit resource management block ends (unreleased)
+- **`worker_threads` support** - every thread gets its own isolated copy of the addon (since 1.0.0)
+- **`AbortController` support** - long-running operations can be interrupted with an `AbortSignal` (since 1.0.0)
+- **Errors with classes** - every failure is a `gdal.GDALError` or one of its subclasses, so `instanceof` tells what went wrong (since 1.0.0)
+- **`using` and `await using` support** - a `Dataset` closes itself when an explicit resource management block ends (since 1.0.0)
 - **`console.log` shows what an object is** - a `Dataset`, a `RasterBand`, a `Geometry` and a `Feature` describe themselves instead of printing `Dataset {}`
 - Numerous bugfixes including a number of memory leaks
 
 ## Long term support of this project
 
-The birth of this project is related to a huge extortion in the geography community linked to a sexual harassment affair, linked to a penis-size problem, and covered up with corruption in the French Judiciary. It is maintained as a free service to the geography community so that it can remain as a constant remainder to [OSGeo](https://www.osgeo.org/) - who chose to back the extortion. I have been working on it while living on social welfare. You can safely use this framework in your projects, be assured that it will be maintained very well and for many years to come. Even if lately, this project has had a number of issues declared in a way as to make evident that my users support the extortion, I remain fully committed to maintaining it.
+`gdal-node` is maintained as a production fork: it follows the upstream releases and its own changes are recorded in [FORK.md](FORK.md) and in [CHANGELOG.md](CHANGELOG.md). The upstream project is maintained by its original author, [@mmomtchev](https://github.com/mmomtchev), whose statements about this project are in [the upstream README](https://github.com/mmomtchev/node-gdal-async#long-term-support-of-this-project).
 
 It's companion project on the client-side is [`rlayers`](https://github.com/mmomtchev/rlayers).
 
@@ -57,7 +61,7 @@ It's companion project on the client-side is [`rlayers`](https://github.com/mmom
 Pre-built binaries are provided for most recent Linux distributions, Windows 64 bit and OS X 10.15:
 
 ```sh
-npm install gdal-async
+npm install gdal-node
 ```
 
 Node.js 22 or newer is required.
@@ -69,7 +73,7 @@ Node.js 22 or newer is required.
 #### Raster
 
 ```js
-const gdal = require("gdal-async")
+const gdal = require("gdal-node")
 const dataset = gdal.open("sample.tif")
 
 console.log("number of bands: " + dataset.bands.count())
@@ -82,7 +86,7 @@ console.log("srs: " + (dataset.srs ? dataset.srs.toWKT() : 'null'))
 #### Vector
 
 ```js
-const gdal = require("gdal-async")
+const gdal = require("gdal-node")
 const dataset = gdal.open("sample.shp")
 const layer = dataset.layers.get(0)
 
@@ -145,7 +149,7 @@ it will be called on completion with standard *(e,r)* semantics
 
 In this case the function will return a resolved *Promise*
 ```js
-const gdal = require('gdal-async');
+const gdal = require('gdal-node');
 gdal.openAsync('sample.tif', (e, dataset) => {
         if (e) {
             console.error(e);
@@ -167,7 +171,7 @@ gdal.openAsync('sample.tif', (e, dataset) => {
 If there is no callback, the function will return a *Promise*
 
 ```js
-const gdal = require('gdal-async')
+const gdal = require('gdal-node')
 gdal.openAsync('sample.tif')
     .then((dataset) => dataset.bands.getAsync(1))
     .then((band) => band.pixels.readAsync(0, 0, band.ds.rasterSize.x, band.ds.rasterSize.y))
@@ -178,7 +182,7 @@ gdal.openAsync('sample.tif')
 ### With async/await
 
 ```js
-const gdal = require('gdal-async');
+const gdal = require('gdal-node');
 try {
     const ds = await gdal.openAsync('sample.tif');
     const band = await ds.bands.getAsync(1);
@@ -189,12 +193,12 @@ try {
 }
 ```
 
-### Explicit resource management (unreleased)
+### Explicit resource management (since 1.0.0)
 
 A `Dataset` implements both `Symbol.dispose` and `Symbol.asyncDispose`, so `using` and `await using` close it when the block ends, exactly like an explicit `ds.close()` would, even when the block throws:
 
 ```js
-const gdal = require('gdal-async');
+const gdal = require('gdal-node');
 {
     using ds = gdal.open('sample.tif');
     const data = ds.bands.get(1).pixels.read(0, 0, ds.rasterSize.x, ds.rasterSize.y);
@@ -212,9 +216,9 @@ With TypeScript this requires `esnext.disposable` in `lib` (or at least TypeScri
 
 TypeScript support is available beginning with `gdal-async@3.1.0`
 ```ts
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 // Alternatively and only with esModuleInterop = true in tsconfig.json
-// import gdal from 'gdal-async'
+// import gdal from 'gdal-node'
 
 const ds1: gdal.Dataset = gdal.open('sample.tif')
 const ds2: Promise<gdal.Dataset> = gdal.openAsync('sample.tif')
@@ -235,15 +239,15 @@ The TypeScript declaration file (index.d.ts) is auto-generated by the yatag tool
 
 When importing from a so-called Michael Jackson Script environment (Node.js native ES6 modules), the module is available both as a default export - which allows for maximum compatibility with existing CJS applications - and as named exports of its classes:
 ```js
-import gdal from 'gdal-async'
-import { Dataset, RasterBand, GDALOpenError } from 'gdal-async'
+import gdal from 'gdal-node'
+import { Dataset, RasterBand, GDALOpenError } from 'gdal-node'
 
 const dataset = gdal.open('sample.tif')
 console.log(dataset instanceof Dataset) // true
 ```
 The named exports are the classes of the API; the constants, the functions and everything else are reached through the default export, which is the module itself.
 
-### Error classes (unreleased)
+### Error classes (since 1.0.0)
 
 Every failure which GDAL reports is a `gdal.GDALError` or one of its subclasses, one per CPL error number, so a caller can tell what went wrong without matching the message:
 
@@ -319,7 +323,7 @@ Refer to the provided example in `examples/electron`. Prepare for some very roug
 
 ### Bundling with `rollup`
 
-If you are bundling your application for production deployment, `gdal-async` can be bundled with `rollup` through `rollup-plugin-natives` since [`rollup-plugin-natives#13`](https://github.com/danielgindi/rollup-plugin-natives/pull/13). Here is a an example configuration:
+If you are bundling your application for production deployment, `gdal-node` can be bundled with `rollup` through `rollup-plugin-natives` since [`rollup-plugin-natives#13`](https://github.com/danielgindi/rollup-plugin-natives/pull/13). Here is a an example configuration:
 
 ```js
 plugins: [
@@ -330,11 +334,11 @@ plugins: [
   copy({
     targets: [
       {
-        src: 'node_modules/gdal-async/deps/libgdal/gdal/data',
+        src: 'node_modules/gdal-node/deps/libgdal/gdal/data',
         dest: 'build/deps/libgdal/gdal'
       },
       {
-        src: 'node_modules/gdal-async/deps/libproj/proj/data',
+        src: 'node_modules/gdal-node/deps/libproj/proj/data',
         dest: 'build/deps/libproj/proj'
       }
     ]
@@ -342,11 +346,11 @@ plugins: [
 ]
 ```
 
-You can check [XC-DB](https://github.com/mmomtchev/xc-db) for a working project that uses `gdal-async` with `Express` and is bundled for production with `rollup`.
+You can check [XC-DB](https://github.com/mmomtchev/xc-db) for a working project that uses `gdal-node` with `Express` and is bundled for production with `rollup`.
 
 ### Bundling with `Next.js`
 
-As `gdal-async` is a Node.js native module, it does not work in client side components which run in the client browser. You can however use it in server side components, if you can ensure that this code will never get called on the client side.
+As `gdal-node` is a Node.js native module, it does not work in client side components which run in the client browser. You can however use it in server side components, if you can ensure that this code will never get called on the client side.
 
 Add this to your `next.config.js`:
 
@@ -355,7 +359,7 @@ Add this to your `next.config.js`:
 
 export default {
   webpack: (config) => {
-    const externals = ['gdal-async'];
+    const externals = ['gdal-node'];
     if (config.externals)
       config.externals.push(...externals);
     else
@@ -370,7 +374,7 @@ export default {
 * [#2](https://github.com/mmomtchev/node-gdal-async/issues/2) When running multiple parallel async operations per `Dataset` and on multiple `Dataset`s, thread starvation is possible as explained in [`ASYNCIO.md`](https://github.com/mmomtchev/node-gdal-async/blob/master/ASYNCIO.md)
 * [#11](https://github.com/mmomtchev/node-gdal-async/issues/11) Accessing a closed `Dataset` object results in a warning with a stack trace printed out to stdout
 * [#17](https://github.com/mmomtchev/node-gdal-async/issues/17) HDF5 on Windows is not thread-safe
-* [#28](https://github.com/mmomtchev/node-gdal-async/issues/28) `gdal-async` is not compatible with Electron >= 16.0.0 on Windows
+* [#28](https://github.com/mmomtchev/node-gdal-async/issues/28) `gdal-node` is not compatible with Electron >= 16.0.0 on Windows
 
 ## Bundled Drivers
 
@@ -406,6 +410,8 @@ $ npm run container dev {ubuntu|centos|fedora|debian|archlinux|amazonlinux}:{ver
 Copyright &copy; 2015–2017 [Natural Atlas, Inc.](https://github.com/naturalatlas) & [Contributors](https://github.com/naturalatlas/node-gdal/graphs/contributors)
 
 Copyright &copy; 2020-2021 [Momtchil Momtchev, @mmomtchev](https://github.com/mmomtchev) & [Contributors](https://github.com/mmomtchev/node-gdal-async/graphs/contributors)
+
+Copyright &copy; 2025-2026 the `gdal-node` maintainers & [Contributors](https://github.com/yjdyamv/gdal-node/graphs/contributors)
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at: http://www.apache.org/licenses/LICENSE-2.0
 

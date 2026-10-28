@@ -1,5 +1,5 @@
 import { assert } from 'chai'
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 
 describe('geometry async', () => {
   let ring: gdal.LinearRing

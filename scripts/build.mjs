@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const log = (...args) => console.log('gdal-async:', ...args)
+const log = (...args) => console.log('gdal-node:', ...args)
 
 /**
  * Runs a command, printing its output
@@ -112,7 +112,7 @@ export const msvcEnvironment = () => {
     // `>nul` hides the banner and the SDK paths that vcvarsall prints, the
     // code page is switched to UTF-8 so that a path with non-ASCII characters
     // (a user name in C:\Users\...) survives the round trip through cmd
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'gdal-async-'))
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'gdal-node-'))
     let output
     try {
       writeFileSync(path.join(dir, 'vcvars.bat'),

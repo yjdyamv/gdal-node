@@ -1,4 +1,4 @@
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as cp from 'child_process'
@@ -36,7 +36,7 @@ describe('gdal.Dataset', () => {
 
     it('properly close open Datasets when exiting the process', () => {
       const tempFile = path.join(__dirname, 'data', 'temp', 'destructor_close.tiff').replace(/\\/g, '/')
-      const gdalJS = fs.existsSync('./lib/gdal.js') ? './lib/gdal.js' : 'gdal-async'
+      const gdalJS = fs.existsSync('./lib/gdal.js') ? './lib/gdal.js' : 'gdal-node'
       const command =
           `"const gdal = require('${gdalJS}'); gdal.open('${tempFile}', 'w', 'GTiff', 100, 100, 1, gdal.GDT_Float64);"`
       let execPath = process.execPath

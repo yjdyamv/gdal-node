@@ -1,6 +1,6 @@
 import { assert } from 'chai'
 import * as path from 'path'
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 import { startServer } from './utils/http'
 
 // The members whose only test is here: everything which the rest of the suite

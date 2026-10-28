@@ -1,7 +1,7 @@
 import { assert } from 'chai'
 import * as fs from 'fs'
 import * as path from 'path'
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 
 // Every property which cannot be written is registered with the READ_ONLY_SETTER
 // marker; the test parses the registration tables so that a new one cannot be

@@ -2,7 +2,7 @@ import { assert } from 'chai'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as ts from 'typescript'
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 
 /**
  * The `Initialize` of every class is the only place which decides what the module

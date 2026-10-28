@@ -1,8 +1,8 @@
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 import { assert } from 'chai'
 import * as path from 'path'
 
-type Module = typeof import('gdal-async')
+type Module = typeof import('gdal-node')
 
 const fixture = (name: string): string => path.join(__dirname, 'data', name)
 
@@ -10,7 +10,7 @@ const fixture = (name: string): string => path.join(__dirname, 'data', name)
 // as the default export, plus the classes as named exports which lib/gdal.mjs
 // re-exports for the "import" condition of the exports map
 const importModule = async (): Promise<Module & { default: Module }> =>
-  (await import('gdal-async')) as Module & { default: Module }
+  (await import('gdal-node')) as Module & { default: Module }
 
 describe('ES modules', () => {
   it('should import the module by its name', async () => {

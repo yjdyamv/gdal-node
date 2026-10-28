@@ -1,7 +1,7 @@
 import { assert } from 'chai'
 import * as semver from 'semver'
 import * as path from 'path'
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 
 // create = function -> class cannot be directly instantiated
 // create = array -> these are the arguments for the new

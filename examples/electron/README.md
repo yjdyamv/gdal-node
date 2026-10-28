@@ -8,7 +8,7 @@
 export npm_config_disturl=https://electronjs.org/headers
 export npm_config_runtime=electron
 export npm_config_target=19.0.1
-npm install --save gdal-async
+npm install --save gdal-node
 ```
 
 # Windows
@@ -23,7 +23,7 @@ Checkout and build `libc++` according to their instructions. This is a very impo
 
 Alternatively, follow Electron's build instructions for Windows - when building it, you will also obtain `libc++`.
 
-Checkout `gdal-async` from git and do the following:
+Checkout `gdal-node` from git and do the following:
 ```cmd
 set npm_config_disturl=https://electronjs.org/headers
 set npm_config_runtime=electron

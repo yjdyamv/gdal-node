@@ -1,4 +1,4 @@
-# CMake build for the gdal-async native addon.
+# CMake build for the gdal-node native addon.
 #
 # Generator: Ninja.  It is what scripts/build.mjs asks cmake-js for and what the
 # presets below use; CMake would otherwise default to Visual Studio on Windows,
@@ -30,7 +30,7 @@
 
 cmake_minimum_required(VERSION 3.15)
 
-project(gdal-async LANGUAGES CXX)
+project(gdal-node LANGUAGES CXX)
 
 # Node 24's V8 headers require C++20
 set(CMAKE_CXX_STANDARD 20)

@@ -31,7 +31,7 @@ const bindingFile = path.join(bindingDir, `${pkg.binary.module_name}.node`)
 
 const verbose = process.argv.includes('--verbose')
 
-const log = (...args) => console.log('gdal-async:', ...args)
+const log = (...args) => console.log('gdal-node:', ...args)
 const debug = (...args) => {
   if (verbose) {
     log(...args)
@@ -62,7 +62,7 @@ const download = (url, dest, redirects = 0) => new Promise((resolve, reject) => 
     return reject(new Error(`${url} redirects too many times`))
   }
   const client = url.startsWith('https:') ? https : http
-  client.get(url, { headers: { 'User-Agent': `gdal-async/${pkg.version}` } }, (res) => {
+  client.get(url, { headers: { 'User-Agent': `gdal-node/${pkg.version}` } }, (res) => {
     if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
       res.resume()
       return resolve(download(new URL(res.headers.location, url).toString(), dest, redirects + 1))
@@ -108,7 +108,7 @@ const findBinding = (dir) => {
 const downloadPrebuilt = async () => {
   const asset = expand(pkg.binary.package_name)
   const url = new URL(`${expand(pkg.binary.remote_path)}/${asset}`, pkg.binary.host).toString()
-  const tmp = mkdtempSync(path.join(os.tmpdir(), 'gdal-async-'))
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'gdal-node-'))
   const tarball = path.join(tmp, asset)
   try {
     log(`downloading the prebuilt binary from ${url}`)
@@ -153,8 +153,8 @@ const main = async () => {
     log(`built the binding in ${path.relative(root, bindingFile)}`)
     return 0
   }
-  console.error('gdal-async: there is no prebuilt binary for this platform and the build from the sources failed')
-  console.error('gdal-async: install Conan and a C++20 compiler, then re-run `npm install --build-from-source`')
+  console.error('gdal-node: there is no prebuilt binary for this platform and the build from the sources failed')
+  console.error('gdal-node: install Conan and a C++20 compiler, then re-run `npm install --build-from-source`')
   return 1
 }
 

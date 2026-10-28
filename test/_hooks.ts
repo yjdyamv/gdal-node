@@ -1,4 +1,4 @@
-import gdal from 'gdal-async'
+import gdal from 'gdal-node'
 import * as os from 'os'
 
 import * as chai from 'chai'

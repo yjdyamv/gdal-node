@@ -1,4 +1,4 @@
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 import * as path from 'path'
 import { assert } from 'chai'
 import * as fileUtils from './utils/file'

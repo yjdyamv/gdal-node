@@ -1,9 +1,10 @@
 {
-  "name": "gdal-async",
-  "version": "3.12.3",
-  "description": "Bindings to GDAL (Geospatial Data Abstraction Library) with full async support",
+  "name": "gdal-node",
+  "version": "1.0.0",
+  "upstreamVersion": "3.13.0",
+  "description": "Bindings to GDAL (Geospatial Data Abstraction Library) with full async support - the maintained fork of gdal-async",
   "license": "Apache-2.0",
-  "url": "https://github.com/mmomtchev/node-gdal-async",
+  "url": "https://github.com/yjdyamv/gdal-node",
   "main": "./lib/gdal.js",
   "types": "./lib/index.d.ts",
   "type": "commonjs",
@@ -36,16 +37,12 @@
     "module_name": "gdal",
     "module_path": "./lib/binding/napi-v8-{platform}-{arch}",
     "remote_path": "v{version}",
-    "host": "https://github.com/yjdyamv/node-gdal-async/releases/download/",
+    "host": "https://github.com/yjdyamv/gdal-node/releases/download/",
     "package_name": "napi-v8-{platform}-{arch}.tar.gz"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mmomtchev/node-gdal-async.git"
-  },
-  "funding": {
-    "url": "https://github.com/sponsors/mmomtchev",
-    "type": "individual"
+    "url": "https://github.com/yjdyamv/gdal-node.git"
   },
   "contributors": [
     {

@@ -1,4 +1,4 @@
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 import { Readable, Transform, finished as _finished } from 'stream'
 import { promisify } from 'util'
 import { assert } from 'chai'

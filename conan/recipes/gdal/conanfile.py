@@ -13,7 +13,7 @@ required_conan_version = ">=2.0.5"
 
 class GdalConan(ConanFile):
     """
-    conan-center's gdal recipe, forked so that the node-gdal-async feature set
+    conan-center's gdal recipe, forked so that the gdal-node feature set
     is not lost.
 
     The upstream recipe does not wire up muparser and ExprTk, so a GDAL built

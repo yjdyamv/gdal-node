@@ -2,7 +2,7 @@
 
 Common pitfalls to avoid when writing server code
 
-## Mixing of synchronous and asynchronous operations (or why does gdal-async complain about blocking the event loop)
+## Mixing of synchronous and asynchronous operations (or why does gdal-node complain about blocking the event loop)
 
 *If you are not writing server code that must remain responsive at all times and should never block the event loop for more than a few hundred microseconds, you can safely ignore this warning. In this case you can simply set `gdal.eventLoopWarning = false`.*
 
@@ -98,7 +98,7 @@ Here we are chaining all the Promises one on another. Now the read of the second
 
 SQL layers present a unique challenge when implementing asynchronous bindings - they require holding a lock over the parent Dataset in order to destroy them. This means that if a Dataset with multiple layers has an asynchronous operation running on one of them and the GC decides it is time to reclaim the SQL results layer - there will be only one solution - to completely block the Node.js process until that background operation finishes.
 
-Alas, there are no simple solutions for this issue. `gdal-async`prints a warning to stderr when this happens.
+Alas, there are no simple solutions for this issue. `gdal-node`prints a warning to stderr when this happens.
 
 ## RFC101 thread-safe datasets with GDAL >= 3.10
 

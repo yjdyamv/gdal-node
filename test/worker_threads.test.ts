@@ -1,7 +1,7 @@
-// gdal-async can be used from worker threads - each thread gets its own
+// gdal-node can be used from worker threads - each thread gets its own
 // Node-API environment and its own object store
 
-import * as gdal from 'gdal-async'
+import * as gdal from 'gdal-node'
 import { assert } from 'chai'
 import { Worker } from 'worker_threads'
 import * as path from 'path'

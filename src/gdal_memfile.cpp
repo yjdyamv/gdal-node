@@ -101,7 +101,7 @@ Memfile *Memfile::get(Napi::Object buffer, const std::string &filename) {
   return mem;
 }
 
-// GDAL buffers handled by GDAL and are not referenced by node-gdal-async
+// GDAL buffers handled by GDAL and are not referenced by gdal-node
 bool Memfile::copy(Napi::Object buffer, const std::string &filename) {
   if (!bufferHasData(buffer)) return false;
   void *data = bufferData(buffer);

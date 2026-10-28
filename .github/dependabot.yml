@@ -4,7 +4,7 @@ updates:
     directory: "/"
     schedule:
       interval: "cron"
-      # node -p 'require("crypto").createHash("md5").update("node-gdal-async").digest("buffer")[0] % 15'
+      # node -p 'require("crypto").createHash("md5").update("gdal-node").digest("buffer")[0] % 15'
       cronjob: "0 5 4/15 * *"
     open-pull-requests-limit: 1
     groups:

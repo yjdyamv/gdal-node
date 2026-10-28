@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
-const gdal = require('gdal-async')
+const gdal = require('gdal-node')
 const path = require('path')
 
 function createWindow() {
