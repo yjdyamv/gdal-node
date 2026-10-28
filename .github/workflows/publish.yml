@@ -3,12 +3,37 @@ name: Publish
 on: workflow_dispatch
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
 
+  create-release:
+
+    name: Release
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Create the draft release
+      # The binaries are uploaded by every job below into the release which
+      # this job creates, so that the release exists exactly once, with the
+      # notes which Github generates, instead of being raced into existence by
+      # the first uploader
+      shell: bash
+      run: |
+        VERSION="$(node -p 'require("./package.json").version')"
+        if gh release view "v$VERSION" >/dev/null 2>&1; then
+          echo "the release v$VERSION already exists"
+        else
+          gh release create "v$VERSION" --draft --generate-notes --title "v$VERSION"
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   publish-linux:
 
+    needs: create-release
     name: Linux
 
     runs-on: ubuntu-latest
@@ -23,11 +48,12 @@ jobs:
         node-version: 24.x
     - run: npm run container publish ubuntu:22.04 24
       env:
-        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ github.token }}
 
 
   publish-linux-arm64:
 
+    needs: create-release
     name: Linux arm64
 
     runs-on: ubuntu-24.04-arm
@@ -45,11 +71,12 @@ jobs:
     # runners are 24.04
     - run: npm run container publish ubuntu:22.04 24
       env:
-        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ github.token }}
 
 
   publish-winmac:
 
+    needs: create-release
     name: Windows and macOS
 
     runs-on: ${{ matrix.platforms }}
@@ -101,4 +128,4 @@ jobs:
       run: npm run package
     - run: npx @mmomtchev/node-pre-gyp-github publish
       env:
-        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.NODE_PRE_GYP_GITHUB_TOKEN }}
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ github.token }}

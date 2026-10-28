@@ -197,3 +197,41 @@ build system, object store or API.
 * A surface hardening campaign: every documented example is executed by the
   test suite, every member of every class is called at least once, the typings
   are checked against the source, and the failure messages name what failed.
+
+## Releasing
+
+The binaries are built by `.github/workflows/publish.yml`, which is started by
+hand from the Actions tab, with the tag of the release as its ref. It uses the
+repository's own `GITHUB_TOKEN` (`contents: write`), so there is no personal
+token to configure.
+
+1. Tag the commit which is being released and push the tag - it is both the ref
+   the workflow is started from and the one the binaries are downloaded from,
+   since `binary.remote_path` is `v{version}`:
+
+   ```bash
+   git tag -a v1.0.0 -m "gdal-node 1.0.0"
+   git push origin v1.0.0
+   ```
+
+2. Actions -> **Publish** -> *Run workflow* -> choose the tag `v1.0.0`. Six jobs
+   build the six `napi-v8-<platform>-<arch>.tar.gz` tarballs (Linux x86_64 and
+   arm64 in an `ubuntu:22.04` container, Windows x86_64 and arm64, macOS x86_64
+   and arm64) and upload them into the release of the tag. The first job creates
+   that release once, so that the six uploads cannot race each other into
+   creating it six times.
+
+3. The release appears as a **draft**, with the notes which Github generated.
+   Read them, fix the title, add what matters (the upstream version this release
+   carries, `upstreamVersion`), then publish it. A draft is invisible to
+   `npm install`, which falls back to compiling from the source.
+
+4. Publishing the release starts `test-release.yml`, which installs the
+   **published** tarballs in `ubuntu:24.04`, `debian:trixie`,
+   `amazonlinux:2023`, on Linux arm64, and on Windows and macOS.
+
+The npm package is not published yet. When it is, it must come *after* step 3,
+because the published package is what sends the installers to the release: a
+package whose release is still a draft cannot be installed. Its `postpublish`
+script starts `test-npm.yml`, which installs the published package from the
+registry on every platform.
