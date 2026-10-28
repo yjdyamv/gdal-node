@@ -173,12 +173,21 @@ GDALDataType TypedArray::Identify(Napi::Object obj) {
 
   // A DataView is not a typed array and does not say what it holds. The only one
   // which reaches the addon is the polyfilled Float16Array of Node.js < 24, which
-  // lib/gdal.js hands over tagged with the data type of its elements
+  // lib/gdal.js hands over tagged with the data type of its elements.  Anything
+  // else which claims the tag is not a buffer at all and must be refused here:
+  // the callers take the data pointer of what this function accepted, and a
+  // plain object which says `_gdal_type: 99` has no data pointer to take
+  bool is_dataview = false;
+  if (napi_is_dataview(napiEnv, obj, &is_dataview) != napi_ok || !is_dataview) return GDT_Unknown;
   if (!obj.HasOwnProperty("_gdal_type")) return GDT_Unknown;
   Napi::Value val = obj.Get("_gdal_type");
   if (!val.IsNumber()) return GDT_Unknown;
 
-  return (GDALDataType)val.As<Napi::Number>().Int32Value();
+  GDALDataType type = (GDALDataType)val.As<Napi::Number>().Int32Value();
+  // GDALGetDataTypeName() returns null for anything which is not a data type
+  if (GDALGetDataTypeName(type) == nullptr) return GDT_Unknown;
+
+  return type;
 }
 
 // The old binding's typed arrays took any ArrayBufferView, DataView included -
@@ -215,6 +224,13 @@ template <typename T> static void *validate(Napi::Object obj, GDALDataType type,
   return data;
 }
 
+// GDALGetDataTypeName() returns null for a number which is not a data type, and
+// a null string cannot be streamed into a std::ostringstream
+static const char *dataTypeName(GDALDataType type) {
+  const char *name = GDALGetDataTypeName(type);
+  return name == nullptr ? "Unknown" : name;
+}
+
 void *TypedArray::Validate(Napi::Object obj, GDALDataType type, int64_t min_length) {
   // validate array
 
@@ -227,7 +243,7 @@ void *TypedArray::Validate(Napi::Object obj, GDALDataType type, int64_t min_leng
   if (src_type != type) {
     std::ostringstream ss;
     ss << "Array type does not match band data type ("
-       << "input: " << GDALGetDataTypeName(src_type) << ", target: " << GDALGetDataTypeName(type) << ")";
+       << "input: " << dataTypeName(src_type) << ", target: " << dataTypeName(type) << ")";
 
     Napi::TypeError::New(node_gdal::napi_env(), ss.str().c_str()).ThrowAsJavaScriptException();
     return nullptr;

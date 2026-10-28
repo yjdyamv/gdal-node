@@ -1508,6 +1508,30 @@ describe('gdal.RasterBand', () => {
               band.pixels.readBlock(0, 0, data)
             })
           })
+          // The Float16Array of Node.js < 24 is a DataView which says which type
+          // it holds with a `_gdal_type` property, as it is not a typed array and
+          // a DataView does not know its type.  An object which only claims the
+          // property is not a buffer at all: the addon used to take the data
+          // pointer of whatever the property said, and the process died when the
+          // type it said was not a data type
+          it('should throw error if the array only claims to be an array', () => {
+            const ds = gdal.open(`${__dirname}/data/sample.tif`)
+            const band = ds.bands.get(1)
+            // `gdal.GDT_Byte` is the name of the type, not its number, so both
+            // kinds of claim are refused here
+            const claimed = (type: number | string) => ({ _gdal_type: type }) as unknown as Uint8Array
+            for (const type of [ gdal.GDT_Byte, gdal.GDT_Float16, 99, 0 ]) {
+              assert.throws(() => {
+                band.pixels.readBlock(0, 0, claimed(type))
+              }, /Unable to identify GDAL datatype of passed array object/, `_gdal_type: ${type}`)
+              assert.throws(() => {
+                band.pixels.read(0, 0, 1, 1, claimed(type))
+              }, /Invalid array/, `_gdal_type: ${type}`)
+              assert.throws(() => {
+                band.pixels.writeBlock(0, 0, claimed(type))
+              }, /Unable to identify GDAL datatype of passed array object/, `_gdal_type: ${type}`)
+            }
+          })
         })
         it('should throw error if dataset already closed', () => {
           const ds = gdal.open(`${__dirname}/data/sample.tif`)
