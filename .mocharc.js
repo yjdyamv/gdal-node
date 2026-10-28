@@ -15,6 +15,11 @@ module.exports = {
   spec: files.length ? files : [ path.join(root, 'test', '*.test.ts').replace(/\\/g, '/') ],
   require: [ 'tsx', 'tsconfig-paths/register', path.join(root, 'test', '_common.ts'), path.join(root, 'test', '_hooks.ts') ],
   reporter: 'tap',
-  timeout: 20000,
+  // This is a report, not a watchdog: a synchronous test cannot be interrupted
+  // and an asynchronous test which really hangs is stopped by the job timeout
+  // of GitHub, so what is measured here is the cost of the test on a shared
+  // runner which is 2-3x slower than a developer machine and which can be
+  // loaded by a concurrent build. The local cost of the slowest test is 1.4s.
+  timeout: 60000,
   'v8-expose-gc': true
 }

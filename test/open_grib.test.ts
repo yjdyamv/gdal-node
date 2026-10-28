@@ -115,9 +115,28 @@ describe('Open', () => {
     it('should support PNG compression', () => {
       const ds = gdal.open(`/vsigzip/${path.join(__dirname, 'data',
         'MRMS_NLDN_CG_001min_AvgDensity.latest.grib2.gz')}`)
-      const data = ds.bands.get(1).pixels.read(0, 0, ds.rasterSize.x, ds.rasterSize.y)
-      assert.instanceOf(data, Float64Array)
-      assert.lengthOf(data, ds.rasterSize.x * ds.rasterSize.y)
+      const band = ds.bands.get(1)
+      // This raster is 7000 x 3500 of Float64: reading it in a single call
+      // allocates 196 MB, which makes the test depend on the free memory of
+      // the machine instead of on the decoder - it timed out on a loaded CI
+      // runner. Reading it in bands of 100 rows decodes the same message
+      // 5.5 MB at a time, and allows checking the values themselves rather
+      // than only their number.
+      let count = 0
+      let max = -Infinity
+      for (let y = 0; y < ds.rasterSize.y; y += 100) {
+        const height = Math.min(100, ds.rasterSize.y - y)
+        const data = band.pixels.read(0, y, ds.rasterSize.x, height)
+        assert.instanceOf(data, Float64Array)
+        assert.lengthOf(data, ds.rasterSize.x * height)
+        count += data.length
+        for (let i = 0; i < data.length; i++) if (data[i] > max) max = data[i]
+      }
+      assert.equal(count, 7000 * 3500)
+      // The band is nodata (-1) everywhere except for 73 lightning strikes,
+      // the strongest of which is this one: a decoder which silently returned
+      // zeros would pass a length check, but not this one
+      assert.closeTo(max, 1.924, 0.001)
     })
 
     it('with bundled GDAL, should support AEC compression', () => {
