@@ -161,3 +161,58 @@ export function withDataset<T>(path: string|Buffer, mode: string, fn: (dataset: 
  */
 export function withDatasetAsync<T>(args: OpenArguments, fn: (dataset: Dataset) => T|Promise<T>): Promise<T>
 export function withDatasetAsync<T>(path: string|Buffer, mode: string, fn: (dataset: Dataset) => T|Promise<T>): Promise<T>
+
+/**
+ * The scope which `using()` and `usingAsync()` hand to their callback
+ *
+ * Every dataset which is opened inside the callback is registered with the
+ * scope and closed when the callback ends, in the reverse order of its opening.
+ */
+export interface DatasetScope {
+  /** The number of datasets which the scope still has to close */
+  readonly size: number
+  /** Takes a dataset out of the scope, so that the scope does not close it */
+  keep(dataset: Dataset): Dataset
+  /** Closes a dataset before the scope ends */
+  close(dataset: Dataset): Dataset
+}
+
+/**
+ * Runs a callback and closes the datasets which it opens
+ *
+ * Every dataset which is opened inside the callback, including the ones which a
+ * function which the callback calls opens and the ones which are opened after
+ * an `await`, is closed when the callback returns or throws, in the reverse
+ * order of its opening. A dataset which the callback returns stays open, and a
+ * dataset which was opened outside the callback is not touched. A failure of a
+ * close is attached to the failure of the callback as `suppressed` instead of
+ * replacing it.
+ *
+ * @example
+ *
+ * const count = gdal.using((scope) => {
+ *   const ds = gdal.open('in.tif')
+ *   return ds.bands.count()
+ * })
+ *
+ * @throws {TypeError} if the callback is not a function
+ */
+export function using<T>(fn: (scope: DatasetScope) => T): T
+
+/**
+ * Runs an asynchronous callback and closes the datasets which it opens
+ *
+ * The same as `using()`, with the datasets closed without blocking the event
+ * loop, which matters for the datasets which were opened for writing because
+ * closing one of them writes the directory of the file.
+ *
+ * @example
+ *
+ * const count = await gdal.usingAsync(async (scope) => {
+ *   const ds = await gdal.openAsync('in.tif')
+ *   return ds.bands.countAsync()
+ * })
+ *
+ * @throws {TypeError} if the callback is not a function
+ */
+export function usingAsync<T>(fn: (scope: DatasetScope) => T|Promise<T>): Promise<T>

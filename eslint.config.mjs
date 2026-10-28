@@ -222,7 +222,9 @@ export default [
     files: [ 'lib/gdal.js' ],
 
     languageOptions: {
-      ecmaVersion: 2020
+      // lib/gdal.js closes a scope with an AggregateError, which is an ES2021
+      // global: every version of Node.js which `engines` allows has it
+      ecmaVersion: 2021
     }
   }
 ]
