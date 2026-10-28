@@ -104,7 +104,22 @@ jobs:
       with:
         key: ccache-${{ matrix.os }}
         max-size: 500M
-    - run: npm install --ignore-scripts
+    - name: Install the dependencies
+      shell: bash
+      # npm gives up after its own short retries, and a shared runner does
+      # occasionally lose the registry. A failure here throws away a job which
+      # has not even started to build, and on the slowest platform that is a
+      # half hour of cold compilation
+      run: |
+        for attempt in 1 2 3; do
+          if npm install --ignore-scripts; then
+            exit 0
+          fi
+          echo "::warning::npm install failed (attempt $attempt of 3)"
+          sleep $((attempt * 20))
+        done
+        echo "::error::npm install failed 3 times"
+        exit 1
     - name: Check that the typings are up to date
       # lib/index.d.ts is committed and the build regenerates it as its last
       # step, so this has to run before the build to catch a comment which
