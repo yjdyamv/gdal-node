@@ -107,6 +107,17 @@ int ProgressTrampoline(double dfComplete, const char *pszMessage, void *pProgres
   GDALProgressInfo *info = new GDALProgressInfo(dfComplete, pszMessage);
   // Go to the dispatcher
   context->Send(info);
+  // A synchronous progress callback runs right here, so it may have aborted the
+  // operation itself - which is what a program which lets its user press
+  // 'cancel' does - and GDAL can only learn about it from the return value of
+  // this trampoline.  Without this second check the abort is noticed only when
+  // GDAL asks again, which may never happen.  In asynchronous mode the
+  // dispatcher only queues a job for the main thread and returns immediately,
+  // so the flag cannot have changed here and this check is a no-op
+  if (context->Aborted()) {
+    context->MarkInterrupted();
+    return 0;
+  }
   return 1;
 }
 

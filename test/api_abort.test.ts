@@ -14,10 +14,7 @@ const aborted = () => {
 // a translation of a cached file does not report any progress - and then the
 // abort never had a chance to interrupt it, so there is nothing to assert and the
 // test is skipped instead of failing for a reason which has nothing to do with
-// the abort.  The same is true when the operation reports a single notification:
-// GDAL asks its progress callback between the steps of the work, so a machine
-// fast enough to do all of the work in one step reports once, when there is
-// nothing left to interrupt
+// the abort
 const assertAborted = async function (
   context: Mocha.Context,
   operation: Promise<unknown>,
@@ -27,7 +24,7 @@ const assertAborted = async function (
     (value) => ({ value, error: null as Error | null }),
     (error: Error) => ({ value: null, error })
   )
-  if (result.error === null && progress() <= 1) context.skip()
+  if (result.error === null && progress() === 0) context.skip()
   assert.isNotNull(result.error, 'should have been aborted')
   assert.equal((result.error as Error).name, 'AbortError')
 }
