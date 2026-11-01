@@ -24,6 +24,7 @@ class MDArray : public GDALObject<MDArray> {
   static void Initialize(Napi::Object target);
   static Napi::Value New(std::shared_ptr<GDALMDArray> group, GDALDataset *parent_ds);
   GDAL_ASYNCABLE_DECLARE(read);
+  GDAL_ASYNCABLE_DECLARE(write);
   static NAPI_GETTER(lengthGetter);
 
   MDArray(const Napi::CallbackInfo &info);

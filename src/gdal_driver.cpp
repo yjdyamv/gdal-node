@@ -191,6 +191,89 @@ struct createBody : node_gdal::AsyncMethodBody {
 GDAL_ASYNC_METHOD(Driver::create, createBody)
 
 /**
+ * Create a new multidimensional dataset with this driver.
+ *
+ * Unlike {@link Driver#create}, this creates a dataset which has a root
+ * {@link Group} instead of raster bands, and the dimensions and the arrays are
+ * created through that group with {@link Group#createDimension} and
+ * {@link Group#createMDArray}.
+ *
+ * This is what the `netCDF`, `Zarr` and `HDF5` drivers use. Note that the
+ * root group of a freshly created dataset is not available until the dataset is
+ * reopened.
+ *
+ * @method createMultidim
+ * @instance
+ * @memberof Driver
+ * @throws {Error}
+ * @param {string} filename
+ * @param {StringOptions} [root_group_options] An array or object containing
+ * driver-specific creation options for the root group
+ * @param {StringOptions} [creation_options] An array or object containing
+ * driver-specific dataset creation options
+ * @return {Dataset}
+ */
+
+/**
+ * Asynchronously create a new multidimensional dataset with this driver.
+ * @async
+ *
+ * @method createMultidimAsync
+ * @instance
+ * @memberof Driver
+ * @throws {Error}
+ * @param {string} filename
+ * @param {StringOptions} [root_group_options] An array or object containing
+ * driver-specific creation options for the root group
+ * @param {StringOptions} [creation_options] An array or object containing
+ * driver-specific dataset creation options
+ * @param {callback<Dataset>} [callback=undefined]
+ * @return {Promise<Dataset>}
+ */
+namespace {
+
+struct createMultidimBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+    Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+
+    std::string filename;
+    StringList *root_group_options = new StringList;
+    StringList *options = new StringList;
+
+    if (!args.get(0, "filename", filename)) return args.failed();
+    if (info.Length() > 1 && root_group_options->parse(info[1])) {
+      node_gdal::ThrowOverPending(info.Env(), "Failed parsing root group options");
+      return info.Env().Undefined();
+    }
+    if (info.Length() > 2 && options->parse(info[2])) {
+      node_gdal::ThrowOverPending(info.Env(), "Failed parsing options");
+      return info.Env().Undefined();
+    }
+
+    GDALDriver *raw = driver->getGDALDriver();
+
+    GDALAsyncableJob<GDALDataset *> job(0);
+    job.persist(driver->Value());
+    job.main = [raw, filename, root_group_options, options](const GDALExecutionProgress &) {
+      std::unique_ptr<StringList> root_group_options_ptr(root_group_options);
+      std::unique_ptr<StringList> options_ptr(options);
+      CPLErrorReset();
+      GDALDataset *ds = raw->CreateMultiDimensional(filename.c_str(), root_group_options->get(), options->get());
+      if (!ds) throw GDALError::fromGDAL();
+      return ds;
+    };
+    job.rval = DatasetRval;
+
+    return job.run(info, node_gdal::is_async<Async>, 3);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(Driver::createMultidim, createMultidimBody)
+
+/**
  * @typedef {object} CreateOptions
  * @property {ProgressCb} [progress_cb]
  * @property {AbortSignal} [abort_signal] AbortSignal to interrupt the operation
@@ -502,6 +585,7 @@ void Driver::Initialize(Napi::Object target) {
     method("toString", toString),
     asyncMethod("open", open, openAsync),
     asyncMethod("create", create, createAsync),
+    asyncMethod("createMultidim", createMultidim, createMultidimAsync),
     asyncMethod("createCopy", createCopy, createCopyAsync),
     method("deleteDataset", deleteDataset),
     method("rename", rename),

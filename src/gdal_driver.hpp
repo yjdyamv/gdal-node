@@ -23,6 +23,7 @@ class Driver : public GDALObject<Driver> {
   static Napi::Value New(GDALDriver *driver);
   GDAL_ASYNCABLE_DECLARE(open);
   GDAL_ASYNCABLE_DECLARE(create);
+  GDAL_ASYNCABLE_DECLARE(createMultidim);
   GDAL_ASYNCABLE_DECLARE(createCopy);
 
 

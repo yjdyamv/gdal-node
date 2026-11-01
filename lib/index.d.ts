@@ -2854,8 +2854,15 @@ export class Attribute {
   constructor()
 
   /**
- * Complex GDAL data types introduced in 3.1 are not yet supported
- * @readonly
+ * The value of the attribute.
+ *
+ * Numeric attributes hold a single number, string attributes hold a string.
+ * Complex GDAL data types introduced in 3.1 are not yet supported.
+ *
+ * Writing a string to an attribute created with the `String` data type
+ * replaces its contents, writing a number to a numeric attribute does the
+ * same for the number.
+ *
  * @kind member
  * @name value
  * @instance
@@ -2863,7 +2870,7 @@ export class Attribute {
  * @throws {Error}
  * @type {string|number}
  */
-  readonly value: string|number
+  value: string|number
 
   /**
  * @readonly
@@ -4124,6 +4131,49 @@ export class Driver {
  * @return {Promise<Dataset>}
  */
   createAsync(filename: string, x_size?: number, y_size?: number, band_count?: number, data_type?: string, creation_options?: StringOptions, callback?: callback<Dataset>): Promise<Dataset>
+
+  /**
+ * Create a new multidimensional dataset with this driver.
+ *
+ * Unlike {@link Driver#create}, this creates a dataset which has a root
+ * {@link Group} instead of raster bands, and the dimensions and the arrays are
+ * created through that group with {@link Group#createDimension} and
+ * {@link Group#createMDArray}.
+ *
+ * This is what the `netCDF`, `Zarr` and `HDF5` drivers use. Note that the
+ * root group of a freshly created dataset is not available until the dataset is
+ * reopened.
+ *
+ * @method createMultidim
+ * @instance
+ * @memberof Driver
+ * @throws {Error}
+ * @param {string} filename
+ * @param {StringOptions} [root_group_options] An array or object containing
+ * driver-specific creation options for the root group
+ * @param {StringOptions} [creation_options] An array or object containing
+ * driver-specific dataset creation options
+ * @return {Dataset}
+ */
+  createMultidim(filename: string, root_group_options?: StringOptions, creation_options?: StringOptions): Dataset
+
+  /**
+ * Asynchronously create a new multidimensional dataset with this driver.
+ * @async
+ *
+ * @method createMultidimAsync
+ * @instance
+ * @memberof Driver
+ * @throws {Error}
+ * @param {string} filename
+ * @param {StringOptions} [root_group_options] An array or object containing
+ * driver-specific creation options for the root group
+ * @param {StringOptions} [creation_options] An array or object containing
+ * driver-specific dataset creation options
+ * @param {callback<Dataset>} [callback=undefined]
+ * @return {Promise<Dataset>}
+ */
+  createMultidimAsync(filename: string, root_group_options?: StringOptions, creation_options?: StringOptions, callback?: callback<Dataset>): Promise<Dataset>
 
   /**
  * Create a copy of a dataset.
@@ -6454,6 +6504,248 @@ export class Group {
  * @type {GroupAttributes}
  */
   readonly attributes: GroupAttributes
+
+  /**
+ * Create a subgroup.
+ *
+ * @method createGroup
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @return {Group}
+ */
+  createGroup(name: string, options?: StringOptions): Group
+
+  /**
+ * Create a subgroup.
+ * @async
+ *
+ * @method createGroupAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @param {callback<Group>} [callback=undefined]
+ * @return {Promise<Group>}
+ */
+  createGroupAsync(name: string, options?: StringOptions, callback?: callback<Group>): Promise<Group>
+
+  /**
+ * Create a dimension.
+ *
+ * The dimensions of a group are what the arrays of the group are indexed by:
+ * an array is created from a list of dimensions.
+ *
+ * @method createDimension
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {string} type The axis type, one of `HORIZONTAL_X`, `HORIZONTAL_Y`,
+ * `VERTICAL`, `TEMPORAL` or `PARAMETRIC`. An empty string means unknown.
+ * @param {string} direction `EAST`, `WEST`, `NORTH`, `SOUTH`, `UP`, `DOWN` or
+ * an empty string for none
+ * @param {number} size
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @return {Dimension}
+ */
+  createDimension(name: string, type: string, direction: string, size: number, options?: StringOptions): Dimension
+
+  /**
+ * Create a dimension.
+ * @async
+ *
+ * @method createDimensionAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {string} type The axis type, one of `HORIZONTAL_X`, `HORIZONTAL_Y`,
+ * `VERTICAL`, `TEMPORAL` or `PARAMETRIC`. An empty string means unknown.
+ * @param {string} direction `EAST`, `WEST`, `NORTH`, `SOUTH`, `UP`, `DOWN` or
+ * an empty string for none
+ * @param {number} size
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @param {callback<Dimension>} [callback=undefined]
+ * @return {Promise<Dimension>}
+ */
+  createDimensionAsync(name: string, type: string, direction: string, size: number, options?: StringOptions, callback?: callback<Dimension>): Promise<Dimension>
+
+  /**
+ * Create an array.
+ *
+ * @method createMDArray
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {Dimension[]} dimensions The dimensions the array is indexed by
+ * @param {string} data_type See {@link GDT|GDT constants}, or `"String"`
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @return {MDArray}
+ */
+  createMDArray(name: string, dimensions: Dimension[], data_type: string, options?: StringOptions): MDArray
+
+  /**
+ * Create an array.
+ * @async
+ *
+ * @method createMDArrayAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {Dimension[]} dimensions The dimensions the array is indexed by
+ * @param {string} data_type See {@link GDT|GDT constants}, or `"String"`
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @param {callback<MDArray>} [callback=undefined]
+ * @return {Promise<MDArray>}
+ */
+  createMDArrayAsync(name: string, dimensions: Dimension[], data_type: string, options?: StringOptions, callback?: callback<MDArray>): Promise<MDArray>
+
+  /**
+ * Create an attribute.
+ *
+ * Attributes are the metadata of a group or of an array. Their value is written
+ * with {@link Attribute#value}.
+ *
+ * @method createAttribute
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {number[]} [dimensions] The sizes of the dimensions of the attribute,
+ * an empty array for a scalar
+ * @param {string} [data_type=String] See {@link GDT|GDT constants}, or `"String"`
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @return {Attribute}
+ */
+  createAttribute(name: string, dimensions?: number[], data_type?: string, options?: StringOptions): Attribute
+
+  /**
+ * Create an attribute.
+ * @async
+ *
+ * @method createAttributeAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {number[]} [dimensions] The sizes of the dimensions of the attribute,
+ * an empty array for a scalar
+ * @param {string} [data_type=String] See {@link GDT|GDT constants}, or `"String"`
+ * @param {StringOptions} [options] Driver-specific creation options
+ * @param {callback<Attribute>} [callback=undefined]
+ * @return {Promise<Attribute>}
+ */
+  createAttributeAsync(name: string, dimensions?: number[], data_type?: string, options?: StringOptions, callback?: callback<Attribute>): Promise<Attribute>
+
+  /**
+ * Delete a subgroup.
+ *
+ * @method deleteGroup
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @return {boolean}
+ */
+  deleteGroup(name: string): boolean
+
+  /**
+ * Delete a subgroup.
+ * @async
+ *
+ * @method deleteGroupAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {callback<boolean>} [callback=undefined]
+ * @return {Promise<boolean>}
+ */
+  deleteGroupAsync(name: string, callback?: callback<boolean>): Promise<boolean>
+
+  /**
+ * Delete an array.
+ *
+ * @method deleteMDArray
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @return {boolean}
+ */
+  deleteMDArray(name: string): boolean
+
+  /**
+ * Delete an array.
+ * @async
+ *
+ * @method deleteMDArrayAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {callback<boolean>} [callback=undefined]
+ * @return {Promise<boolean>}
+ */
+  deleteMDArrayAsync(name: string, callback?: callback<boolean>): Promise<boolean>
+
+  /**
+ * Delete an attribute.
+ *
+ * @method deleteAttribute
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @return {boolean}
+ */
+  deleteAttribute(name: string): boolean
+
+  /**
+ * Delete an attribute.
+ * @async
+ *
+ * @method deleteAttributeAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} name
+ * @param {callback<boolean>} [callback=undefined]
+ * @return {Promise<boolean>}
+ */
+  deleteAttributeAsync(name: string, callback?: callback<boolean>): Promise<boolean>
+
+  /**
+ * Rename the group.
+ *
+ * @method rename
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} newName
+ * @return {void}
+ */
+  rename(newName: string): void
+
+  /**
+ * Rename the group.
+ * @async
+ *
+ * @method renameAsync
+ * @instance
+ * @memberof Group
+ * @throws {Error}
+ * @param {string} newName
+ * @param {callback<void>} [callback=undefined]
+ * @return {Promise<void>}
+ */
+  renameAsync(newName: string, callback?: callback<void>): Promise<void>
 }
 
 export class GroupArrays implements Iterable<MDArray>, AsyncIterable<MDArray> {
@@ -7839,6 +8131,18 @@ export class MDArray {
   srs: SpatialReference|null
 
   /**
+ * Whether the array can be written to.
+ *
+ * @readonly
+ * @kind member
+ * @name isWritable
+ * @instance
+ * @memberof MDArray
+ * @type {boolean}
+ */
+  readonly isWritable: boolean
+
+  /**
  * Raster value offset.
  *
  * @kind member
@@ -7862,6 +8166,8 @@ export class MDArray {
 
   /**
  * No data value for this array.
+ *
+ * Assigning `null` removes the no data value.
  *
  * @kind member
  * @name noDataValue
@@ -7986,6 +8292,54 @@ export class MDArray {
  * @return {Promise<T>} A `TypedArray` of values.
  */
   readAsync<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>(options: MDArrayOptions<T>, callback?: callback<T>): Promise<T>
+
+  /**
+ * Write data to the MDArray.
+ *
+ * This will write the contents of a (hyper-)rectangle into the array from a buffer.
+ * Generalized n-dimensional strides are supported.
+ *
+ * The array must be writable - {@link MDArray#isWritable} reports whether it is.
+ *
+ * @method write<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>
+ * @instance
+ * @memberof MDArray
+ * @throws {Error}
+ * @param {MDArrayOptions<T>} options
+ * @param {number[]} options.origin An array of the starting indices
+ * @param {number[]} options.span An array specifying the number of elements to write in each dimension
+ * @param {number[]} [options.stride] An array of strides for the input array, mandatory if the array is specified
+ * @param {string} [options.data_type] See {@link GDT|GDT constants}
+ * @param {T} options.data The `TypedArray` to take the data from.
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
+ * @return {void}
+ */
+  write<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>(options: MDArrayOptions<T>): void
+
+  /**
+ * Write data to the MDArray.
+ * @async
+ *
+ * This will write the contents of a (hyper-)rectangle into the array from a buffer.
+ * Generalized n-dimensional strides are supported.
+ *
+ * The array must be writable - {@link MDArray#isWritable} reports whether it is.
+ *
+ * @method writeAsync<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>
+ * @instance
+ * @memberof MDArray
+ * @throws {Error}
+ * @param {MDArrayOptions<T>} options
+ * @param {number[]} options.origin An array of the starting indices
+ * @param {number[]} options.span An array specifying the number of elements to write in each dimension
+ * @param {number[]} [options.stride] An array of strides for the input array, mandatory if the array is specified
+ * @param {string} [options.data_type] See {@link GDT|GDT constants}
+ * @param {T} options.data The `TypedArray` to take the data from.
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
+ * @param {callback<void>} [callback=undefined]
+ * @return {Promise<void>}
+ */
+  writeAsync<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>(options: MDArrayOptions<T>, callback?: callback<void>): Promise<void>
 
   /**
  * Get a partial view of the MDArray.

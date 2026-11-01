@@ -71,8 +71,15 @@ Napi::Value Attribute::New(std::shared_ptr<GDALAttribute> raw, GDALDataset *pare
 }
 
 /**
- * Complex GDAL data types introduced in 3.1 are not yet supported
- * @readonly
+ * The value of the attribute.
+ *
+ * Numeric attributes hold a single number, string attributes hold a string.
+ * Complex GDAL data types introduced in 3.1 are not yet supported.
+ *
+ * Writing a string to an attribute created with the `String` data type
+ * replaces its contents, writing a number to a numeric attribute does the
+ * same for the number.
+ *
  * @kind member
  * @name value
  * @instance
@@ -113,6 +120,37 @@ Napi::Value valueGetter(const Napi::CallbackInfo &info) {
 }
 
 
+void valueSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
+  std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
+
+  GDAL_LOCK_PARENT_VOID(attribute);
+  GDALExtendedDataType type = raw->GetDataType();
+  CPLErrorReset();
+  bool ok;
+  switch (type.GetClass()) {
+    case GEDTC_NUMERIC:
+      if (!value.IsNumber()) {
+        Napi::Error::New(node_gdal::napi_env(), "Numeric attributes must be assigned a number").ThrowAsJavaScriptException();
+        return;
+      }
+      ok = raw->Write(value.As<Napi::Number>().DoubleValue());
+      break;
+    case GEDTC_STRING:
+      if (!value.IsString()) {
+        Napi::Error::New(node_gdal::napi_env(), "String attributes must be assigned a string").ThrowAsJavaScriptException();
+        return;
+      }
+      ok = raw->Write(value.As<Napi::String>().Utf8Value().c_str());
+      break;
+    default:
+      Napi::Error::New(node_gdal::napi_env(), "Compound attributes are not supported yet").ThrowAsJavaScriptException();
+      return;
+  }
+
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
 Napi::Value typeGetter(const Napi::CallbackInfo &info) {
   Attribute *attribute = node_gdal::unwrap_or_throw<Attribute>(info.This(), "Attribute");
   std::shared_ptr<GDALAttribute> raw = node_gdal::raw_or_throw<std::shared_ptr<GDALAttribute>>(attribute, "std::shared_ptr<GDALAttribute>");
@@ -146,7 +184,7 @@ void Attribute::Initialize(Napi::Object target) {
   static constexpr AccessorEntry accessors[] = {
     hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
     attr("dataType", typeGetter, READ_ONLY_SETTER),
-    attr("value", valueGetter, READ_ONLY_SETTER),
+    attr("value", valueGetter, valueSetter),
   };
 
   Napi::Function lcons = GDALDefineClass<Attribute>(env, "Attribute", methods, accessors);

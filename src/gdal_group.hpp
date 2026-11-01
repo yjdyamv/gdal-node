@@ -25,6 +25,14 @@ class Group : public GDALObject<Group> {
   static Napi::Value New(std::shared_ptr<GDALGroup> group, Napi::Object parent_ds);
   static Napi::Value New(std::shared_ptr<GDALGroup> group, GDALDataset *parent_ds);
   static NAPI_GETTER(descriptionGetter);
+  GDAL_ASYNCABLE_DECLARE(createGroup);
+  GDAL_ASYNCABLE_DECLARE(createDimension);
+  GDAL_ASYNCABLE_DECLARE(createMDArray);
+  GDAL_ASYNCABLE_DECLARE(createAttribute);
+  GDAL_ASYNCABLE_DECLARE(deleteGroup);
+  GDAL_ASYNCABLE_DECLARE(deleteMDArray);
+  GDAL_ASYNCABLE_DECLARE(deleteAttribute);
+  GDAL_ASYNCABLE_DECLARE(rename);
 
   Group(const Napi::CallbackInfo &info);
 
@@ -32,6 +40,10 @@ class Group : public GDALObject<Group> {
   ~Group();
   inline std::shared_ptr<GDALGroup> get() {
     return this_;
+  }
+
+  inline GDALDataset *getParent() {
+    return parent_ds;
   }
 
   void dispose();

@@ -334,6 +334,182 @@ struct readBody : node_gdal::AsyncMethodBody {
 GDAL_ASYNC_METHOD(MDArray::read, readBody)
 
 /**
+ * Write data to the MDArray.
+ *
+ * This will write the contents of a (hyper-)rectangle into the array from a buffer.
+ * Generalized n-dimensional strides are supported.
+ *
+ * The array must be writable - {@link MDArray#isWritable} reports whether it is.
+ *
+ * @method write<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>
+ * @instance
+ * @memberof MDArray
+ * @throws {Error}
+ * @param {MDArrayOptions<T>} options
+ * @param {number[]} options.origin An array of the starting indices
+ * @param {number[]} options.span An array specifying the number of elements to write in each dimension
+ * @param {number[]} [options.stride] An array of strides for the input array, mandatory if the array is specified
+ * @param {string} [options.data_type] See {@link GDT|GDT constants}
+ * @param {T} options.data The `TypedArray` to take the data from.
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
+ * @return {void}
+ */
+
+/**
+ * Write data to the MDArray.
+ * @async
+ *
+ * This will write the contents of a (hyper-)rectangle into the array from a buffer.
+ * Generalized n-dimensional strides are supported.
+ *
+ * The array must be writable - {@link MDArray#isWritable} reports whether it is.
+ *
+ * @method writeAsync<T extends TypedArray<number> | TypedArray<bigint> = TypedArray<number>>
+ * @instance
+ * @memberof MDArray
+ * @throws {Error}
+ * @param {MDArrayOptions<T>} options
+ * @param {number[]} options.origin An array of the starting indices
+ * @param {number[]} options.span An array specifying the number of elements to write in each dimension
+ * @param {number[]} [options.stride] An array of strides for the input array, mandatory if the array is specified
+ * @param {string} [options.data_type] See {@link GDT|GDT constants}
+ * @param {T} options.data The `TypedArray` to take the data from.
+ * @param {AbortSignal} [options.abort_signal] AbortSignal to interrupt the operation
+ * @param {callback<void>} [callback=undefined]
+ * @return {Promise<void>}
+ */
+namespace {
+
+struct writeBody : node_gdal::AsyncMethodBody {
+  template <class Async> static Napi::Value run(const Napi::CallbackInfo &info, Async async) {
+    Args args(info);
+
+    MDArray *self = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+    Napi::Object options;
+    Napi::Array origin, span, stride;
+    std::string type_name;
+    GDALDataType type = GDT_Byte;
+    GPtrDiff_t offset = 0;
+
+    if (!args.get(0, "options", options)) return args.failed();
+    if (!args.from(options, "origin", origin)) return args.failed();
+    if (!args.from(options, "span", span)) return args.failed();
+    if (!args.from(options, "stride", stride)) return args.failed();
+    if (!args.from(options, "data_type", type_name)) return args.failed();
+    NODE_INT64_FROM_OBJ_OPT(options, "_offset", offset);
+    if (!type_name.empty()) { type = GDALGetDataTypeByName(type_name.c_str()); }
+
+    // the source buffer is read as a raw own property and not through
+    // Args::from(), which would insist on a Napi::Array and reject the
+    // TypedArray which this method is all about. There is nothing to write
+    // without it, so it is required here.
+    Napi::Value data = options.Get("data");
+    // a plain JS array is an object too, but it is not a buffer and
+    // TypedArray::Identify() cannot deduce its type - refuse it here so that
+    // the message names the actual problem
+    if (!data.IsObject() || data.IsArray()) {
+      Napi::TypeError::New(node_gdal::napi_env(), "data must be a TypedArray").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    std::shared_ptr<GUInt64[]> gdal_origin;
+    std::shared_ptr<size_t[]> gdal_span;
+    std::shared_ptr<GPtrDiff_t[]> gdal_stride;
+    try {
+      gdal_origin = NumberArrayToSharedPtr<int64_t, GUInt64>(origin, self->dimensions);
+      gdal_span = NumberArrayToSharedPtr<int64_t, size_t>(span, self->dimensions);
+      gdal_stride = NumberArrayToSharedPtr<int64_t, GPtrDiff_t>(stride, self->dimensions);
+    } catch (const char *e) {
+      Napi::Error::New(node_gdal::napi_env(), e).ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (gdal_origin == nullptr) {
+      Napi::TypeError::New(node_gdal::napi_env(), "origin is required").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+    if (gdal_span == nullptr) {
+      Napi::TypeError::New(node_gdal::napi_env(), "span is required").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    Napi::Object array = data.As<Napi::Object>();
+    GDALDataType identified = node_gdal::TypedArray::Identify(array);
+    if (identified == GDT_Unknown) {
+      Napi::Error::New(node_gdal::napi_env(), "Invalid array").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    GPtrDiff_t highest = findHighest(self->dimensions, gdal_span, gdal_stride, offset);
+    GPtrDiff_t lowest = findLowest(self->dimensions, gdal_span, gdal_stride, offset);
+    size_t length = (highest - (lowest < 0 ? lowest : 0)) + 1;
+
+    if (lowest < 0) {
+      Napi::RangeError::New(node_gdal::napi_env(), "Will have to write before the start of the array").ThrowAsJavaScriptException();
+      return node_gdal::napi_env().Undefined();
+    }
+
+    // The buffer always holds elements of the type of the TypedArray which was
+    // passed - GDAL converts them to the type of the array by itself, so a
+    // Float32Array can be written into a Float64 array without any help from
+    // here. `data_type` is therefore only a restatement of the buffer type: it
+    // can make the call explicit, but it cannot lie about the buffer layout.
+    if (!type_name.empty()) {
+      GDALDataType declared = GDALGetDataTypeByName(type_name.c_str());
+      if (declared == GDT_Unknown) {
+        Napi::TypeError::New(node_gdal::napi_env(), "Invalid data type: " + type_name).ThrowAsJavaScriptException();
+        return node_gdal::napi_env().Undefined();
+      }
+      if (declared != identified) {
+        Napi::TypeError::New(node_gdal::napi_env(), "data_type does not match the type of the data array").ThrowAsJavaScriptException();
+        return node_gdal::napi_env().Undefined();
+      }
+    }
+    type = identified;
+
+    void *buffer = node_gdal::TypedArray::Validate(array, identified, length);
+    if (!buffer) {
+      node_gdal::ThrowOverPending(node_gdal::napi_env(), "Failed to allocate array");
+      return node_gdal::napi_env().Undefined();
+    }
+
+    std::shared_ptr<GDALMDArray> gdal_mdarray = node_gdal::raw_or_throw<std::shared_ptr<GDALMDArray>>(self, "std::shared_ptr<GDALMDArray>");
+
+    GDALAsyncableJob<bool> job(self->parent_uid);
+    // GDALMDArray::Write() takes no progress callback, so an operation which is
+    // already aborted can only be refused before it is started
+    Napi::Value abort_signal;
+    if (!args.from(options, "abort_signal", abort_signal)) return args.failed();
+    if (!job.setAbortSignal(abort_signal)) return node_gdal::napi_env().Undefined();
+
+    job.main =
+      [buffer, gdal_mdarray, gdal_origin, gdal_span, gdal_stride, identified, length, offset](const GDALExecutionProgress &) {
+        int bytes_per_pixel = GDALGetDataTypeSizeBytes(identified);
+        if (bytes_per_pixel == 0) { throw GDALError("Invalid GDAL data type"); }
+        CPLErrorReset();
+        GDALExtendedDataType gdal_type = GDALExtendedDataType::Create(identified);
+        bool success = gdal_mdarray->Write(
+          gdal_origin.get(),
+          gdal_span.get(),
+          nullptr,
+          gdal_stride.get(),
+          gdal_type,
+          (const void *)((const uint8_t *)buffer + offset * bytes_per_pixel),
+          buffer,
+          length * bytes_per_pixel);
+        if (!success) { throw GDALError::fromGDAL(); }
+        return success;
+      };
+    job.rval = [](bool, const GetFromPersistentFunc &) { return v8_undefined(); };
+    return job.run(info, node_gdal::is_async<Async>, 1);
+  }
+};
+
+} // namespace
+
+GDAL_ASYNC_METHOD(MDArray::write, writeBody)
+
+/**
  * Get a partial view of the MDArray.
  *
  * The slice expression uses the same syntax as NumPy basic slicing and indexing. See (https://www.numpy.org/devdocs/reference/arrays.indexing.html#basic-slicing-and-indexing). Or it can use field access by name. See (https://www.numpy.org/devdocs/reference/arrays.indexing.html#field-access).
@@ -382,6 +558,16 @@ GDAL_ASYNC_METHOD(MDArray::read, readBody)
  * @type {SpatialReference|null}
  */
 /**
+ * Whether the array can be written to.
+ *
+ * @readonly
+ * @kind member
+ * @name isWritable
+ * @instance
+ * @memberof MDArray
+ * @type {boolean}
+ */
+/**
  * Raster value offset.
  *
  * @kind member
@@ -401,6 +587,8 @@ GDAL_ASYNC_METHOD(MDArray::read, readBody)
  */
 /**
  * No data value for this array.
+ *
+ * Assigning `null` removes the no data value.
  *
  * @kind member
  * @name noDataValue
@@ -650,6 +838,97 @@ Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   return Napi::Number::New(node_gdal::napi_env(), (int)ds->uid);
 }
 
+
+Napi::Value isWritableGetter(const Napi::CallbackInfo &info) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+  GDAL_LOCK_PARENT(array);
+  return Napi::Boolean::New(node_gdal::napi_env(), array->get()->IsWritable());
+}
+
+
+void srsSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+  GDAL_LOCK_PARENT_VOID(array);
+  CPLErrorReset();
+  bool ok;
+  if (value.IsNull() || value.IsUndefined()) {
+    ok = array->get()->SetSpatialRef(nullptr);
+  } else if (node_gdal::IsInstanceOf<SpatialReference>(value)) {
+    SpatialReference *srs_obj = node_gdal::UnwrapWrapped<SpatialReference>(value.As<Napi::Object>());
+    ok = array->get()->SetSpatialRef(srs_obj->get());
+  } else {
+    Napi::Error::New(node_gdal::napi_env(), "srs must be SpatialReference object").ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
+
+void unitTypeSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+  if (!value.IsString()) {
+    Napi::Error::New(node_gdal::napi_env(), "Unit type must be a string").ThrowAsJavaScriptException();
+    return;
+  }
+  std::string input = value.As<Napi::String>().Utf8Value();
+  GDAL_LOCK_PARENT_VOID(array);
+  CPLErrorReset();
+  bool ok = array->get()->SetUnit(input);
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
+
+void noDataValueSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+  GDAL_LOCK_PARENT_VOID(array);
+  CPLErrorReset();
+  bool ok;
+  if (value.IsNull() || value.IsUndefined()) {
+    ok = array->get()->SetRawNoDataValue(nullptr);
+  } else if (value.IsNumber()) {
+    ok = array->get()->SetNoDataValue(value.As<Napi::Number>().DoubleValue());
+  } else {
+    Napi::Error::New(node_gdal::napi_env(), "No data value must be a number").ThrowAsJavaScriptException();
+    return;
+  }
+
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
+
+void scaleSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+  if (!value.IsNumber()) {
+    Napi::Error::New(node_gdal::napi_env(), "Scale must be a number").ThrowAsJavaScriptException();
+    return;
+  }
+  double input = value.As<Napi::Number>().DoubleValue();
+  GDAL_LOCK_PARENT_VOID(array);
+  CPLErrorReset();
+  bool ok = array->get()->SetScale(input);
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
+
+void offsetSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  MDArray *array = node_gdal::unwrap_or_throw<MDArray>(info.This(), "MDArray");
+
+  if (!value.IsNumber()) {
+    Napi::Error::New(node_gdal::napi_env(), "Offset must be a number").ThrowAsJavaScriptException();
+    return;
+  }
+  double input = value.As<Napi::Number>().DoubleValue();
+  GDAL_LOCK_PARENT_VOID(array);
+  CPLErrorReset();
+  bool ok = array->get()->SetOffset(input);
+  if (!ok) { throw GDALError::fromGDAL(); }
+}
+
 } // namespace
 
 void MDArray::Initialize(Napi::Object target) {
@@ -657,6 +936,7 @@ void MDArray::Initialize(Napi::Object target) {
   static constexpr MethodEntry methods[] = {
     method("toString", toString),
     asyncMethod("read", read, readAsync),
+    asyncMethod("write", write, writeAsync),
     method("getView", getView),
     method("getMask", getMask),
     method("asDataset", asDataset),
@@ -664,13 +944,14 @@ void MDArray::Initialize(Napi::Object target) {
 
   static constexpr AccessorEntry accessors[] = {
     hiddenAttr("_uid", uidGetter, READ_ONLY_SETTER),
-    attr("srs", srsGetter, READ_ONLY_SETTER),
+    attr("srs", srsGetter, srsSetter),
     attr("dataType", typeGetter, READ_ONLY_SETTER),
+    attr("isWritable", isWritableGetter, READ_ONLY_SETTER),
     attr("length", lengthGetter, READ_ONLY_SETTER),
-    attr("unitType", unitTypeGetter, READ_ONLY_SETTER),
-    attr("scale", scaleGetter, READ_ONLY_SETTER),
-    attr("offset", offsetGetter, READ_ONLY_SETTER),
-    attr("noDataValue", noDataValueGetter, READ_ONLY_SETTER),
+    attr("unitType", unitTypeGetter, unitTypeSetter),
+    attr("scale", scaleGetter, scaleSetter),
+    attr("offset", offsetGetter, offsetSetter),
+    attr("noDataValue", noDataValueGetter, noDataValueSetter),
     attr("description", descriptionGetter, READ_ONLY_SETTER),
     attr("dimensions", dimensionsGetter, READ_ONLY_SETTER),
     attr("attributes", attributesGetter, READ_ONLY_SETTER),
