@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [Unreleased]
+# [1.1.0] - 2026-11-01
 
 ### Added
  - The multidimensional API is writable. `Driver.createMultidim()` and `createMultidimAsync()` create a multidimensional dataset, which could not be created at all before - `Driver.create()` needs a raster size and a band count, and a multidimensional dataset has neither. `Group` gains `createGroup()`, `createDimension()`, `createMDArray()`, `createAttribute()`, `deleteGroup()`, `deleteMDArray()`, `deleteAttribute()` and `rename()`, all with their asynchronous twin, and `MDArray` gains `write()` and `writeAsync()`, which is the exact inverse of `read()`: the same `origin`, `span`, `stride`, `_offset` and `abort_signal`, so a region which was written with a given stride reads back the same values with that stride. A Zarr or a netCDF file can now be produced from JavaScript, which was possible only with Python

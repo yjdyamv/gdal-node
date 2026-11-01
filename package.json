@@ -1,6 +1,6 @@
 {
   "name": "gdal-node",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "upstreamVersion": "3.13.0",
   "description": "Bindings to GDAL (Geospatial Data Abstraction Library) with full async support - the maintained fork of gdal-async",
   "license": "Apache-2.0",
