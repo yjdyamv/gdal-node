@@ -1,5 +1,4 @@
 Makefile
-yuidoc.json
 .editorconfig
 .eslintrc.json
 *.yml
@@ -7,7 +6,6 @@ test
 examples
 build
 node_modules
-yuidocs
 /coverage
 .vscode
 Attic

@@ -26,7 +26,6 @@ msys-1.0.dll
 *.pdb
 *.log
 *.orig
-gdal-trunk
 test/data/**/*.aux*
 test/data/**/*.tmp*
 test/data/**/*.gfs
