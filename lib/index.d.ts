@@ -115,6 +115,12 @@ export type SieveOptions = {
 
 export type StringOptions = string[]|Record<string, string|number|(string|number)[]>
 
+export type TransformerPoint = {
+	x: number;
+	y: number;
+	z?: number;
+}
+
 export type TypedArray<T = number> = T extends number ? Uint8Array | Int16Array | Uint16Array | Int32Array | Uint32Array | import('@petamoriken/float16').Float16Array | Float32Array | Float64Array : T extends bigint ? BigInt64Array | BigUint64Array : never
 
 export type UtilOptions = {
@@ -8663,6 +8669,210 @@ export class PolygonRings implements Iterable<LineString> {
   toArray(): LineString[]
 }
 
+export class RasterAttributeTable {
+/**
+ * A raster attribute table: a table of columns, one per row of a
+ * {@link RasterBand} with a thematic classification.
+ *
+ * @example
+ * const rat = band.rasterAttributeTable;
+ * console.log(rat.rowCount, rat.columnCount);
+ *
+ * @class RasterAttributeTable
+ */
+  constructor()
+
+  /**
+ * Returns the name of the {@link RasterBand} this table belongs to.
+ *
+ * @readonly
+ * @kind member
+ * @name band
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {RasterBand}
+ */
+  readonly band: RasterBand
+
+  /**
+ * The number of rows in the table.
+ *
+ * @readonly
+ * @kind member
+ * @name rowCount
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {number}
+ */
+  readonly rowCount: number
+
+  /**
+ * The number of columns in the table.
+ *
+ * @readonly
+ * @kind member
+ * @name columnCount
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {number}
+ */
+  readonly columnCount: number
+
+  /**
+ * The names of the columns of the table, in order.
+ *
+ * @readonly
+ * @kind member
+ * @name columnNames
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {string[]}
+ */
+  readonly columnNames: string[]
+
+  /**
+ * The types of the columns of the table, in order. Each one is one of
+ * `Integer`, `Real`, `String`, `Boolean`, `DateTime` or `WKBGeometry`.
+ *
+ * @readonly
+ * @kind member
+ * @name columnTypes
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {string[]}
+ */
+  readonly columnTypes: string[]
+
+  /**
+ * The usages of the columns of the table, in order.
+ *
+ * @readonly
+ * @kind member
+ * @name columnUsages
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {string[]}
+ */
+  readonly columnUsages: string[]
+
+  /**
+ * Whether the changes made to this table are written to the dataset directly.
+ * When this is `false`, the table has to be assigned back to the band with
+ * `RasterBand.rasterAttributeTable` for the changes to be kept.
+ *
+ * @readonly
+ * @kind member
+ * @name changesAreWrittenToFile
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {boolean}
+ */
+  readonly changesAreWrittenToFile: boolean
+
+  /**
+ * The type of the table: `Thematic` or `Athematic`.
+ *
+ * @kind member
+ * @name tableType
+ * @instance
+ * @memberof RasterAttributeTable
+ * @type {string}
+ */
+  tableType: string
+
+  /**
+ * Returns the index of the first column with the given usage, or -1 when there
+ * is none.
+ *
+ * @method getColumnOfUsage
+ * @instance
+ * @memberof RasterAttributeTable
+ * @param {string} usage
+ * @return {number}
+ */
+  getColumnOfUsage(usage: string): number
+
+  /**
+ * Returns the index of the row which corresponds to the given value of the
+ * column which carries the `Min` usage, or -1 when there is none.
+ *
+ * @method getRowOfValue
+ * @instance
+ * @memberof RasterAttributeTable
+ * @param {number} value
+ * @return {number}
+ */
+  getRowOfValue(value: number): number
+
+  /**
+ * Resizes the table to the given number of rows.
+ *
+ * @method setRowCount
+ * @instance
+ * @memberof RasterAttributeTable
+ * @throws {Error}
+ * @param {number} count
+ */
+  setRowCount(count: number): void
+
+  /**
+ * Creates a new column in the table.
+ *
+ * @method createColumn
+ * @instance
+ * @memberof RasterAttributeTable
+ * @throws {Error}
+ * @param {string} name
+ * @param {string} type One of `Integer`, `Real`, `String`, `Boolean`,
+ * `DateTime` or `WKBGeometry`
+ * @param {string} [usage=Generic] One of `Generic`, `PixelCount`, `Name`,
+ * `Min`, `Max`, `MinMax`, `Red`, `Green`, `Blue`, `Alpha`, `RedMin`,
+ * `GreenMin`, `BlueMin`, `AlphaMin`, `RedMax`, `GreenMax`, `BlueMax`,
+ * `AlphaMax` or `MaxCount`
+ * @return {number} The index of the new column
+ */
+  createColumn(name: string, type: string, usage?: string): number
+
+  /**
+ * Reads the values of one column.
+ *
+ * @method getValues
+ * @instance
+ * @memberof RasterAttributeTable
+ * @throws {Error}
+ * @param {number} column The index of the column
+ * @param {number} [start=0] The first row to read
+ * @param {number} [length] The number of rows to read, the rest of the table
+ * by default
+ * @return {number[]|string[]} An array of numbers for the numeric columns and
+ * an array of strings for the string ones
+ */
+  getValues(column: number, start?: number, length?: number): number[]|string[]
+
+  /**
+ * Writes the values of one column.
+ *
+ * @method setValues
+ * @instance
+ * @memberof RasterAttributeTable
+ * @throws {Error}
+ * @param {number} column The index of the column
+ * @param {number[]|string[]} values
+ * @param {number} [start=0] The first row to write
+ */
+  setValues(column: number, values: number[]|string[], start?: number): void
+
+  /**
+ * Returns a copy of the table which is not owned by any {@link RasterBand}.
+ *
+ * @method clone
+ * @instance
+ * @memberof RasterAttributeTable
+ * @return {RasterAttributeTable}
+ */
+  clone(): RasterAttributeTable
+}
+
 export class RasterBand {
 /**
  * A single raster band (or channel).
@@ -9105,6 +9315,20 @@ export class RasterBand {
  * @type {Promise<ColorTable|null>}
  */
   readonly colorTableAsync: Promise<ColorTable|null>
+
+  /**
+ * Raster attribute table ({@link RasterAttributeTable|see RasterAttributeTable})
+ * The table handed out here belongs to the band and is read-only; use
+ * `RasterAttributeTable#clone()` to obtain a copy which can be modified and
+ * then assign it back to the band.
+ *
+ * @kind member
+ * @name rasterAttributeTable
+ * @instance
+ * @memberof RasterBand
+ * @type {RasterAttributeTable|null}
+ */
+  rasterAttributeTable: RasterAttributeTable|null
 
   /**
  * Saves changes to disk.
@@ -10792,6 +11016,64 @@ export class SpatialReference {
  * @return {string|null} `"corrupt"`, '"unsupported"', `null` (if fine)
  */
   validate(): string|null
+}
+
+export class Transformer {
+/**
+ * A coordinate transformer.
+ *
+ * A `Transformer` is created either from a source and a target
+ * {@link SpatialReference}, or from a {@link Dataset}. In the second form the
+ * geotransform of the dataset and its SRS are used, which is what
+ * `gdal.warp()` does.
+ *
+ * @example
+ * const transformer = new gdal.Transformer(srcSrs, dstSrs)
+ * const pt = transformer.transformPoint(false, { x: 0, y: 0 })
+ *
+ * @example
+ * const transformer = new gdal.Transformer(ds)
+ * const pt = transformer.transformPoint(false, { x: 0, y: 0 })
+ *
+ * @class Transformer
+ * @param {SpatialReference|Dataset} src
+ * @param {SpatialReference} [dst]
+ * @param {object} [options] creation options
+ */
+  constructor(src: SpatialReference|Dataset, dst?: SpatialReference, options?: object)
+
+  /**
+ * Transforms a single point.
+ *
+ * @example
+ * const pt = transformer.transformPoint(false, { x: 0, y: 0 })
+ *
+ * @method transformPoint
+ * @instance
+ * @memberof Transformer
+ * @throws {Error}
+ * @param {boolean} dstToSrc `true` to transform from the destination to the
+ * source, `false` for the other direction
+ * @param {TransformerPoint} point
+ * @return {TransformerPoint} The transformed point
+ */
+  transformPoint(dstToSrc: boolean, point: TransformerPoint): TransformerPoint
+
+  /**
+ * Transforms an array of points.
+ *
+ * @example
+ * const pts = transformer.transformPoints(false, [ { x: 0, y: 0 }, { x: 1, y: 1 } ])
+ *
+ * @method transformPoints
+ * @instance
+ * @memberof Transformer
+ * @throws {Error}
+ * @param {boolean} dstToSrc
+ * @param {TransformerPoint[]} points
+ * @return {TransformerPoint[]} The transformed points
+ */
+  transformPoints(dstToSrc: boolean, points: TransformerPoint[]): TransformerPoint[]
 }
 
 export class algebra {

@@ -81,7 +81,10 @@ describe('read-only properties', () => {
     Group: () => multidim.root,
     MDArray: () => multidim.root.arrays.get(0),
     Attribute: () => multidim.root.attributes.get(0),
-    Dimension: () => multidim.root.dimensions.get(0)
+    Dimension: () => multidim.root.dimensions.get(0),
+    RasterAttributeTable: () => {
+      raster.bands.get(1).rasterAttributeTable = new gdal.RasterAttributeTable(); return raster.bands.get(1).rasterAttributeTable
+    }
   }
   for (const name of templateCollections) instances[name] = () => multidim.root.groups
 

@@ -6,6 +6,7 @@
 #include "collections/rasterband_pixels.hpp"
 #include "collections/colortable.hpp"
 #include "gdal_dataset.hpp"
+#include "gdal_rasterattributetable.hpp"
 #include "gdal_mdarray.hpp"
 #include "gdal_majorobject.hpp"
 #include "gdal_rasterband.hpp"
@@ -1562,6 +1563,49 @@ void colorTableSetter(const Napi::CallbackInfo &info, const Napi::Value &value) 
 }
 
 
+/**
+ * Raster attribute table ({@link RasterAttributeTable|see RasterAttributeTable})
+ * The table handed out here belongs to the band and is read-only; use
+ * `RasterAttributeTable#clone()` to obtain a copy which can be modified and
+ * then assign it back to the band.
+ *
+ * @kind member
+ * @name rasterAttributeTable
+ * @instance
+ * @memberof RasterBand
+ * @type {RasterAttributeTable|null}
+ */
+static NAPI_GETTER(rasterAttributeTableGetter) {
+  RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(info.This(), "RasterBand");
+  if (!band) { return info.Env().Undefined(); }
+  GDALRasterBand *raw = node_gdal::raw_or_throw<GDALRasterBand *>(band, "GDALRasterBand");
+  GDAL_LOCK_PARENT(band);
+  GDALRasterAttributeTable *rat = raw->GetDefaultRAT();
+  if (rat == nullptr) { return info.Env().Null(); }
+  return RasterAttributeTable::New(rat, info.This());
+}
+
+static void rasterAttributeTableSetter(const Napi::CallbackInfo &info, const Napi::Value &value) {
+  RasterBand *band = node_gdal::unwrap_or_throw<RasterBand>(info.This(), "RasterBand");
+  if (!band) { return; }
+
+  GDALRasterAttributeTable *raw;
+  if (value.IsNull() || value.IsUndefined()) {
+    raw = nullptr;
+  } else if (node_gdal::IsInstanceOf<RasterAttributeTable>(value)) {
+    RasterAttributeTable *rat = node_gdal::unwrap_or_throw<RasterAttributeTable>(value.As<Napi::Object>(), "RasterAttributeTable");
+    if (!rat) { return; }
+    raw = node_gdal::raw_or_throw<GDALRasterAttributeTable *>(rat, "GDALRasterAttributeTable");
+  } else {
+    Napi::TypeError::New(info.Env(), "raster attribute table must be a gdal.RasterAttributeTable object or null").ThrowAsJavaScriptException();
+    return;
+  }
+
+  GDAL_LOCK_PARENT_VOID(band);
+  CPLErrorReset();
+  if (band->get()->SetDefaultRAT(raw) != CE_None) { throw GDALError::fromGDAL(); }
+}
+
 Napi::Value uidGetter(const Napi::CallbackInfo &info) {
   RasterBand *band = node_gdal::UnwrapWrapped<RasterBand>(info.This().As<Napi::Object>());
   return Napi::Number::New(node_gdal::napi_env(), (int)band->uid);
@@ -1609,6 +1653,7 @@ void RasterBand::Initialize(Napi::Object target) {
     asyncAttr("categoryNames", categoryNamesGetter, categoryNamesSetter, categoryNamesGetterAsync),
     asyncAttr("colorInterpretation", colorInterpretationGetter, colorInterpretationSetter, colorInterpretationGetterAsync),
     asyncAttr("colorTable", colorTableGetter, colorTableSetter, colorTableGetterAsync),
+    attr("rasterAttributeTable", rasterAttributeTableGetter, rasterAttributeTableSetter),
   };
 
   Napi::Function lcons = GDALDefineClass<RasterBand>(env, "RasterBand", methods, accessors);

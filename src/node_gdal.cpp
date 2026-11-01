@@ -11,6 +11,8 @@
 #include "gdal_dataset.hpp"
 #include "gdal_driver.hpp"
 #include "gdal_rasterband.hpp"
+#include "gdal_rasterattributetable.hpp"
+#include "gdal_transformer.hpp"
 #include "gdal_group.hpp"
 #include "gdal_mdarray.hpp"
 #include "gdal_dimension.hpp"
@@ -408,6 +410,8 @@ Napi::Object Init(Napi::Env env, Napi::Object target) {
   Driver::Initialize(target);
   Dataset::Initialize(target);
   RasterBand::Initialize(target);
+  RasterAttributeTable::Initialize(target);
+  Transformer::Initialize(target);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
   Group::Initialize(target);
   MDArray::Initialize(target);

@@ -121,6 +121,7 @@ bool ObjectStore::isAlive(long uid) {
   if (uid == 0) return true;
   return isAliveIn(maps<GDALRasterBand *>().by_uid, uid) || isAliveIn(maps<OGRLayer *>().by_uid, uid) ||
     isAliveIn(maps<GDALDataset *>().by_uid, uid) || isAliveIn(maps<GDALColorTable *>().by_uid, uid)
+    || isAliveIn(maps<GDALRasterAttributeTable *>().by_uid, uid)
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
     || isAliveIn(maps<shared_ptr<GDALGroup>>().by_uid, uid) || isAliveIn(maps<shared_ptr<GDALMDArray>>().by_uid, uid) ||
     isAliveIn(maps<shared_ptr<GDALDimension>>().by_uid, uid) || isAliveIn(maps<shared_ptr<GDALAttribute>>().by_uid, uid)
@@ -388,18 +389,21 @@ template long ObjectStore::add(GDALDriver *, Napi::Reference<Napi::Object> &, lo
 template long ObjectStore::add(GDALRasterBand *, Napi::Reference<Napi::Object> &, long, bool);
 template long ObjectStore::add(OGRSpatialReference *, Napi::Reference<Napi::Object> &, long, bool);
 template long ObjectStore::add(GDALColorTable *, Napi::Reference<Napi::Object> &, long, bool);
+template long ObjectStore::add(GDALRasterAttributeTable *, Napi::Reference<Napi::Object> &, long, bool);
 template bool ObjectStore::has(GDALDriver *);
 template bool ObjectStore::has(GDALDataset *);
 template bool ObjectStore::has(OGRLayer *);
 template bool ObjectStore::has(GDALRasterBand *);
 template bool ObjectStore::has(OGRSpatialReference *);
 template bool ObjectStore::has(GDALColorTable *);
+template bool ObjectStore::has(GDALRasterAttributeTable *);
 template Napi::Object ObjectStore::get(GDALDriver *);
 template Napi::Object ObjectStore::get(GDALDataset *);
 template Napi::Object ObjectStore::get(OGRLayer *);
 template Napi::Object ObjectStore::get(GDALRasterBand *);
 template Napi::Object ObjectStore::get(OGRSpatialReference *);
 template Napi::Object ObjectStore::get(GDALColorTable *);
+template Napi::Object ObjectStore::get(GDALRasterAttributeTable *);
 template Napi::Object ObjectStore::get<GDALDataset *>(long uid);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
 template long ObjectStore::add(shared_ptr<GDALAttribute>, Napi::Reference<Napi::Object> &, long, bool);
@@ -531,6 +535,8 @@ void ObjectStore::do_dispose(long uid, bool manual) {
     dispose(maps<OGRSpatialReference *>().by_uid[uid], manual);
   else if (maps<GDALColorTable *>().by_uid.count(uid))
     dispose(maps<GDALColorTable *>().by_uid[uid], manual);
+  else if (maps<GDALRasterAttributeTable *>().by_uid.count(uid))
+    dispose(maps<GDALRasterAttributeTable *>().by_uid[uid], manual);
 #if GDAL_VERSION_MAJOR > 3 || (GDAL_VERSION_MAJOR == 3 && GDAL_VERSION_MINOR >= 1)
   else if (maps<shared_ptr<GDALGroup>>().by_uid.count(uid))
     dispose(maps<shared_ptr<GDALGroup>>().by_uid[uid], manual);
