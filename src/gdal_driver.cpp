@@ -1,4 +1,5 @@
 #include <memory>
+#include <cstring>
 #include "gdal_driver.hpp"
 #include "utils/args.hpp"
 #include "gdal_common.hpp"
@@ -493,6 +494,40 @@ struct openBody : node_gdal::AsyncMethodBody {
 
 GDAL_ASYNC_METHOD(Driver::open, openBody)
 
+/**
+ * Determines if the driver supports the indicated operation.
+ *
+ * `DCAP_CREATE_MULTIDIMENSIONAL` tells whether `createMultidim()` can work,
+ * `DCAP_CREATECOPY_MULTIDIMENSIONAL` whether a multidim dataset can be copied,
+ * and `DCAP_MULTIDIM_RASTER` whether the datasets of this driver have a root
+ * group. The full list is in the [GDAL documentation](https://gdal.org/api/gdaldriver_cpp.html#_CPPv4N10GDALDriver14TestCapabilityEPKc).
+ *
+ * @example
+ * const zarr = gdal.drivers.get('Zarr')
+ * if (zarr.testCapability('DCAP_CREATE_MULTIDIMENSIONAL')) {
+ *   const ds = zarr.createMultidim(filename)
+ * }
+ *
+ * @method testCapability
+ * @instance
+ * @memberof Driver
+ * @param {string} capability
+ * @return {boolean}
+ */
+NAPI_METHOD(Driver::testCapability) {
+  Args args(info);
+  Driver *driver = node_gdal::UnwrapWrapped<Driver>(info.This().As<Napi::Object>());
+  std::string capability("");
+  if (!args.get(0, "capability", capability)) return args.failed();
+  GDALDriver *raw = driver->getGDALDriver();
+  if (!raw) {
+    Napi::Error::New(node_gdal::napi_env(), "Driver object has already been destroyed").ThrowAsJavaScriptException();
+    return node_gdal::napi_env().Undefined();
+  }
+  const char *result = raw->GetMetadataItem(capability.c_str());
+  return Napi::Boolean::New(node_gdal::napi_env(), result != nullptr && strcmp(result, "YES") == 0);
+}
+
 namespace {
 
 Napi::Value toString(const Napi::CallbackInfo &info) {
@@ -587,6 +622,7 @@ void Driver::Initialize(Napi::Object target) {
     asyncMethod("create", create, createAsync),
     asyncMethod("createMultidim", createMultidim, createMultidimAsync),
     asyncMethod("createCopy", createCopy, createCopyAsync),
+    method("testCapability", testCapability),
     method("deleteDataset", deleteDataset),
     method("rename", rename),
     method("copyFiles", copyFiles),

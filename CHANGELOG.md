@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [Unreleased]
+
+### Added
+ - The multidimensional API is writable. `Driver.createMultidim()` and `createMultidimAsync()` create a multidimensional dataset, which could not be created at all before - `Driver.create()` needs a raster size and a band count, and a multidimensional dataset has neither. `Group` gains `createGroup()`, `createDimension()`, `createMDArray()`, `createAttribute()`, `deleteGroup()`, `deleteMDArray()`, `deleteAttribute()` and `rename()`, all with their asynchronous twin, and `MDArray` gains `write()` and `writeAsync()`, which is the exact inverse of `read()`: the same `origin`, `span`, `stride`, `_offset` and `abort_signal`, so a region which was written with a given stride reads back the same values with that stride. A Zarr or a netCDF file can now be produced from JavaScript, which was possible only with Python
+ - `MDArray.isWritable`, because GDAL does not enforce it: an array which was reopened read-only still accepts a `write()` in some drivers, and the property is the only way to find out before writing
+ - The writable metadata of an `MDArray` is no longer read-only: `srs`, `unitType`, `scale`, `offset` and `noDataValue`, the last one accepting `null` to remove the value, and `Attribute.value`, which was read-only as well
+ - `RasterAttributeTable`, the table which classifies the values of a thematic raster, reachable with `band.rasterAttributeTable` and assignable with `band.rasterAttributeTable = rat` or `= null`. It can be created empty from JavaScript, resized, extended with `createColumn()`, filled with `setValues()`, searched with `getRowOfValue()` and `getColumnOfUsage()`, and cloned. The table which a band hands out is marked read-only, like a `ColorTable` of a band or a `FieldDefn` of a layer
+ - `Transformer`, the `GDALTransformerFunc` machinery of `gdal_alg.h`, which `gdal.warp()` and `Warper.reprojectImage()` used internally and which was not reachable directly. It is built from a source and a destination `SpatialReference`, or from a `Dataset`, and `transformPoint()`/`transformPoints()` transform in both directions and carry `z` through. A point which PROJ cannot transform raises the PROJ error instead of silently returning its input
+ - `Driver.testCapability()`, which `Dataset` and `Layer` already had and `Driver` did not, so that `DCAP_CREATE_MULTIDIMENSIONAL`, `DCAP_MULTIDIM_RASTER` and the rest can be asked before a dataset is created instead of after the creation failed
+
+### Fixed
+ - The messages which are not a class name were left behind by the rename to `gdal-node`: the two errors of `lib/gdal.js` about the bundled GDAL data path, the `--enable_logging=true` error of `gdal.startLogging()`, the names of the libuv async handles (`gdal-node:GDALAsyncWorker`, `gdal-node:onAbort`) and the container name of `scripts/container.sh`
+ - `ObjectStore` did not know about `GDALRasterAttributeTable`, and an unhandled type in `do_dispose()` is not a missing error message: `close()` of a dataset whose band had an attribute table hung forever, because the dispose of the dataset ends with `while (!item->children.empty()) do_dispose(item->children.back())` and the child was never removed from the list
+
+### Removed
+ - The `release` target of the `Makefile`, which rewrote a `yuidoc.json` that does not exist in this repository, committed `Released X. [publish binary]` and pushed `origin master` - a workflow which `scripts/publish-packages.mjs` and `publish.yml` replaced. `scripts/gdal-trunk.sh`, which checked GDAL out with `svn`, and `scripts/parse-commit-message.ps1`, which read `$env:APPVEYOR_REPO_COMMIT_MESSAGE`, are gone with it
 # [1.0.0] - 2026-10-28
 
 First release of `gdal-node`, the maintained fork of [`node-gdal-async`](https://github.com/mmomtchev/node-gdal-async). It is the upstream 3.13.0 release (see `upstreamVersion` in `package.json`) plus the changes below. See [FORK.md](FORK.md) for the provenance, the versioning scheme and the full inventory of the patches with their upstream status.

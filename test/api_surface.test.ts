@@ -1,4 +1,6 @@
 import { assert } from 'chai'
+import * as fs from 'fs'
+import * as os from 'os'
 import * as path from 'path'
 import gdal from 'gdal-node'
 import { startServer } from './utils/http'
@@ -332,6 +334,139 @@ describe('API surface', () => {
     })
   })
 
+  // The multidim write API and the raster attribute table are new, and the
+  // point of this file is that every member is called at least once, so they
+  // are exercised here in the shortest form which still reaches the member.
+  describe('the multidim write API', () => {
+    let directory: string
+    let filename: string
+    let ds: gdal.Dataset
+    let root: gdal.Group
+
+    beforeEach(() => {
+      directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gdal-surface-'))
+      filename = path.join(directory, 'surface.zarr')
+      ds = gdal.drivers.get('Zarr').createMultidim(filename)
+      root = ds.root
+    })
+    afterEach(() => {
+      try {
+        ds.close()
+      } catch (_e) {
+        // some tests close the dataset themselves in order to reopen it
+      }
+      fs.rmSync(directory, { recursive: true, force: true })
+    })
+
+    it('should tell the capabilities of a driver', () => {
+      const zarr = gdal.drivers.get('Zarr')
+      assert.isTrue(zarr.testCapability('DCAP_MULTIDIM_RASTER'))
+      assert.isTrue(zarr.testCapability('DCAP_CREATE_MULTIDIMENSIONAL'))
+      assert.isFalse(gdal.drivers.get('GTiff').testCapability('DCAP_CREATE_MULTIDIMENSIONAL'))
+      assert.isFalse(zarr.testCapability('DCAP_NOT_A_CAPABILITY'))
+      assert.throws(() => (zarr.testCapability as unknown as () => boolean)(), /capability must be given/)
+    })
+
+    it('should create the whole structure with the asynchronous forms', async () => {
+      const group = await root.createGroupAsync('g')
+      assert.instanceOf(group, gdal.Group)
+      const dimension = await group.createDimensionAsync('x', 'HORIZONTAL_X', 'EAST', 4)
+      assert.instanceOf(dimension, gdal.Dimension)
+      assert.equal(dimension.size, 4)
+      const array = await group.createMDArrayAsync('a', [ dimension ], 'Float64')
+      assert.instanceOf(array, gdal.MDArray)
+      assert.isTrue(array.isWritable)
+      assert.equal(array.length, 4)
+      await array.writeAsync({ origin: [ 0 ], span: [ 4 ], data: new Float64Array([ 1, 2, 3, 4 ]) })
+      assert.deepEqual(Array.from(array.read({ origin: [ 0 ], span: [ 4 ] })), [ 1, 2, 3, 4 ])
+      const attribute = await group.createAttributeAsync('a')
+      assert.instanceOf(attribute, gdal.Attribute)
+      assert.isNull(attribute.value)
+      attribute.value = 'written'
+      assert.equal(attribute.value, 'written')
+      await group.renameAsync('h')
+      assert.deepEqual(root.groups.names, [ 'h' ])
+      await group.createAttributeAsync('to-delete')
+      assert.isTrue(await group.deleteAttributeAsync('to-delete'))
+      assert.isTrue(await group.deleteMDArrayAsync('a'))
+      assert.isTrue(await root.deleteGroupAsync('h'))
+    })
+
+    it('should write the metadata of an array', () => {
+      const dimension = root.createDimension('x', 'HORIZONTAL_X', 'EAST', 2)
+      const array = root.createMDArray('a', [ dimension ], 'Float64')
+      const srs = gdal.SpatialReference.fromEPSG(4326)
+      array.srs = srs
+      assert.isTrue(array.srs.isSame(srs))
+      array.unitType = 'm'
+      assert.equal(array.unitType, 'm')
+      array.scale = 2
+      assert.equal(array.scale, 2)
+      array.offset = 5
+      assert.equal(array.offset, 5)
+      array.noDataValue = -9999
+      assert.equal(array.noDataValue, -9999)
+      array.noDataValue = null
+      assert.isNull(array.noDataValue)
+      assert.throws(() => {
+        array.unitType = 3 as unknown as string
+      }, /must be a string/)
+    })
+
+    it('should refuse to write data which is not a TypedArray', () => {
+      const dimension = root.createDimension('x', 'HORIZONTAL_X', 'EAST', 2)
+      const array = root.createMDArray('a', [ dimension ], 'Float64')
+      assert.throws(() => {
+        array.write({ origin: [ 0 ], span: [ 2 ], data: [ 1, 2 ] as unknown as Float64Array })
+      }, /must be a TypedArray/)
+    })
+  })
+
+  describe('the raster attribute table members', () => {
+    let rat: gdal.RasterAttributeTable
+
+    beforeEach(() => {
+      rat = new gdal.RasterAttributeTable()
+      rat.setRowCount(3)
+      rat.createColumn('Value', 'Integer', 'Generic')
+      rat.createColumn('Count', 'Integer', 'PixelCount')
+      rat.createColumn('Class', 'String', 'Name')
+      rat.setValues(0, [ 1, 2, 3 ])
+      rat.setValues(1, [ 10, 20, 30 ])
+      rat.setValues(2, [ 'a', 'b', 'c' ])
+    })
+
+    it('should clone the table', () => {
+      const copy = rat.clone()
+      assert.instanceOf(copy, gdal.RasterAttributeTable)
+      assert.equal(copy.rowCount, 3)
+      assert.deepEqual(copy.columnNames, [ 'Value', 'Count', 'Class' ])
+      copy.setValues(0, [ 9, 9, 9 ])
+      assert.deepEqual(Array.from(rat.getValues(0) as number[]), [ 1, 2, 3 ])
+    })
+
+    it('should find the rows and the columns', () => {
+      // GetRowOfValue() searches the column whose usage is MinMax,
+      // so the table of this fixture has to have one
+      rat.createColumn('From', 'Real', 'MinMax')
+      rat.setValues(3, [ 10, 20, 30 ])
+      assert.equal(rat.getRowOfValue(20), 1)
+      assert.equal(rat.getColumnOfUsage('PixelCount'), 1)
+      assert.equal(rat.getColumnOfUsage('Name'), 2)
+      assert.equal(rat.getColumnOfUsage('MinMax'), 3)
+      assert.equal(rat.getColumnOfUsage('Red'), -1)
+    })
+
+    it('should tell whether the changes are written to the file', () => {
+      assert.isFalse(rat.changesAreWrittenToFile)
+    })
+
+    it('should refuse to be created with an argument', () => {
+      assert.throws(() => {
+        new (gdal.RasterAttributeTable as unknown as new (x: number) => gdal.RasterAttributeTable)(1)
+      }, /cannot be created from JavaScript/)
+    })
+  })
   describe('the raster band members', () => {
     let ds: gdal.Dataset
     let band: gdal.RasterBand

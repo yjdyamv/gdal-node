@@ -4284,6 +4284,28 @@ export class Driver {
  * @return {Promise<Dataset>}
  */
   openAsync(path: string, mode?: string, options?: StringOptions, callback?: callback<Dataset>): Promise<Dataset>
+
+  /**
+ * Determines if the driver supports the indicated operation.
+ *
+ * `DCAP_CREATE_MULTIDIMENSIONAL` tells whether `createMultidim()` can work,
+ * `DCAP_CREATECOPY_MULTIDIMENSIONAL` whether a multidim dataset can be copied,
+ * and `DCAP_MULTIDIM_RASTER` whether the datasets of this driver have a root
+ * group. The full list is in the [GDAL documentation](https://gdal.org/api/gdaldriver_cpp.html#_CPPv4N10GDALDriver14TestCapabilityEPKc).
+ *
+ * @example
+ * const zarr = gdal.drivers.get('Zarr')
+ * if (zarr.testCapability('DCAP_CREATE_MULTIDIMENSIONAL')) {
+ *   const ds = zarr.createMultidim(filename)
+ * }
+ *
+ * @method testCapability
+ * @instance
+ * @memberof Driver
+ * @param {string} capability
+ * @return {boolean}
+ */
+  testCapability(capability: string): boolean
 }
 
 export class Envelope {

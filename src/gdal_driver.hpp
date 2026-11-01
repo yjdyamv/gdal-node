@@ -24,9 +24,8 @@ class Driver : public GDALObject<Driver> {
   GDAL_ASYNCABLE_DECLARE(open);
   GDAL_ASYNCABLE_DECLARE(create);
   GDAL_ASYNCABLE_DECLARE(createMultidim);
+  static NAPI_METHOD(testCapability);
   GDAL_ASYNCABLE_DECLARE(createCopy);
-
-
   Driver(const Napi::CallbackInfo &info);
   // Must be accessible: ObjectWrap's finalizer deletes the instance itself
   ~Driver();
