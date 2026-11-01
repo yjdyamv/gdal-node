@@ -5,7 +5,7 @@
 // gdal
 #include <gdal.h>
 
-// node-gdal
+// gdal-node
 #include "gdal_algorithms.hpp"
 #include "gdal_common.hpp"
 #include "gdal_dataset.hpp"
@@ -203,7 +203,7 @@ static NAPI_METHOD(StartLogging) {
   }
 
 #else
-  Napi::Error::New(info.Env(), "Logging requires node-gdal be compiled with --enable_logging=true").ThrowAsJavaScriptException();
+  Napi::Error::New(info.Env(), "Logging requires gdal-node be compiled with --enable_logging=true").ThrowAsJavaScriptException();
 #endif
 
   return info.Env().Undefined();

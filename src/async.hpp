@@ -499,7 +499,7 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
-  : GDALAsyncProgressWorker(resultCallback, "node-gdal:GDALAsyncWorker"),
+  : GDALAsyncProgressWorker(resultCallback, "gdal-node:GDALAsyncWorker"),
     progressCallback(progressCallback),
     abort(abort),
     // These members are not references! These functions must be copied
@@ -523,7 +523,7 @@ GDALAsyncWorker<GDALType>::GDALAsyncWorker(
   const GDALRValFunc &rval,
   const std::map<std::string, Napi::Object> &objects,
   const std::vector<long> &ds_uids)
-  : GDALAsyncProgressWorker(env, "node-gdal:GDALAsyncWorker"),
+  : GDALAsyncProgressWorker(env, "gdal-node:GDALAsyncWorker"),
     progressCallback(progressCallback),
     abort(abort),
     doit(doit),

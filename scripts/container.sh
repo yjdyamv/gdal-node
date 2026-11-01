@@ -23,7 +23,7 @@ if [ -z "${NODEJS}" ]; then
   NODEJS=lts
 fi
 
-CONTAINER="${DIST}-node-gdal:${VERSION}_${NODEJS}"
+CONTAINER="${DIST}-gdal-node:${VERSION}_${NODEJS}"
 SEP="\n=======================================================\n"
 echo -e "${SEP}Building container ${CONTAINER}${SEP}"
 

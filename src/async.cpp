@@ -48,7 +48,7 @@ bool GDALAbortSignal::arm(const Napi::Value &value) {
       shared->aborted.store(true);
       return info.Env().Undefined();
     },
-    "node-gdal:onAbort"));
+    "gdal-node:onAbort"));
   signal = Napi::Persistent(obj);
 
   try {
